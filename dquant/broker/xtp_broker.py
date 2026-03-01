@@ -11,6 +11,7 @@ import queue
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.broker.safety import TradingSafety, log_trade, log_error
 
 
 class XTPBroker(BaseBroker):
@@ -64,6 +65,14 @@ class XTPBroker(BaseBroker):
         self._api = None
         self._connected = False
         self._callback_queue = queue.Queue()
+
+        # 交易安全控制
+        self.safety = TradingSafety(
+            enable_time_check=kwargs.get('enable_time_check', True),
+            enable_fund_check=kwargs.get('enable_fund_check', True),
+            enable_order_validation=kwargs.get('enable_order_validation', True),
+            enable_position_check=kwargs.get('enable_position_check', True),
+        )
         
     def connect(self, **kwargs) -> bool:
         """连接 XTP 服务器"""

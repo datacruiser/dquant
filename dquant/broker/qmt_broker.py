@@ -12,6 +12,7 @@ import os
 from dquant.constants import DEFAULT_INITIAL_CASH
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
+from dquant.broker.safety import TradingSafety, log_trade, log_error
 
 
 class QMTBroker(BaseBroker):
@@ -49,6 +50,15 @@ class QMTBroker(BaseBroker):
         self.account = account
         
         self._connected = False
+
+        # 交易安全控制
+        self.safety = TradingSafety(
+            enable_time_check=kwargs.get('enable_time_check', True),
+            enable_fund_check=kwargs.get('enable_fund_check', True),
+            enable_order_validation=kwargs.get('enable_order_validation', True),
+            enable_position_check=kwargs.get('enable_position_check', True),
+        )
+
         
     def connect(self, **kwargs) -> bool:
         """连接 QMT"""
@@ -67,6 +77,15 @@ class QMTBroker(BaseBroker):
     def disconnect(self) -> bool:
         """断开连接"""
         self._connected = False
+
+        # 交易安全控制
+        self.safety = TradingSafety(
+            enable_time_check=kwargs.get('enable_time_check', True),
+            enable_fund_check=kwargs.get('enable_fund_check', True),
+            enable_order_validation=kwargs.get('enable_order_validation', True),
+            enable_position_check=kwargs.get('enable_position_check', True),
+        )
+
         return True
     
     def _call_qmt(self, func_name: str, params: dict) -> dict:
@@ -157,8 +176,18 @@ print(json.dumps(result))
             return {}
     
     def place_order(self, order: Order) -> OrderResult:
-        """下单"""
+        """
+        下单 (带安全检查)
+        
+        Args:
+            order: 订单对象
+        
+        Returns:
+            OrderResult: 订单结果
+        """
+        # 1. 连接检查
         if not self._connected:
+            log_error("PLACE_ORDER", Exception("未连接到QMT"), {"symbol": order.symbol})
             return OrderResult(
                 order_id='',
                 symbol=order.symbol,
@@ -171,6 +200,34 @@ print(json.dumps(result))
             )
         
         try:
+            # 2. 安全检查
+            account_info = self.get_account()
+            positions = self.get_positions()
+            
+            valid, msg = self.safety.check_order(
+                order,
+                available_cash=account_info.get('cash', 0),
+                positions=positions,
+            )
+            
+            if not valid:
+                log_error("PLACE_ORDER", Exception(msg), {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                })
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+            
+            # 3. 调用QMT下单
             from xtquant import xttrade
             
             # 下单
@@ -190,7 +247,7 @@ print(json.dumps(result))
                 order.order_id = str(result)
                 order.status = 'PENDING'
                 
-                return OrderResult(
+                result = OrderResult(
                     order_id=order.order_id,
                     symbol=order.symbol,
                     side=order.side,
@@ -305,6 +362,15 @@ class QMTSimulator(QMTBroker):
     
     def disconnect(self) -> bool:
         self._connected = False
+
+        # 交易安全控制
+        self.safety = TradingSafety(
+            enable_time_check=kwargs.get('enable_time_check', True),
+            enable_fund_check=kwargs.get('enable_fund_check', True),
+            enable_order_validation=kwargs.get('enable_order_validation', True),
+            enable_position_check=kwargs.get('enable_position_check', True),
+        )
+
         return True
     
     def get_account(self) -> dict:
