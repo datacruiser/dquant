@@ -9,7 +9,6 @@ from datetime import datetime
 import subprocess
 import json
 import os
-from dquant.constants import DEFAULT_INITIAL_CASH
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 
