@@ -1,0 +1,36 @@
+# DQuant 配置文件
+
+# 数据配置
+data:
+  source: csv  # csv, akshare, qlib
+  path: ./data/
+  
+# 回测配置
+backtest:
+  initial_cash: 1000000
+  commission: 0.0003  # 万三
+  slippage: 0.0001
+  benchmark: 000300.SH
+  
+# 策略配置
+strategy:
+  name: MLFactorStrategy
+  top_k: 10
+  rebalance_freq: 5
+  
+# AI 配置
+ai:
+  model: xgboost
+  features:
+    - pe
+    - pb
+    - momentum_20
+    - volatility_20
+  target: return_5d
+  
+# 实盘配置 (预留)
+broker:
+  name: simulator  # simulator, xtp, qmt
+  # account: 
+  #   host: localhost
+  #   port: 7709

@@ -1,0 +1,167 @@
+"""
+组合管理
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass, field
+from datetime import datetime
+import pandas as pd
+import numpy as np
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+
+
+@dataclass
+class Position:
+    """持仓"""
+    symbol: str
+    shares: float
+    avg_cost: float
+    current_price: float = 0.0
+    timestamp: datetime = None
+    
+    @property
+    def market_value(self) -> float:
+        return self.shares * self.current_price
+    
+    @property
+    def profit(self) -> float:
+        return (self.current_price - self.avg_cost) * self.shares
+    
+    @property
+    def profit_pct(self) -> float:
+        if self.avg_cost == 0:
+            return 0
+        return (self.current_price - self.avg_cost) / self.avg_cost
+
+
+@dataclass
+class Portfolio:
+    """
+    投资组合
+    
+    管理持仓、现金、净值等。
+    """
+    initial_cash: float = DEFAULT_INITIAL_CASH
+    cash: float = field(default=0.0)
+    positions: Dict[str, Position] = field(default_factory=dict)
+    nav_history: List[float] = field(default_factory=list)
+    timestamp_history: List[datetime] = field(default_factory=list)
+    
+    def __post_init__(self):
+        if self.cash == 0:
+            self.cash = self.initial_cash
+    
+    @property
+    def total_value(self) -> float:
+        """总资产"""
+        return self.cash + sum(p.market_value for p in self.positions.values())
+    
+    @property
+    def nav(self) -> float:
+        """净值"""
+        return self.total_value / self.initial_cash
+    
+    def update_prices(self, prices: Dict[str, float], timestamp: datetime = None):
+        """更新持仓价格"""
+        for symbol, price in prices.items():
+            if symbol in self.positions:
+                self.positions[symbol].current_price = price
+        
+        # 记录净值
+        self.nav_history.append(self.nav)
+        self.timestamp_history.append(timestamp)
+    
+    def buy(self, symbol: str, shares: float, price: float, commission: float = 0):
+        """买入"""
+        cost = shares * price * (1 + commission)
+        
+        if cost > self.cash:
+            # 调整为可买入的最大数量
+            shares = self.cash / (price * (1 + commission))
+            cost = self.cash
+        
+        if shares <= 0:
+            return
+        
+        self.cash -= cost
+        
+        if symbol in self.positions:
+            pos = self.positions[symbol]
+            total_shares = pos.shares + shares
+            pos.avg_cost = (pos.avg_cost * pos.shares + price * shares) / total_shares
+            pos.shares = total_shares
+        else:
+            self.positions[symbol] = Position(
+                symbol=symbol,
+                shares=shares,
+                avg_cost=price,
+                current_price=price,
+            )
+    
+    def sell(self, symbol: str, shares: float, price: float, commission: float = 0):
+        """卖出"""
+        if symbol not in self.positions:
+            return
+        
+        pos = self.positions[symbol]
+        shares = min(shares, pos.shares)
+        
+        revenue = shares * price * (1 - commission)
+        self.cash += revenue
+        pos.shares -= shares
+        
+        if pos.shares <= 0:
+            del self.positions[symbol]
+    
+    def rebalance(
+        self,
+        target_weights: Dict[str, float],
+        prices: Dict[str, float],
+        commission: float = 0,
+    ):
+        """
+        再平衡到目标权重
+        
+        Args:
+            target_weights: {symbol: weight} 目标权重
+            prices: {symbol: price} 当前价格
+            commission: 手续费率
+        """
+        total = self.total_value
+        
+        # 计算目标市值
+        target_values = {s: total * w for s, w in target_weights.items()}
+        
+        # 先卖出
+        for symbol in list(self.positions.keys()):
+            if symbol not in target_weights:
+                # 清仓
+                pos = self.positions[symbol]
+                self.sell(symbol, pos.shares, prices.get(symbol, pos.current_price), commission)
+        
+        # 再买入调整
+        for symbol, target_value in target_values.items():
+            if symbol not in prices:
+                continue
+                
+            current_value = 0
+            if symbol in self.positions:
+                current_value = self.positions[symbol].market_value
+            
+            diff = target_value - current_value
+            
+            if diff > 0:
+                # 需要买入
+                shares = diff / prices[symbol]
+                self.buy(symbol, shares, prices[symbol], commission)
+            elif diff < 0:
+                # 需要卖出
+                shares = -diff / prices[symbol]
+                self.sell(symbol, shares, prices[symbol], commission)
+    
+    def to_dataframe(self) -> pd.DataFrame:
+        """转换为 DataFrame"""
+        return pd.DataFrame({
+            'timestamp': self.timestamp_history,
+            'nav': self.nav_history,
+        }).set_index('timestamp')

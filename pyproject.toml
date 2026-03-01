@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dquant"
+version = "0.1.0"
+description = "A lightweight AI-powered quantitative trading framework"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "David熊", email = "dquant@example.com"}
+]
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "scikit-learn>=1.0.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "xgboost>=1.6.0",
+    "lightgbm>=3.3.0",
+]
+data = [
+    "akshare>=1.10.0",
+    "tushare>=1.2.0",
+]
+qlib = [
+    "pyqlib>=0.9.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dquant*"]

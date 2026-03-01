@@ -1,0 +1,44 @@
+{
+  "backtest": {
+    "initial_cash": 1000000,
+    "commission_rate": 0.0003,
+    "stamp_duty": 0.001,
+    "slippage": 0.001,
+    "max_position_pct": 0.1,
+    "max_cash_pct": 0.95,
+    "benchmark": "hs300"
+  },
+  "data": {
+    "default_source": "akshare",
+    "cache_dir": "./data/cache",
+    "enable_cache": true,
+    "cache_expire_days": 7,
+    "tushare_token": null,
+    "db_url": null,
+    "mongo_url": null
+  },
+  "factor": {
+    "standardize": true,
+    "winsorize": true,
+    "winsorize_limit": 0.01,
+    "neutralize": true,
+    "neutralize_industry": true,
+    "min_ic": 0.02,
+    "min_ir": 0.5,
+    "max_correlation": 0.7
+  },
+  "ml": {
+    "train_test_split": 0.8,
+    "n_splits": 5,
+    "xgboost_params": {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "n_estimators": 100
+    },
+    "lightgbm_params": {
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "n_estimators": 100
+    }
+  }
+}
