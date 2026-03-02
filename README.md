@@ -721,8 +721,8 @@ MIT License
 
 ## 联系方式
 
-- GitHub Issues: [提交问题](https://github.com/yourusername/dquant/issues)
-- Email: dquant@example.com
+- GitHub Issues: [提交问题](https://github.com/datacruiser/dquant/issues)
+- Email: phy.zju@gmail.com
 
 ## 致谢
 
