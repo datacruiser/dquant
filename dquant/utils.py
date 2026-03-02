@@ -8,7 +8,14 @@ from typing import List, Union, Tuple
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_SLIPPAGE,
+    DEFAULT_STAMP_DUTY,
+    DEFAULT_INITIAL_CASH,
+    MIN_SHARES,
+    DEFAULT_WINDOW,
+)
 
 
 # ============================================================

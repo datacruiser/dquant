@@ -1,4 +1,11 @@
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_SLIPPAGE,
+    DEFAULT_STAMP_DUTY,
+    DEFAULT_INITIAL_CASH,
+    MIN_SHARES,
+    DEFAULT_WINDOW,
+)
 
 """
 DQuant 内置因子库
@@ -380,7 +387,10 @@ class TrendStrengthFactor(BaseFactor):
             plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
             minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
 
-            tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
+            tr = pd.concat([high - low,
+                abs(high - close.shift(1)),
+                abs(low - close.shift(1))],
+                axis=1).max(axis=1)
             atr = tr.rolling(self.window).mean()
             plus_di = MIN_SHARES * (plus_dm.rolling(self.window).mean() / atr)
             minus_di = MIN_SHARES * (minus_dm.rolling(self.window).mean() / atr)
@@ -861,7 +871,9 @@ class PERatioFactor(BaseFactor):
         if 'pe' in data.columns:
             for idx, row in data.iterrows():
                 if pd.notna(row['pe']) and row['pe'] > 0:
-                    results.append({'date': idx, 'symbol': row['symbol'], 'score': -row['pe']})  # 低 PE 偏好
+                    results.append({'date': idx,
+                        'symbol': row['symbol'],
+                        'score': -row['pe']})  # 低 PE 偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -885,7 +897,9 @@ class PBRatioFactor(BaseFactor):
         if 'pb' in data.columns:
             for idx, row in data.iterrows():
                 if pd.notna(row['pb']) and row['pb'] > 0:
-                    results.append({'date': idx, 'symbol': row['symbol'], 'score': -row['pb']})  # 低 PB 偏好
+                    results.append({'date': idx,
+                        'symbol': row['symbol'],
+                        'score': -row['pb']})  # 低 PB 偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -909,7 +923,9 @@ class ROEFactor(BaseFactor):
         if 'roe' in data.columns:
             for idx, row in data.iterrows():
                 if pd.notna(row['roe']):
-                    results.append({'date': idx, 'symbol': row['symbol'], 'score': row['roe']})  # 高 ROE 偏好
+                    results.append({'date': idx,
+                        'symbol': row['symbol'],
+                        'score': row['roe']})  # 高 ROE 偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -988,7 +1004,9 @@ class MarketCapFactor(BaseFactor):
             for idx, row in data.iterrows():
                 if pd.notna(row['market_cap']):
                     # 小市值偏好
-                    results.append({'date': idx, 'symbol': row['symbol'], 'score': -np.log(row['market_cap'])})
+                    results.append({'date': idx,
+                        'symbol': row['symbol'],
+                        'score': -np.log(row['market_cap'])})
 
         df = pd.DataFrame(results)
         if len(df) > 0:
