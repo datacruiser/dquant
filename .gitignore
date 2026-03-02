@@ -33,9 +33,6 @@ htmlcov/
 *.swp
 *.swo
 *~
-# claude
-.claude/
-
 
 # Jupyter
 .ipynb_checkpoints/
@@ -49,8 +46,8 @@ env/
 venv/
 ENV/
 
-# Data Files
-data/
+# Data Files (根目录)
+/data/
 *.csv
 *.h5
 *.hdf5
@@ -59,6 +56,9 @@ data/
 *.db
 *.sqlite
 *.sqlite3
+
+# 但保留 dquant/data/ 中的 Python 代码
+!dquant/data/
 
 # Logs
 *.log
@@ -101,8 +101,6 @@ keys/
 # ⚠️ 临时文件
 *.tmp
 *.temp
-*.swp
-*~
 
 # ⚠️ 实盘交易相关
 trading_state.json
