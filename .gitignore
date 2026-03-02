@@ -33,6 +33,9 @@ htmlcov/
 *.swp
 *.swo
 *~
+# claude
+.claude/
+
 
 # Jupyter
 .ipynb_checkpoints/
