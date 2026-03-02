@@ -2,6 +2,10 @@
 DQuant - 轻量级AI量化框架
 """
 
+# flake8: noqa: F401
+# This file re-exports public API for package users
+
+
 from dquant.core import Engine
 
 # Data
@@ -239,7 +243,7 @@ __all__ = [
 ]
 
 # Config
-from dquant.config import (  # noqa: F401
+from dquant.config import (
     DQuantConfig,
     BacktestConfig,
     DataConfig,
@@ -249,13 +253,13 @@ from dquant.config import (  # noqa: F401
 )
 
 # Logger
-from dquant.logger import (  # noqa: F401
+from dquant.logger import (
     get_logger,
     set_log_level,
     quiet_mode,
     debug_mode,
     LoggerMixin,
-)  # noqa: F401
+)
 
 # Utils
 from dquant.utils import (
