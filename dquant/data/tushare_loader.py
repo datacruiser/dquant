@@ -118,7 +118,7 @@ class TushareLoader(DataSource):
 
             return df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
 
-        except Exception:
+        except Exception as e:
             return None
 
     def load(self) -> pd.DataFrame:
@@ -204,7 +204,7 @@ class TushareLoader(DataSource):
         try:
             df = self._pro.index_weight(index_code=index_code, start_date=self.start or '20200101')
             return df['con_code'].unique().tolist()
-        except Exception:
+        except Exception as e:
             # 备用方案：返回部分股票
             print(f"[Tushare] Cannot get constituents for {index_code}, using sample")
             return self._get_all_stocks()[:50]
@@ -329,7 +329,7 @@ class TushareLoader(DataSource):
 
                 # TODO: 合并到主数据
                 pass
-        except Exception:
+        except Exception as e:
             logger.warning(f"Operation failed: {e}")
 
         return df
@@ -347,7 +347,7 @@ class TushareLoader(DataSource):
                 trade_date=datetime.now().strftime('%Y%m%d'),
             )
             return df
-        except Exception:
+        except Exception as e:
             return pd.DataFrame()
 
 

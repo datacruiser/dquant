@@ -119,8 +119,8 @@ class RiceQuantLoader(DataSource):
             try:
                 df = rq.index_components(index_code)
                 return df.index.tolist() if hasattr(df, 'index') else []
-            except Exception:
-                logger.warning(f"Operation failed: {e}")
+            except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
         if self.symbols == 'all':
             df = rq.all_instruments(type='CS')

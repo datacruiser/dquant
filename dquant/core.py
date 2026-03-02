@@ -9,6 +9,7 @@ import pandas as pd
 from dquant.data.base import DataSource
 from dquant.strategy.base import BaseStrategy
 from dquant.backtest.engine import BacktestEngine
+from dquant.backtest.result import BacktestResult
 from dquant.backtest.portfolio import Portfolio
 from dquant.broker.base import BaseBroker
 from dquant.broker.simulator import Simulator

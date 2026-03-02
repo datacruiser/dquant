@@ -311,7 +311,6 @@ class QlibDataHandler:
             output_dir: 输出目录
         """
         from pathlib import Path
-        import os
 
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)

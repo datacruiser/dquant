@@ -281,8 +281,8 @@ class RealtimeServer:
         for client in self.clients:
             try:
                 asyncio.create_task(client.send(message))
-            except Exception:
-                logger.warning(f"Operation failed: {e}")
+            except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     async def start(self):
         """启动服务器"""

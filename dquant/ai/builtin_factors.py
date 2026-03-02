@@ -42,7 +42,7 @@ class MomentumFactor(BaseFactor):
         results = []
         for symbol, group in data.groupby('symbol'):
             group = group.sort_index()
-            momentum = group['close'].pct_change(self.window)
+            momentum = group['close'].pct_change(self.window, fill_method=None)
             for date, value in momentum.items():
                 if pd.notna(value):
                     results.append({'date': date, 'symbol': symbol, 'score': value})

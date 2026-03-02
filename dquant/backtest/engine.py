@@ -5,7 +5,6 @@
 from typing import Optional, Dict, List
 from datetime import datetime
 import pandas as pd
-import numpy as np
 
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.backtest.portfolio import Portfolio

@@ -391,8 +391,8 @@ class PerformanceMonitor:
             try:
                 import tracemalloc
                 tracemalloc.start()
-            except Exception:
-                logger.warning(f"Operation failed: {e}")
+            except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
             result = func(*args, **kwargs)
 

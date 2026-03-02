@@ -608,7 +608,13 @@ class HurstExponentFactor(BaseFactor):
 
                 # 对数回归
                 try:
-                    reg = np.polyfit(np.log(lags), np.log(tau), 1)
+                    # 过滤掉0和负数
+                    lags_arr = np.array(lags)
+                    tau_arr = np.array(tau)
+                    mask = (lags_arr > 0) & (tau_arr > 0)
+                    if not mask.any():
+                        continue
+                    reg = np.polyfit(np.log(lags_arr[mask]), np.log(tau_arr[mask]), 1)
                     hurst = reg[0]
 
                     results.append({
@@ -616,7 +622,7 @@ class HurstExponentFactor(BaseFactor):
                         'symbol': symbol,
                         'score': hurst,
                     })
-                except Exception:
+                except Exception as e:
                     logger.warning(f"Operation failed: {e}")
 
         df = pd.DataFrame(results)
@@ -712,7 +718,7 @@ class VarianceRatioFactor(BaseFactor):
                         'symbol': symbol,
                         'score': vr,
                     })
-                except Exception:
+                except Exception as e:
                     logger.warning(f"Operation failed: {e}")
 
         df = pd.DataFrame(results)
@@ -771,7 +777,7 @@ class BetaFactor(BaseFactor):
                             'symbol': symbol,
                             'score': beta,
                         })
-                    except Exception:
+                    except Exception as e:
                         logger.warning(f"Operation failed: {e}")
 
         df = pd.DataFrame(results)
@@ -826,7 +832,7 @@ class AlphaFactor(BaseFactor):
                             'symbol': symbol,
                             'score': alpha,
                         })
-                    except Exception:
+                    except Exception as e:
                         logger.warning(f"Operation failed: {e}")
 
         df = pd.DataFrame(results)

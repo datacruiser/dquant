@@ -2,6 +2,7 @@
 ML 因子策略
 """
 
+from typing import List
 import pandas as pd
 
 from dquant.strategy.base import BaseStrategy, Signal, SignalType

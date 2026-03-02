@@ -2,6 +2,7 @@
 AI 因子基类
 """
 
+from typing import Optional
 from abc import ABC, abstractmethod
 import pandas as pd
 

@@ -14,7 +14,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
-import pickle
 
 from dquant.data.base import DataSource
 
@@ -58,51 +57,51 @@ def _register_builtin_sources():
     try:
         from dquant.data.csv_loader import CSVLoader
         DataSourceRegistry.register('csv', CSVLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.akshare_loader import AKShareLoader
         DataSourceRegistry.register('akshare', AKShareLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.tushare_loader import TushareLoader
         DataSourceRegistry.register('tushare', TushareLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.yahoo_loader import YahooLoader
         DataSourceRegistry.register('yahoo', YahooLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.jqdata_loader import JQDataLoader
         DataSourceRegistry.register('jqdata', JQDataLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.ricequant_loader import RiceQuantLoader
         DataSourceRegistry.register('ricequant', RiceQuantLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.tdx_loader import TDXLoader
         DataSourceRegistry.register('tdx', TDXLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
     try:
         from dquant.data.database_loader import DatabaseLoader, MongoLoader
         DataSourceRegistry.register('sql', DatabaseLoader)
         DataSourceRegistry.register('mongodb', MongoLoader)
-    except Exception:
-        logger.warning(f"Operation failed: {e}")
+    except Exception as e:
+                    logger.warning(f"Operation failed: {e}")
 
 
 _register_builtin_sources()

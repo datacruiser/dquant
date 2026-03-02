@@ -6,7 +6,6 @@ XTP 券商接口 (中泰证券极速交易接口)
 
 from typing import Dict, Optional, List
 from datetime import datetime
-import threading
 import queue
 
 from dquant.broker.base import BaseBroker, Order, OrderResult

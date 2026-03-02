@@ -7,7 +7,6 @@ Yahoo Finance 数据加载器
 from typing import Optional, List, Union
 from datetime import datetime, timedelta
 import pandas as pd
-import numpy as np
 
 from dquant.data.base import DataSource
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
