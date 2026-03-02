@@ -4,16 +4,15 @@
 提供 numba JIT 加速、并行计算等功能。
 """
 
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 from typing import Optional, List, Callable, Any
 import pandas as pd
 import numpy as np
 from functools import wraps
 import time
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 # 尝试导入 numba
 try:
@@ -295,7 +294,7 @@ class CacheManager:
     缓存计算结果以避免重复计算。
     """
 
-    def __init__(self, max_size: int = MIN_SHARES):
+    def __init__(self, max_size: int = 100):
         self.cache = {}
         self.max_size = max_size
         self.access_count = {}
@@ -392,7 +391,7 @@ class PerformanceMonitor:
                 import tracemalloc
                 tracemalloc.start()
             except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+                logger.debug(f"tracemalloc not available: {e}")
 
             result = func(*args, **kwargs)
 

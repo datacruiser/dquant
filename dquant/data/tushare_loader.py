@@ -1,7 +1,3 @@
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 """
 Tushare 数据加载器
 
@@ -12,10 +8,12 @@ Tushare 是国内最流行的免费金融数据接口之一。
 from typing import Optional, List, Union
 from datetime import datetime
 import pandas as pd
-import numpy as np
 
 from dquant.data.base import DataSource
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import MIN_SHARES
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class TushareLoader(DataSource):
@@ -119,6 +117,7 @@ class TushareLoader(DataSource):
             return df[['symbol', 'open', 'high', 'low', 'close', 'volume']]
 
         except Exception as e:
+            logger.debug(f"Failed to load symbol {symbol}: {e}")
             return None
 
     def load(self) -> pd.DataFrame:
@@ -206,7 +205,7 @@ class TushareLoader(DataSource):
             return df['con_code'].unique().tolist()
         except Exception as e:
             # 备用方案：返回部分股票
-            print(f"[Tushare] Cannot get constituents for {index_code}, using sample")
+            logger.warning(f"Failed to get constituents for {index_code}: {e}, using sample")
             return self._get_all_stocks()[:50]
 
     def _get_all_stocks(self) -> List[str]:
@@ -270,6 +269,7 @@ class TushareLoader(DataSource):
             return df
 
         except Exception as e:
+            logger.debug(f"Failed to get stock data for {symbol}: {e}")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -330,7 +330,7 @@ class TushareLoader(DataSource):
                 # TODO: 合并到主数据
                 pass
         except Exception as e:
-            logger.warning(f"Operation failed: {e}")
+            logger.warning(f"Failed to add financial data: {e}")
 
         return df
 
@@ -348,6 +348,7 @@ class TushareLoader(DataSource):
             )
             return df
         except Exception as e:
+            logger.warning(f"Failed to get realtime quotes: {e}")
             return pd.DataFrame()
 
 

@@ -77,15 +77,6 @@ class QMTBroker(BaseBroker):
     def disconnect(self) -> bool:
         """断开连接"""
         self._connected = False
-
-        # 交易安全控制
-        self.safety = TradingSafety(
-            enable_time_check=kwargs.get('enable_time_check', True),
-            enable_fund_check=kwargs.get('enable_fund_check', True),
-            enable_order_validation=kwargs.get('enable_order_validation', True),
-            enable_position_check=kwargs.get('enable_position_check', True),
-        )
-
         return True
 
     def _call_qmt(self, func_name: str, params: dict) -> dict:
@@ -362,15 +353,6 @@ class QMTSimulator(QMTBroker):
 
     def disconnect(self) -> bool:
         self._connected = False
-
-        # 交易安全控制
-        self.safety = TradingSafety(
-            enable_time_check=kwargs.get('enable_time_check', True),
-            enable_fund_check=kwargs.get('enable_fund_check', True),
-            enable_order_validation=kwargs.get('enable_order_validation', True),
-            enable_position_check=kwargs.get('enable_position_check', True),
-        )
-
         return True
 
     def get_account(self) -> dict:

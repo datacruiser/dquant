@@ -4,10 +4,6 @@
 支持逐笔成交、滑点、市场冲击等高级功能。
 """
 
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 from typing import Optional, List, Dict, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -15,7 +11,16 @@ from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 import numpy as np
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_SLIPPAGE,
+    DEFAULT_STAMP_DUTY,
+    MIN_SHARES,
+)
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class EventType(Enum):

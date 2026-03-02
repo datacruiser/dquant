@@ -1,7 +1,3 @@
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 """
 数据源管理器
 
@@ -11,11 +7,13 @@ logger = get_logger(__name__)
 from typing import Optional, List, Dict, Any, Union, Type
 from pathlib import Path
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 import json
 
 from dquant.data.base import DataSource
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class DataSourceRegistry:
@@ -57,51 +55,51 @@ def _register_builtin_sources():
     try:
         from dquant.data.csv_loader import CSVLoader
         DataSourceRegistry.register('csv', CSVLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"CSVLoader not available: {e}")
 
     try:
         from dquant.data.akshare_loader import AKShareLoader
         DataSourceRegistry.register('akshare', AKShareLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"AKShareLoader not available: {e}")
 
     try:
         from dquant.data.tushare_loader import TushareLoader
         DataSourceRegistry.register('tushare', TushareLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"TushareLoader not available: {e}")
 
     try:
         from dquant.data.yahoo_loader import YahooLoader
         DataSourceRegistry.register('yahoo', YahooLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"YahooLoader not available: {e}")
 
     try:
         from dquant.data.jqdata_loader import JQDataLoader
         DataSourceRegistry.register('jqdata', JQDataLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"JQDataLoader not available: {e}")
 
     try:
         from dquant.data.ricequant_loader import RiceQuantLoader
         DataSourceRegistry.register('ricequant', RiceQuantLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"RiceQuantLoader not available: {e}")
 
     try:
         from dquant.data.tdx_loader import TDXLoader
         DataSourceRegistry.register('tdx', TDXLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"TDXLoader not available: {e}")
 
     try:
         from dquant.data.database_loader import DatabaseLoader, MongoLoader
         DataSourceRegistry.register('sql', DatabaseLoader)
         DataSourceRegistry.register('mongodb', MongoLoader)
-    except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+    except ImportError as e:
+        logger.debug(f"DatabaseLoader not available: {e}")
 
 
 _register_builtin_sources()

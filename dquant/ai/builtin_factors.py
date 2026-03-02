@@ -1,12 +1,3 @@
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_SLIPPAGE,
-    DEFAULT_STAMP_DUTY,
-    DEFAULT_INITIAL_CASH,
-    MIN_SHARES,
-    DEFAULT_WINDOW,
-)
-
 """
 DQuant 内置因子库
 
@@ -21,6 +12,7 @@ import pandas as pd
 import numpy as np
 
 from dquant.ai.base import BaseFactor
+from dquant.constants import MIN_SHARES
 
 
 # ============================================================
@@ -1162,47 +1154,53 @@ def list_factors() -> List[str]:
     """列出所有内置因子"""
     return list(FACTOR_REGISTRY.keys())
 
-# 导入扩展因子
-from dquant.ai.extended_factors import (
-    ADXFactor,
-    AroonFactor,
-    StochasticFactor,
-    ROCFactor,
-    CMOFactor,
-    MFIFactor,
-    ADLineFactor,
-    ChaikinOscillatorFactor,
-    EaseOfMovementFactor,
-    ForceIndexFactor,
-    VPTFactor,
-    HurstExponentFactor,
-    AutocorrelationFactor,
-    VarianceRatioFactor,
-    BetaFactor,
-    AlphaFactor,
-)
 
-# 添加到注册表
-FACTOR_REGISTRY.update({
-    # 技术指标
-    'adx': ADXFactor,
-    'aroon': AroonFactor,
-    'stochastic': StochasticFactor,
-    'roc': ROCFactor,
-    'cmo': CMOFactor,
-    'mfi': MFIFactor,
+def _register_extended_factors():
+    """注册扩展因子 - 在函数内部导入避免循环导入"""
+    from dquant.ai.extended_factors import (
+        ADXFactor,
+        AroonFactor,
+        StochasticFactor,
+        ROCFactor,
+        CMOFactor,
+        MFIFactor,
+        ADLineFactor,
+        ChaikinOscillatorFactor,
+        EaseOfMovementFactor,
+        ForceIndexFactor,
+        VPTFactor,
+        HurstExponentFactor,
+        AutocorrelationFactor,
+        VarianceRatioFactor,
+        BetaFactor,
+        AlphaFactor,
+    )
 
-    # 量价关系
-    'ad_line': ADLineFactor,
-    'chaikin_osc': ChaikinOscillatorFactor,
-    'eom': EaseOfMovementFactor,
-    'force_index': ForceIndexFactor,
-    'vpt': VPTFactor,
+    # 添加到注册表
+    FACTOR_REGISTRY.update({
+        # 技术指标
+        'adx': ADXFactor,
+        'aroon': AroonFactor,
+        'stochastic': StochasticFactor,
+        'roc': ROCFactor,
+        'cmo': CMOFactor,
+        'mfi': MFIFactor,
 
-    # 统计因子
-    'hurst': HurstExponentFactor,
-    'autocorr': AutocorrelationFactor,
-    'variance_ratio': VarianceRatioFactor,
-    'beta': BetaFactor,
-    'alpha': AlphaFactor,
-})
+        # 量价关系
+        'ad_line': ADLineFactor,
+        'chaikin_osc': ChaikinOscillatorFactor,
+        'eom': EaseOfMovementFactor,
+        'force_index': ForceIndexFactor,
+        'vpt': VPTFactor,
+
+        # 统计因子
+        'hurst': HurstExponentFactor,
+        'autocorr': AutocorrelationFactor,
+        'variance_ratio': VarianceRatioFactor,
+        'beta': BetaFactor,
+        'alpha': AlphaFactor,
+    })
+
+
+# 注册扩展因子
+_register_extended_factors()

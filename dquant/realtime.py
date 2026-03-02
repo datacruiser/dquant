@@ -4,16 +4,17 @@
 支持 WebSocket 推送、实时行情订阅等。
 """
 
-from typing import Optional, List, Dict, Callable, Any
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
+from typing import Optional, List, Dict, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import asyncio
 import json
 from datetime import datetime
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+
+from dquant.constants import DEFAULT_STAMP_DUTY, MIN_SHARES
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -282,7 +283,7 @@ class RealtimeServer:
             try:
                 asyncio.create_task(client.send(message))
             except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+                logger.warning(f"Failed to send message to client: {e}")
 
     async def start(self):
         """启动服务器"""

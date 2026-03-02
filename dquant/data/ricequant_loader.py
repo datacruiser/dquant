@@ -1,7 +1,3 @@
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 """
 米筐 RiceQuant 数据加载器
 
@@ -12,9 +8,11 @@ logger = get_logger(__name__)
 from typing import Optional, List, Union
 from datetime import datetime
 import pandas as pd
-import numpy as np
 
 from dquant.data.base import DataSource
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class RiceQuantLoader(DataSource):
@@ -120,7 +118,7 @@ class RiceQuantLoader(DataSource):
                 df = rq.index_components(index_code)
                 return df.index.tolist() if hasattr(df, 'index') else []
             except Exception as e:
-                    logger.warning(f"Operation failed: {e}")
+                logger.warning(f"Failed to get index components for {index_code}: {e}")
 
         if self.symbols == 'all':
             df = rq.all_instruments(type='CS')

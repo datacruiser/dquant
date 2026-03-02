@@ -1,7 +1,3 @@
-from dquant.logger import get_logger
-
-logger = get_logger(__name__)
-
 """
 扩展因子库
 
@@ -13,14 +9,10 @@ import pandas as pd
 import numpy as np
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_SLIPPAGE,
-    DEFAULT_STAMP_DUTY,
-    DEFAULT_INITIAL_CASH,
-    MIN_SHARES,
-    DEFAULT_WINDOW,
-)
+from dquant.constants import MIN_SHARES
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 # ============================================================
@@ -117,13 +109,15 @@ class AroonFactor(BaseFactor):
 
             # Aroon Up
             aroon_up = group['high'].rolling(self.window).apply(
-                lambda x: (self.window - (self.window - 1 - np.argmax(x))) / self.window * MIN_SHARES,
+                lambda x: (self.window - (self.window - 1 - np.argmax(x)))
+                / self.window * MIN_SHARES,
                 raw=False
             )
 
             # Aroon Down
             aroon_down = group['low'].rolling(self.window).apply(
-                lambda x: (self.window - (self.window - 1 - np.argmin(x))) / self.window * MIN_SHARES,
+                lambda x: (self.window - (self.window - 1 - np.argmin(x)))
+                / self.window * MIN_SHARES,
                 raw=False
             )
 

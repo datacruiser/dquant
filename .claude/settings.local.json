@@ -9,7 +9,8 @@
       "Bash(ssh-add:*)",
       "Bash(gh auth:*)",
       "Bash(ping:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(python:*)"
     ]
   }
 }
