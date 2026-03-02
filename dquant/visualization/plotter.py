@@ -2,7 +2,7 @@
 回测可视化
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional
 import pandas as pd
 
 from dquant.backtest.result import BacktestResult
@@ -173,7 +173,7 @@ class BacktestPlotter:
 
         pivot = df.pivot(index='year', columns='month', values='return')
         pivot.columns = ['1月', '2月', '3月', '4月', '5月', '6月',
-                 '7月', '8月', '9月', '10月', '11月', '12月']
+                        '7月', '8月', '9月', '10月', '11月', '12月']
 
         fig, ax = plt.subplots(figsize=figsize)
 
