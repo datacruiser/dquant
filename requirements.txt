@@ -86,12 +86,12 @@ seaborn>=0.11.0
 # jupyter>=1.0.0
 
 # 测试
-# pytest>=6.0.0
-# pytest-cov>=2.10.0
+pytest>=6.0.0
+pytest-cov>=2.10.0
 
 # 代码格式化
-# black>=21.0
-# isort>=5.0
+black>=21.0
+isort>=5.0
 
 # 类型检查
 # mypy>=0.900
