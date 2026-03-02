@@ -35,14 +35,14 @@ from dquant.ai.builtin_factors import (
     MomentumFactor,
     ReversalFactor,
     AccMomentumFactor,
-    
+
     # 波动率类
     VolatilityFactor,
     ATRFactor,
     SkewnessFactor,
     KurtosisFactor,
     MaxDrawdownFactor,
-    
+
     # 技术指标
     RSIFactor,
     MACDFactor,
@@ -51,24 +51,24 @@ from dquant.ai.builtin_factors import (
     KDJFactor,
     CCIFactor,
     WilliamsRFactor,
-    
+
     # 成交量
     VolumeRatioFactor,
     TurnoverRateFactor,
     OBVFactor,
     VWAPFactor,
-    
+
     # 价格形态
     PricePositionFactor,
     GapFactor,
     IntradayReturnFactor,
     OvernightReturnFactor,
-    
+
     # 均线
     MASlopeFactor,
     MACrossFactor,
     BiasFactor,
-    
+
     # 基本面
     PERatioFactor,
     PBRatioFactor,
@@ -76,11 +76,11 @@ from dquant.ai.builtin_factors import (
     RevenueGrowthFactor,
     ProfitGrowthFactor,
     MarketCapFactor,
-    
+
     # 情绪
     MoneyFlowFactor,
     AmihudIlliquidityFactor,
-    
+
     # 注册表
     FACTOR_REGISTRY,
     get_factor,
@@ -112,11 +112,11 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "Engine",
-    
+
     # Data - Base
     "DataSource",
     "CSVLoader",
-    
+
     # Data - Online
     "AKShareLoader",
     "AKShareRealTime",
@@ -127,48 +127,48 @@ __all__ = [
     "JQDataLoader",
     "JQDataFactor",
     "RiceQuantLoader",
-    
+
     # Data - Local
     "TDXLoader",
     "TDXBlockLoader",
-    
+
     # Data - Database
     "DatabaseLoader",
     "MongoLoader",
-    
+
     # Data - Manager
     "DataManager",
     "DataSourceRegistry",
     "load_data",
-    
+
     # Strategy
     "BaseStrategy",
     "Signal",
     "SignalType",
     "MLFactorStrategy",
     "TopKStrategy",
-    
+
     # Backtest
     "BacktestEngine",
     "Portfolio",
     "Metrics",
     "BacktestResult",
-    
+
     # AI - Base
     "BaseFactor",
-    
+
     # AI - 动量类因子
     "MomentumFactor",
     "ReversalFactor",
     "AccMomentumFactor",
-    
+
     # AI - 波动率类因子
     "VolatilityFactor",
     "ATRFactor",
     "SkewnessFactor",
     "KurtosisFactor",
     "MaxDrawdownFactor",
-    
+
     # AI - 技术指标因子
     "RSIFactor",
     "MACDFactor",
@@ -177,24 +177,24 @@ __all__ = [
     "KDJFactor",
     "CCIFactor",
     "WilliamsRFactor",
-    
+
     # AI - 成交量因子
     "VolumeRatioFactor",
     "TurnoverRateFactor",
     "OBVFactor",
     "VWAPFactor",
-    
+
     # AI - 价格形态因子
     "PricePositionFactor",
     "GapFactor",
     "IntradayReturnFactor",
     "OvernightReturnFactor",
-    
+
     # AI - 均线因子
     "MASlopeFactor",
     "MACrossFactor",
     "BiasFactor",
-    
+
     # AI - 基本面因子
     "PERatioFactor",
     "PBRatioFactor",
@@ -202,27 +202,27 @@ __all__ = [
     "RevenueGrowthFactor",
     "ProfitGrowthFactor",
     "MarketCapFactor",
-    
+
     # AI - 情绪因子
     "MoneyFlowFactor",
     "AmihudIlliquidityFactor",
-    
+
     # AI - Registry
     "FACTOR_REGISTRY",
     "get_factor",
     "list_factors",
-    
+
     # AI - Combiner
     "FactorCombiner",
     "CombinedFactor",
-    
+
     # AI - ML
     "XGBoostFactor",
     "LGBMFactor",
     "QlibModelAdapter",
     "DQNAgent",
     "TradingEnvironment",
-    
+
     # Broker
     "BaseBroker",
     "Order",
@@ -232,7 +232,7 @@ __all__ = [
     "OrderValidator",
     "FundChecker",
     "TradingTimeChecker",
-    
+
     # Visualization
     "BacktestPlotter",
     "plot_backtest",
@@ -344,12 +344,12 @@ __all__.extend([
     "RiskMetrics",
     "StopLoss",
     "TakeProfit",
-    
+
     # Data Validation
     "DataValidator",
     "DataCleaner",
     "DataQualityReport",
-    
+
     # Factor Analysis
     "FactorAnalyzer",
     "FactorAnalysisResult",
@@ -419,7 +419,7 @@ __all__.extend([
     "cache_manager",
     "performance_monitor",
     "timing",
-    
+
     # Realtime
     "RealtimeQuote",
     "RealtimeDataSource",
@@ -428,7 +428,7 @@ __all__.extend([
     "RealtimeServer",
     "RealtimeClient",
     "create_mock_realtime_manager",
-    
+
     # Event-Driven
     "EventType",
     "Event",
@@ -439,7 +439,7 @@ __all__.extend([
     "SlippageModel",
     "ExecutionHandler",
     "EventDrivenBacktest",
-    
+
     # Alternative Factors
     "SentimentFactor",
     "NewsSentimentFactor",
@@ -480,14 +480,14 @@ __all__.extend([
     "ROCFactor",
     "CMOFactor",
     "MFIFactor",
-    
+
     # Extended Factors - Volume-Price
     "ADLineFactor",
     "ChaikinOscillatorFactor",
     "EaseOfMovementFactor",
     "ForceIndexFactor",
     "VPTFactor",
-    
+
     # Extended Factors - Statistical
     "HurstExponentFactor",
     "AutocorrelationFactor",

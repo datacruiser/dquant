@@ -18,27 +18,27 @@ from dquant.broker.safety import TradingSafety, log_trade, log_error
 class QMTBroker(BaseBroker):
     """
     miniQMT 券商接口
-    
+
     迅投 QMT 迷你交易接口封装。
-    
+
     使用前需要:
     1. 开通 QMT 交易权限
     2. 安装 QMT 客户端
     3. 配置 miniQMT
-    
+
     Usage:
         broker = QMTBroker(
             qmt_path='C:/国金证券QMT/userdata_mini',
             account='your_account',
         )
-        
+
         broker.connect()
-        
+
         # 下单
         order = Order(symbol='000001.SZ', side='BUY', quantity=MIN_SHARES)
         result = broker.place_order(order)
     """
-    
+
     def __init__(
         self,
         qmt_path: str = '',
@@ -48,7 +48,7 @@ class QMTBroker(BaseBroker):
         super().__init__(name="QMT")
         self.qmt_path = qmt_path
         self.account = account
-        
+
         self._connected = False
 
         # 交易安全控制
@@ -59,21 +59,21 @@ class QMTBroker(BaseBroker):
             enable_position_check=kwargs.get('enable_position_check', True),
         )
 
-        
+
     def connect(self, **kwargs) -> bool:
         """连接 QMT"""
         if not self.qmt_path:
             print("[QMT] QMT path not configured")
             return False
-        
+
         if not os.path.exists(self.qmt_path):
             print(f"[QMT] QMT path not found: {self.qmt_path}")
             return False
-        
+
         self._connected = True
         print(f"[QMT] Connected to {self.qmt_path}")
         return True
-    
+
     def disconnect(self) -> bool:
         """断开连接"""
         self._connected = False
@@ -87,12 +87,12 @@ class QMTBroker(BaseBroker):
         )
 
         return True
-    
+
     def _call_qmt(self, func_name: str, params: dict) -> dict:
         """调用 QMT 函数"""
         if not self._connected:
             return {'error': 'not connected'}
-        
+
         # miniQMT 通过 Python 文件调用
         # 实际实现需要根据 QMT API 文档
         script = f"""
@@ -108,7 +108,7 @@ xttrade.connect()
 result = xttrade.{func_name}(**{params})
 print(json.dumps(result))
 """
-        
+
         try:
             # 执行脚本
             # 实际使用时需要更安全的方式
@@ -117,26 +117,26 @@ print(json.dumps(result))
                 capture_output=True,
                 text=True,
             )
-            
+
             if result.returncode == 0:
                 return json.loads(result.stdout)
             else:
                 return {'error': result.stderr}
-                
+
         except Exception as e:
             return {'error': str(e)}
-    
+
     def get_account(self) -> dict:
         """获取账户信息"""
         if not self._connected:
             return {}
-        
+
         try:
             from xtquant import xttrade
-            
+
             account_info = xttrade.get_stock_account(self.account)
             asset = xttrade.get_asset(self.account)
-            
+
             return {
                 'cash': asset.cash,
                 'total_value': asset.total_asset,
@@ -149,18 +149,18 @@ print(json.dumps(result))
         except Exception as e:
             print(f"[QMT] Query account error: {e}")
             return {}
-    
+
     def get_positions(self) -> Dict[str, dict]:
         """获取持仓"""
         if not self._connected:
             return {}
-        
+
         try:
             from xtquant import xttrade
-            
+
             positions = xttrade.get_stock_positions(self.account)
             result = {}
-            
+
             for pos in positions:
                 result[pos.stock_code] = {
                     'symbol': pos.stock_code,
@@ -169,19 +169,19 @@ print(json.dumps(result))
                     'avg_cost': pos.open_price,
                     'current_price': pos.market_value / pos.volume if pos.volume > 0 else 0,
                 }
-            
+
             return result
         except Exception as e:
             print(f"[QMT] Query positions error: {e}")
             return {}
-    
+
     def place_order(self, order: Order) -> OrderResult:
         """
         下单 (带安全检查)
-        
+
         Args:
             order: 订单对象
-        
+
         Returns:
             OrderResult: 订单结果
         """
@@ -198,18 +198,18 @@ print(json.dumps(result))
                 timestamp=datetime.now(),
                 status='REJECTED',
             )
-        
+
         try:
             # 2. 安全检查
             account_info = self.get_account()
             positions = self.get_positions()
-            
+
             valid, msg = self.safety.check_order(
                 order,
                 available_cash=account_info.get('cash', 0),
                 positions=positions,
             )
-            
+
             if not valid:
                 log_error("PLACE_ORDER", Exception(msg), {
                     "symbol": order.symbol,
@@ -226,14 +226,14 @@ print(json.dumps(result))
                     timestamp=datetime.now(),
                     status='REJECTED',
                 )
-            
+
             # 3. 调用QMT下单
             from xtquant import xttrade
-            
+
             # 下单
             # order_type: 23=市价, 24=限价
             order_type = 23 if order.order_type == 'MARKET' else 24
-            
+
             result = xttrade.order_stock(
                 account=self.account,
                 stock_code=order.symbol,
@@ -242,11 +242,11 @@ print(json.dumps(result))
                 price_type=1,  # 1=限价, 2=市价
                 price=order.price or 0,
             )
-            
+
             if result > 0:
                 order.order_id = str(result)
                 order.status = 'PENDING'
-                
+
                 result = OrderResult(
                     order_id=order.order_id,
                     symbol=order.symbol,
@@ -268,7 +268,7 @@ print(json.dumps(result))
                     timestamp=datetime.now(),
                     status='REJECTED',
                 )
-                
+
         except Exception as e:
             print(f"[QMT] Place order error: {e}")
             return OrderResult(
@@ -281,29 +281,29 @@ print(json.dumps(result))
                 timestamp=datetime.now(),
                 status='REJECTED',
             )
-    
+
     def cancel_order(self, order_id: str) -> bool:
         """撤单"""
         if not self._connected:
             return False
-        
+
         try:
             from xtquant import xttrade
-            
+
             result = xttrade.cancel_order(self.account, int(order_id))
             return result > 0
         except Exception as e:
             print(f"[QMT] Cancel order error: {e}")
             return False
-    
+
     def get_order_status(self, order_id: str) -> Order:
         """查询订单状态"""
         if not self._connected:
             return None
-        
+
         try:
             from xtquant import xttrade
-            
+
             orders = xttrade.get_stock_orders(self.account)
             for o in orders:
                 if str(o.order_id) == order_id:
@@ -319,12 +319,12 @@ print(json.dumps(result))
         except Exception as e:
             print(f"[QMT] Query order error: {e}")
             return None
-    
+
     def get_market_data(self, symbol: str) -> dict:
         """获取实时行情"""
         try:
             from xtquant import xtdata
-            
+
             quote = xtdata.get_full_tick([symbol])
             if symbol in quote:
                 q = quote[symbol]
@@ -346,7 +346,7 @@ class QMTSimulator(QMTBroker):
     """
     QMT 模拟交易
     """
-    
+
     def __init__(self, initial_cash: float = DEFAULT_INITIAL_CASH, **kwargs):
         super().__init__(**kwargs)
         self.name = "QMTSimulator"
@@ -354,12 +354,12 @@ class QMTSimulator(QMTBroker):
         self.cash = initial_cash
         self.positions: Dict[str, dict] = {}
         self.orders: Dict[str, Order] = {}
-    
+
     def connect(self, **kwargs) -> bool:
         print(f"[{self.name}] Connected (simulated)")
         self._connected = True
         return True
-    
+
     def disconnect(self) -> bool:
         self._connected = False
 
@@ -372,7 +372,7 @@ class QMTSimulator(QMTBroker):
         )
 
         return True
-    
+
     def get_account(self) -> dict:
         total_value = self.cash + sum(
             p['quantity'] * p.get('price', 0)
