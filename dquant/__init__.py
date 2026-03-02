@@ -495,3 +495,19 @@ __all__.extend([
     "BetaFactor",
     "AlphaFactor",
 ])
+
+# 资金流因子
+from dquant.ai.money_flow_factors import (
+    MediumFlowFactor,
+    MainForceFactor,
+    RetailFlowFactor,
+    SmartFlowFactor,
+    FlowDivergenceFactor,
+)
+
+# 资金流策略
+from dquant.strategy.flow_strategy import (
+    MoneyFlowStrategy,
+    SmartFlowStrategy,
+    FlowDivergenceStrategy,
+)

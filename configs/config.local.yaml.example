@@ -1,0 +1,58 @@
+# DQuant 本地配置模板
+# 
+# 使用说明:
+# 1. 复制此文件为 config.local.yaml
+# 2. 填写您的实际配置信息
+# 3. config.local.yaml 已被 .gitignore 排除，不会被提交
+
+# 数据源配置
+data:
+  # Tushare Pro Token (https://tushare.pro/)
+  tushare_token: "YOUR_TUSHARE_TOKEN"
+  
+  # 聚宽数据账号
+  jq_username: "YOUR_JQDATA_USERNAME"
+  jq_password: "YOUR_JQDATA_PASSWORD"
+  
+  # 数据库连接 (可选)
+  db_url: "postgresql://user:password@localhost:5432/dquant"
+  mongo_url: "mongodb://user:password@localhost:27017/dquant"
+
+# 券商配置
+broker:
+  # QMT 配置
+  qmt:
+    path: "C:/中航证券QMT/userdata_mini"
+    account: "YOUR_QMT_ACCOUNT"
+  
+  # XTP 配置
+  xtp:
+    server: "120.27.164.138"
+    port: 6001
+    account: "YOUR_XTP_ACCOUNT"
+    password: "YOUR_XTP_PASSWORD"
+
+# API Keys (可选)
+api_keys:
+  # OpenAI API Key (用于AI功能)
+  openai: "sk-YOUR_OPENAI_KEY"
+  
+  # 其他API
+  other: "YOUR_OTHER_API_KEY"
+
+# 实盘交易配置
+trading:
+  # 初始资金
+  initial_cash: 100000  # 10万
+  
+  # 风控参数
+  max_position_pct: 0.1   # 单只股票最大仓位 10%
+  max_daily_loss: 0.05    # 日最大亏损 5%
+  stop_loss_pct: 0.03     # 止损 3%
+  
+  # 交易时间
+  trading_hours:
+    morning_start: "09:30"
+    morning_end: "11:30"
+    afternoon_start: "13:00"
+    afternoon_end: "15:00"

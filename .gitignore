@@ -40,18 +40,22 @@ htmlcov/
 
 # Environment
 .env
+.env.*
 .venv
 env/
 venv/
 ENV/
 
-# Data
+# Data Files
 data/
 *.csv
 *.h5
 *.hdf5
 *.pkl
 *.pickle
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
@@ -67,4 +71,56 @@ output/
 results/
 *.png
 *.jpg
+*.jpeg
+
+# ⚠️ 敏感配置文件 (重要！)
 config.json
+config.local.json
+config.*.json
+configs/config.local.yaml
+configs/config.*.yaml
+configs/secrets.yaml
+configs/secrets.*.yaml
+
+# ⚠️ 敏感信息目录
+secrets/
+credentials/
+api_keys/
+private/
+keys/
+
+# ⚠️ 备份文件
+*.bak
+*.backup
+*.old
+*.orig
+
+# ⚠️ 临时文件
+*.tmp
+*.temp
+*.swp
+*~
+
+# ⚠️ 实盘交易相关
+trading_state.json
+positions.json
+orders.json
+account_info.json
+
+# ⚠️ 数据库文件
+*.db-journal
+*.sqlite-journal
+
+# ⚠️ 加密文件
+*.enc
+*.encrypted
+*.key
+*.pem
+
+# Documentation builds
+docs/_build/
+site/
+
+# Distribution
+*.tar.gz
+*.zip
