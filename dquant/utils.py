@@ -4,7 +4,7 @@ DQuant 工具函数
 常用的辅助函数。
 """
 
-from typing import List, Optional, Union, Tuple
+from typing import List, Union, Tuple
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np

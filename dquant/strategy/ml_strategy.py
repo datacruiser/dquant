@@ -2,9 +2,7 @@
 ML 因子策略
 """
 
-from typing import List, Optional, Dict, Any
 import pandas as pd
-import numpy as np
 
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.ai.base import BaseFactor

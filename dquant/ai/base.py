@@ -3,9 +3,7 @@ AI 因子基类
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
 import pandas as pd
-import numpy as np
 
 
 class BaseFactor(ABC):

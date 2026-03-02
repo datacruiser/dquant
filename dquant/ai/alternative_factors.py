@@ -4,9 +4,7 @@
 包含情感因子、新闻因子、资金流向因子等。
 """
 
-from typing import Optional, List, Dict
 import pandas as pd
-import numpy as np
 
 from dquant.ai.base import BaseFactor
 
@@ -50,7 +48,6 @@ class SentimentFactor(BaseFactor):
             up_ratio = up_stocks / total_stocks if total_stocks > 0 else 0.5
 
             # 成交量变化
-            avg_volume = group['volume'].mean()
 
             # 情感分数
             sentiment = (up_ratio - 0.5) * 2  # 归一化到 [-1, 1]

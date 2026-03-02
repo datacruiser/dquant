@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git remote:*)",
+      "Bash(ssh:*)",
+      "Bash(ssh-keygen:*)",
+      "Bash(~/.ssh/config:*)",
+      "Bash(git push:*)",
+      "Bash(ssh-add:*)",
+      "Bash(gh auth:*)",
+      "Bash(ping:*)",
+      "Bash(git fetch:*)"
+    ]
+  }
+}
