@@ -239,7 +239,7 @@ __all__ = [
 ]
 
 # Config
-from dquant.config import (
+from dquant.config import (  # noqa: F401
     DQuantConfig,
     BacktestConfig,
     DataConfig,
@@ -249,13 +249,13 @@ from dquant.config import (
 )
 
 # Logger
-from dquant.logger import (
+from dquant.logger import (  # noqa: F401
     get_logger,
     set_log_level,
     quiet_mode,
     debug_mode,
     LoggerMixin,
-)
+)  # noqa: F401
 
 # Utils
 from dquant.utils import (
