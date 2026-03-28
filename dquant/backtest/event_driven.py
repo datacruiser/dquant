@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, deque
 import pandas as pd
 import numpy as np
 
@@ -184,7 +184,7 @@ class ExecutionHandler:
     def __init__(
         self,
         slippage_model: str = 'fixed',
-        slippage_pct: float = DEFAULT_STAMP_DUTY,
+        slippage_pct: float = DEFAULT_SLIPPAGE,
         commission_rate: float = DEFAULT_COMMISSION,
     ):
         self.slippage_model = slippage_model
@@ -277,8 +277,8 @@ class EventDrivenBacktest:
         self.positions = defaultdict(int)
         self.trades = []
 
-        # 事件队列
-        self.events = []
+        # 事件队列 (deque for O(1) popleft)
+        self.events: deque = deque()
         self.continue_backtest = True
 
         # 记录每个股票的最新价格，用于期末正确估值
@@ -437,7 +437,7 @@ class EventDrivenBacktest:
 
             # 处理所有事件
             while self.events:
-                event = self.events.pop(0)
+                event = self.events.popleft()
                 self._process_event(event)
 
         # 计算绩效
