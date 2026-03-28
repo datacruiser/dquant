@@ -109,7 +109,7 @@ class Portfolio:
         self.cash += revenue
         pos.shares -= shares
 
-        if pos.shares <= 0:
+        if pos.shares <= 1e-10:
             del self.positions[symbol]
 
     def rebalance(
@@ -137,6 +137,9 @@ class Portfolio:
                 # 清仓
                 pos = self.positions[symbol]
                 self.sell(symbol, pos.shares, prices.get(symbol, pos.current_price), commission)
+
+        # 卖出后重新计算总资产（现金已变化）
+        total = self.total_value
 
         # 再买入调整
         for symbol, target_value in target_values.items():

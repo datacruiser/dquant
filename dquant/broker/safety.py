@@ -13,6 +13,8 @@ from dquant.constants import MIN_SHARES
 
 
 # 配置日志
+import os
+
 logger = logging.getLogger('dquant.trading')
 logger.setLevel(logging.INFO)
 
@@ -22,9 +24,10 @@ if not logger.handlers:
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
 
-    # 文件输出
+    # 文件输出（路径可通过环境变量配置）
+    _log_path = os.environ.get('DQ_TRADING_LOG', 'logs/trading.log')
     try:
-        file_handler = logging.FileHandler('logs/trading.log', encoding='utf-8')
+        file_handler = logging.FileHandler(_log_path, encoding='utf-8')
         file_handler.setLevel(logging.DEBUG)
 
         # 格式
@@ -36,7 +39,7 @@ if not logger.handlers:
 
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
-    except:
+    except (IOError, OSError):
         # 如果无法创建文件，只使用控制台
         logger.addHandler(console_handler)
 

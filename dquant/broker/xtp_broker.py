@@ -64,6 +64,7 @@ class XTPBroker(BaseBroker):
         self._api = None
         self._connected = False
         self._callback_queue = queue.Queue()
+        self._orders: Dict[str, dict] = {}
 
         # 交易安全控制
         self.safety = TradingSafety(
@@ -256,10 +257,25 @@ class XTPBroker(BaseBroker):
             # XTP: 23=市价单, 24=限价单
             price_type = 23 if order.order_type == 'MARKET' else 24
 
+            # 转换买卖方向: 'BUY'/'SELL' -> 1/2
+            side_map = {'BUY': 1, 'SELL': 2}
+            xtp_side = side_map.get(order.side.upper(), 0)
+            if xtp_side == 0:
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+
             # 下单
             result = self._api.place_order(
                 ticker=order.symbol,
-                side=order.side,  # 1=买, 2=卖
+                side=xtp_side,
                 quantity=order.quantity,
                 price=order.price or 0,
                 price_type=price_type,

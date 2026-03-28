@@ -28,6 +28,8 @@ class DataSourceRegistry:
     @classmethod
     def register(cls, name: str, source_class: Type[DataSource]):
         """注册数据源"""
+        if '_sources' not in cls.__dict__:
+            cls._sources = dict(cls._sources)
         cls._sources[name] = source_class
 
     @classmethod
@@ -255,6 +257,7 @@ class DataManager:
             DataFrame 列表或合并后的 DataFrame
         """
         dfs = []
+        errors = []
 
         for i, config in enumerate(configs):
             try:
@@ -262,8 +265,12 @@ class DataManager:
                 dfs.append(df)
                 print(f"[DataManager] Loaded {i+1}/{len(configs)}")
             except Exception as e:
-                print(f"[DataManager] Failed to load config {i+1}: {e}")
+                logger.error(f"[DataManager] Failed to load config {i+1}: {config} — {e}")
+                errors.append({'index': i, 'config': config, 'error': str(e)})
                 dfs.append(pd.DataFrame())
+
+        if errors:
+            logger.warning(f"[DataManager] {len(errors)}/{len(configs)} configs failed to load")
 
         if merge:
             return pd.concat(dfs, axis=0)
@@ -325,28 +332,36 @@ class DataManager:
         清理缓存
 
         Args:
-            older_than: 清理多少小时前的缓存
+            older_than: 清理多少小时前的缓存（必须显式指定）
         """
         if not self.cache_dir:
             return
 
+        if older_than is None:
+            # 安全起见，不指定 older_than 时仅清理已过期的缓存
+            for cache_file in self.cache_dir.glob('*.parquet'):
+                meta_file = cache_file.with_suffix('.meta.json')
+                if meta_file.exists():
+                    with open(meta_file, 'r') as f:
+                        meta = json.load(f)
+                    cached_time = datetime.fromisoformat(meta['timestamp'])
+                    if datetime.now() - cached_time > timedelta(hours=self.cache_expire):
+                        cache_file.unlink()
+                        meta_file.unlink()
+            print("[DataManager] Expired cache cleared")
+            return
+
         for cache_file in self.cache_dir.glob('*.parquet'):
             meta_file = cache_file.with_suffix('.meta.json')
-
-            if older_than and meta_file.exists():
+            if meta_file.exists():
                 with open(meta_file, 'r') as f:
                     meta = json.load(f)
-
                 cached_time = datetime.fromisoformat(meta['timestamp'])
                 if datetime.now() - cached_time > timedelta(hours=older_than):
                     cache_file.unlink()
                     meta_file.unlink()
-            else:
-                cache_file.unlink()
-                if meta_file.exists():
-                    meta_file.unlink()
 
-        print("[DataManager] Cache cleared")
+        print(f"[DataManager] Cache older than {older_than}h cleared")
 
 
 def load_data(
