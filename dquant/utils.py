@@ -230,12 +230,9 @@ def sortino_ratio(
     """
     ann_ret = annualized_return(returns, periods_per_year)
 
-    # 下行波动率
-    negative_returns = returns[returns < 0]
-    if len(negative_returns) == 0:
-        return float('inf')
-
-    downside_std = negative_returns.std() * np.sqrt(periods_per_year)
+    # 下行波动率：使用 downside deviation（低于 target=0 的标准差）
+    downside = returns.apply(lambda x: min(x - 0, 0))
+    downside_std = downside.std() * np.sqrt(periods_per_year)
 
     if downside_std == 0:
         return float('inf')
@@ -295,12 +292,18 @@ def winsorize(
 
 def standardize(data: pd.Series) -> pd.Series:
     """标准化"""
-    return (data - data.mean()) / data.std()
+    std = data.std()
+    if std == 0:
+        return pd.Series(0.0, index=data.index)
+    return (data - data.mean()) / std
 
 
 def normalize(data: pd.Series) -> pd.Series:
     """归一化到 [0, 1]"""
-    return (data - data.min()) / (data.max() - data.min())
+    data_range = data.max() - data.min()
+    if data_range == 0:
+        return pd.Series(0.5, index=data.index)
+    return (data - data.min()) / data_range
 
 
 # ============================================================

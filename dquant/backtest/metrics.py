@@ -41,9 +41,10 @@ class Metrics:
         # 总收益率
         total_return = nav_series.iloc[-1] / nav_series.iloc[0] - 1
 
-        # 年化收益率
+        # 年化收益率（统一使用 252 交易日）
         days = (nav_series.index[-1] - nav_series.index[0]).days
-        annual_return = (1 + total_return) ** (365 / days) - 1 if days > 0 else 0
+        trading_days = len(returns)
+        annual_return = (1 + total_return) ** (252 / trading_days) - 1 if trading_days > 0 else 0
 
         # 年化波动率
         volatility = returns.std() * np.sqrt(252)
