@@ -152,9 +152,6 @@ class SmartFlowStrategy(BaseStrategy):
 
         # 按日期分组
         for date, group in data.groupby(data.index):
-            # 计算 N 日均值
-            # (这里简化处理，实际应该按股票分组计算)
-
             # 综合得分
             score = (
                 self.main_weight * group['main_net_inflow']
@@ -162,18 +159,20 @@ class SmartFlowStrategy(BaseStrategy):
                 - self.retail_weight * group['small_net_inflow']  # 散户反向
             )
 
-            # 选 TopK
-            top_idx = score.nlargest(self.top_k).index
-            top_stocks = group.loc[top_idx]
+            # 使用 reset_index 安全选取 TopK（避免重复日期索引导致 loc 返回多行）
+            group_reset = group.reset_index(drop=True)
+            score_reset = score.reset_index(drop=True)
+            top_k_indices = score_reset.nlargest(self.top_k).index
+            top_stocks = group_reset.iloc[top_k_indices]
 
-            for _, row in top_stocks.iterrows():
+            for pos_idx, row in top_stocks.iterrows():
                 signal = Signal(
                     symbol=row['symbol'],
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,
                     timestamp=date,
                     metadata={
-                        'composite_score': score[row.name],
+                        'composite_score': score_reset.iloc[pos_idx],
                     }
                 )
                 signals.append(signal)
@@ -218,20 +217,17 @@ class FlowDivergenceStrategy(BaseStrategy):
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
 
+        # 按股票分组计算价格变化（跨日期，避免按日 groupby 后 shift 跨股票污染）
+        data_with_change = data.copy()
+        data_with_change['price_change'] = data.groupby('symbol')['close'].transform(
+            lambda x: x / x.shift(self.window) - 1
+        )
+
         # 按日期分组
-        for date, group in data.groupby(data.index):
-            # 简化版: 直接使用当日数据
-            # 实际应该计算 window 日的累计值
-
-            # 价格变化
-            price_change = group['close'] / group['close'].shift(self.window) - 1
-
-            # 资金流累计
-            # (这里简化处理)
-
+        for date, group in data_with_change.groupby(data_with_change.index):
             # 底背离: 价格下跌但主力流入
             bottom_divergence = (
-                (price_change < -0.05) &  # 价格下跌 > 5%
+                (group['price_change'] < -0.05) &  # 价格下跌 > 5%
                 (group['main_net_inflow'] > 0)  # 主力流入
             )
 
@@ -252,7 +248,7 @@ class FlowDivergenceStrategy(BaseStrategy):
                         timestamp=date,
                         metadata={
                             'divergence_type': 'bottom',
-                            'price_change': price_change[row.name],
+                            'price_change': row['price_change'],
                         }
                     )
                     signals.append(signal)

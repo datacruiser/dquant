@@ -120,7 +120,7 @@ class SlippageModel:
     """
 
     @staticmethod
-    def fixed_slippage(price: float, slippage_pct: float = DEFAULT_STAMP_DUTY) -> float:
+    def fixed_slippage(price: float, slippage_pct: float = DEFAULT_SLIPPAGE) -> float:
         """固定滑点"""
         return price * slippage_pct
 
@@ -129,7 +129,7 @@ class SlippageModel:
         price: float,
         volume: int,
         avg_volume: int,
-        base_slippage: float = DEFAULT_STAMP_DUTY,
+        base_slippage: float = DEFAULT_SLIPPAGE,
     ) -> float:
         """
         基于成交量的滑点
@@ -153,7 +153,7 @@ class SlippageModel:
         基于订单占日成交量的比例计算滑点。
         """
         if daily_volume == 0:
-            return price * DEFAULT_STAMP_DUTY
+            return price * DEFAULT_SLIPPAGE
 
         participation_rate = order_size / daily_volume
         impact = impact_coefficient * np.sqrt(participation_rate)
@@ -269,7 +269,7 @@ class EventDrivenBacktest:
         self,
         initial_cash: float = 1000000,
         slippage_model: str = 'fixed',
-        slippage_pct: float = DEFAULT_STAMP_DUTY,
+        slippage_pct: float = DEFAULT_SLIPPAGE,
         commission_rate: float = DEFAULT_COMMISSION,
     ):
         self.initial_cash = initial_cash
@@ -280,6 +280,9 @@ class EventDrivenBacktest:
         # 事件队列
         self.events = []
         self.continue_backtest = True
+
+        # 记录每个股票的最新价格，用于期末正确估值
+        self.last_prices: Dict[str, float] = {}
 
         # 组件
         self.execution_handler = ExecutionHandler(
@@ -348,6 +351,7 @@ class EventDrivenBacktest:
     def _on_market(self, event: MarketEvent):
         """处理市场事件"""
         self.current_bar = event
+        self.last_prices[event.symbol] = event.close
 
         # 调用策略
         for handler in self.market_handlers:
@@ -392,13 +396,28 @@ class EventDrivenBacktest:
 
     def _on_fill(self, event: FillEvent):
         """处理成交事件"""
-        # 更新持仓和资金
         if event.side == 'BUY':
+            cost = event.fill_price * event.quantity + event.commission
+            if cost > self.cash:
+                logger.warning(
+                    f"资金不足，跳过买入: {event.symbol}, "
+                    f"cost={cost:.2f}, cash={self.cash:.2f}"
+                )
+                return
             self.positions[event.symbol] += event.quantity
-            self.cash -= event.fill_price * event.quantity + event.commission
+            self.cash -= cost
         else:
+            available = self.positions.get(event.symbol, 0)
+            if available < event.quantity:
+                logger.warning(
+                    f"持仓不足，跳过卖出: {event.symbol}, "
+                    f"want={event.quantity}, have={available}"
+                )
+                return
             self.positions[event.symbol] -= event.quantity
-            self.cash += event.fill_price * event.quantity - event.commission
+            # A 股卖出需扣印花税
+            stamp_duty = event.fill_price * event.quantity * DEFAULT_STAMP_DUTY
+            self.cash += event.fill_price * event.quantity - event.commission - stamp_duty
 
         # 记录交易
         self.trades.append(event)
@@ -424,10 +443,10 @@ class EventDrivenBacktest:
         # 计算绩效
         total_value = self.cash
 
-        # 计算持仓价值
-        if self.current_bar:
-            for symbol, quantity in self.positions.items():
-                total_value += quantity * self.current_bar.close
+        # 使用各股票最新价格计算持仓价值
+        for symbol, quantity in self.positions.items():
+            if quantity > 0 and symbol in self.last_prices:
+                total_value += quantity * self.last_prices[symbol]
 
         total_return = (total_value - self.initial_cash) / self.initial_cash
 

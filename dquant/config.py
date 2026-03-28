@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import os
 import json
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 
 @dataclass
@@ -18,7 +18,7 @@ class BacktestConfig:
     initial_cash: float = 1000000.0
     commission_rate: float = DEFAULT_COMMISSION  # 佣金率 0.03%
     stamp_duty: float = DEFAULT_STAMP_DUTY        # 印花税 0.1%
-    slippage: float = DEFAULT_STAMP_DUTY          # 滑点 0.1%
+    slippage: float = DEFAULT_SLIPPAGE            # 滑点 0.01%
 
     # 仓位限制
     max_position_pct: float = 0.1    # 单只股票最大仓位 10%
@@ -78,7 +78,7 @@ class MLConfig:
     xgboost_params: Dict[str, Any] = field(default_factory=lambda: {
         'max_depth': 6,
         'learning_rate': 0.05,
-        'n_estimators': MIN_SHARES,
+        'n_estimators': 100,
         'objective': 'reg:squarederror',
     })
 
@@ -86,7 +86,7 @@ class MLConfig:
     lightgbm_params: Dict[str, Any] = field(default_factory=lambda: {
         'max_depth': 6,
         'learning_rate': 0.05,
-        'n_estimators': MIN_SHARES,
+        'n_estimators': 100,
         'objective': 'regression',
     })
 

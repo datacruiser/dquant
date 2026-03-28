@@ -138,6 +138,7 @@ class Engine:
     def live(
         self,
         dry_run: bool = True,
+        interval: int = 60,
         **kwargs
     ) -> None:
         """
@@ -145,6 +146,7 @@ class Engine:
 
         Args:
             dry_run: 是否模拟运行 (不实际下单)
+            interval: 循环间隔（秒），默认 60
             **kwargs: 券商配置参数
         """
         if dry_run:
@@ -258,6 +260,12 @@ class Engine:
                 best_score = score
                 best_params = params
                 best_result = result
+
+        # 恢复策略为最优参数（而非最后一个网格点的参数）
+        if best_params:
+            for name, value in best_params.items():
+                if hasattr(self.strategy, name):
+                    setattr(self.strategy, name, value)
 
         return {
             'best_params': best_params,

@@ -5,10 +5,14 @@
 """
 
 from typing import Optional, List, Union
+import re
 import pandas as pd
 import numpy as np
 
 from dquant.data.base import DataSource
+
+# SQL 标识符白名单校验
+_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
 class DatabaseLoader(DataSource):
@@ -70,19 +74,37 @@ class DatabaseLoader(DataSource):
         """加载数据"""
         self._init_db()
 
-        # 构建 SQL 查询
-        query = f"SELECT * FROM {self.table} WHERE 1=1"
+        # 校验 SQL 标识符（表名、列名）
+        for name, label in [
+            (self.table, 'table'),
+            (self.date_col, 'date_col'),
+            (self.symbol_col, 'symbol_col'),
+        ]:
+            if not _IDENTIFIER_RE.match(name):
+                raise ValueError(f"Invalid SQL identifier for {label}: {name}")
+
+        # 使用参数化查询防止 SQL 注入
+        from sqlalchemy import text
+
+        query_parts = [f"SELECT * FROM {self.table} WHERE 1=1"]
+        params = {}
 
         if self.start:
-            query += f" AND {self.date_col} >= '{self.start}'"
+            query_parts.append(f" AND {self.date_col} >= :start")
+            params['start'] = self.start
         if self.end:
-            query += f" AND {self.date_col} <= '{self.end}'"
+            query_parts.append(f" AND {self.date_col} <= :end")
+            params['end'] = self.end
         if self.symbols:
-            symbols_str = "','".join(self.symbols)
-            query += f" AND {self.symbol_col} IN ('{symbols_str}')"
+            placeholders = ', '.join([f':sym_{i}' for i in range(len(self.symbols))])
+            query_parts.append(f" AND {self.symbol_col} IN ({placeholders})")
+            for i, symbol in enumerate(self.symbols):
+                params[f'sym_{i}'] = symbol
+
+        query = text(''.join(query_parts))
 
         # 执行查询
-        df = pd.read_sql(query, self._engine)
+        df = pd.read_sql(query, self._engine, params=params)
 
         if len(df) == 0:
             raise ValueError("No data loaded")

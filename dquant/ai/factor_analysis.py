@@ -298,10 +298,20 @@ class FactorAnalyzer:
         returns: pd.DataFrame,
         period: int,
     ) -> pd.Series:
-        """计算未来 N 期收益"""
-        # 简化实现
-        # 实际应用中需要根据具体数据结构调整
-        return returns.groupby('symbol')['return'].rolling(period).sum().shift(-period)
+        """
+        计算未来 N 期收益
+
+        forward_return[T] = sum(r[T+1], r[T+2], ..., r[T+period])
+        即从 T+1 到 T+period 的累计日收益（近似多期复利）。
+        """
+        def calc_forward(group):
+            group = group.sort_index()
+            # rolling(period).sum() 在位置 i 给出 sum(r[i-period+1]..r[i])
+            # 在位置 T+period 给出 sum(r[T+1]..r[T+period])
+            # shift(-period) 将其移到位置 T
+            return group.rolling(period).sum().shift(-period)
+
+        return returns.groupby('symbol')['return'].apply(calc_forward)
 
 
 class FactorReport:

@@ -13,7 +13,6 @@ from dquant.constants import (
     DEFAULT_SLIPPAGE,
     DEFAULT_STAMP_DUTY,
     DEFAULT_INITIAL_CASH,
-    MIN_SHARES,
     DEFAULT_WINDOW,
 )
 
@@ -320,7 +319,7 @@ def format_money(amount: float) -> str:
 
 def format_percent(value: float) -> str:
     """格式化百分比"""
-    return f"{value*MIN_SHARES:.2f}%"
+    return f"{value*100:.2f}%"
 
 
 def format_sharpe(sharpe: float) -> str:

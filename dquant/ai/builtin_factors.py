@@ -12,7 +12,8 @@ import pandas as pd
 import numpy as np
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import MIN_SHARES
+# RSI/ADX/KDJ/Williams 等技术指标公式中的常量 100 直接使用字面值，
+# 避免与 A 股最小交易单位 MIN_SHARES 混淆
 
 
 # ============================================================
@@ -278,7 +279,7 @@ class RSIFactor(BaseFactor):
             gain = delta.where(delta > 0, 0).rolling(self.window).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(self.window).mean()
             rs = gain / loss
-            rsi = MIN_SHARES - (MIN_SHARES / (1 + rs))
+            rsi = 100 - (100 / (1 + rs))
             factor = 50 - rsi  # RSI 越低分数越高
             for date, value in factor.items():
                 if pd.notna(value):
@@ -384,9 +385,9 @@ class TrendStrengthFactor(BaseFactor):
                 abs(low - close.shift(1))],
                 axis=1).max(axis=1)
             atr = tr.rolling(self.window).mean()
-            plus_di = MIN_SHARES * (plus_dm.rolling(self.window).mean() / atr)
-            minus_di = MIN_SHARES * (minus_dm.rolling(self.window).mean() / atr)
-            dx = MIN_SHARES * abs(plus_di - minus_di) / (plus_di + minus_di)
+            plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr)
+            minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr)
+            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
 
             for date, value in dx.items():
                 if pd.notna(value):
@@ -420,7 +421,7 @@ class KDJFactor(BaseFactor):
             low_n = group['low'].rolling(self.n).min()
             high_n = group['high'].rolling(self.n).max()
 
-            rsv = (group['close'] - low_n) / (high_n - low_n) * MIN_SHARES
+            rsv = (group['close'] - low_n) / (high_n - low_n) * 100
             k = rsv.ewm(alpha=1/self.m1, adjust=False).mean()
             d = k.ewm(alpha=1/self.m2, adjust=False).mean()
             j = 3 * k - 2 * d
@@ -490,7 +491,7 @@ class WilliamsRFactor(BaseFactor):
             high_n = group['high'].rolling(self.window).max()
             low_n = group['low'].rolling(self.window).min()
 
-            wr = (high_n - group['close']) / (high_n - low_n) * -MIN_SHARES
+            wr = (high_n - group['close']) / (high_n - low_n) * -100
 
             # WR 反转
             for date, value in wr.items():

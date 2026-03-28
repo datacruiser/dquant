@@ -9,6 +9,7 @@ from datetime import datetime
 import subprocess
 import json
 import os
+import re
 from dquant.constants import DEFAULT_INITIAL_CASH
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
@@ -80,33 +81,52 @@ class QMTBroker(BaseBroker):
         return True
 
     def _call_qmt(self, func_name: str, params: dict) -> dict:
-        """调用 QMT 函数"""
+        """调用 QMT 函数（通过环境变量和 stdin 安全传参）"""
         if not self._connected:
             return {'error': 'not connected'}
 
-        # miniQMT 通过 Python 文件调用
-        # 实际实现需要根据 QMT API 文档
-        script = f"""
+        # 安全检查：func_name 只允许合法 Python 标识符
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', func_name):
+            return {'error': f'invalid function name: {func_name}'}
+
+        # 通过环境变量传递路径和函数名，通过 stdin 传递参数，避免命令注入
+        script = """
 import sys
-sys.path.insert(0, '{self.qmt_path}')
+import json
+import os
+
+qmt_path = os.environ.get('DQ_QMT_PATH', '')
+if qmt_path:
+    sys.path.insert(0, qmt_path)
+
+func_name = os.environ.get('DQ_QMT_FUNC', '')
+params = json.loads(sys.stdin.read())
+
 from xtquant import xttrade
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
 
 # 初始化
 xttrade.connect()
 
 # 调用函数
-result = xttrade.{func_name}(**{params})
-print(json.dumps(result))
+func = getattr(xttrade, func_name, None)
+if func is None:
+    print(json.dumps({'error': f'function not found: {func_name}'}))
+else:
+    result = func(**params)
+    print(json.dumps(result))
 """
 
         try:
-            # 执行脚本
-            # 实际使用时需要更安全的方式
+            env = os.environ.copy()
+            env['DQ_QMT_PATH'] = self.qmt_path
+            env['DQ_QMT_FUNC'] = func_name
+
             result = subprocess.run(
                 ['python', '-c', script],
+                input=json.dumps(params),
                 capture_output=True,
                 text=True,
+                env=env,
             )
 
             if result.returncode == 0:
