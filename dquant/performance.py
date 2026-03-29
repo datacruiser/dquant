@@ -233,9 +233,11 @@ class VectorizedOperations:
         func: Callable,
     ) -> np.ndarray:
         """
-        滚动应用函数（向量化）
+        滚动应用函数（滑动窗口视图）
 
-        比 pandas rolling 更快
+        使用 numpy sliding_window_view 创建零拷贝窗口视图，
+        然后对每个窗口应用函数。当 func 无法向量化时，
+        内部使用列表推导，性能优势来自窗口视图的零拷贝。
         """
         from numpy.lib.stride_tricks import sliding_window_view
 
@@ -320,7 +322,7 @@ class CacheManager:
                 del self.access_count[min_key]
 
             self.cache[key] = value
-            self.access_count[key] = 0
+            self.access_count[key] = 1  # 初始值为 1，避免立即被淘汰
 
     def clear(self):
         """清空缓存"""
@@ -342,25 +344,26 @@ class CacheManager:
                 # 如果参数不可哈希，跳过缓存
                 return func(*args, **kwargs)
 
-            # 尝试从缓存获取（使用 sentinel 区分缓存 None 和未命中）
+            # 在同一锁内完成查找 + 计数更新
             with self._lock:
                 cached = self.cache.get(key, CacheManager._MISS)
-
-            if cached is not CacheManager._MISS:
-                with self._lock:
+                if cached is not CacheManager._MISS:
                     self.access_count[key] += 1
-                return cached
+                    return cached
 
-            # 计算并缓存
+            # 在锁外计算（避免持锁阻塞）
             result = func(*args, **kwargs)
 
+            # 在同一锁内完成写入
             with self._lock:
-                if len(self.cache) >= self.max_size:
-                    min_key = min(self.access_count, key=self.access_count.get)
-                    del self.cache[min_key]
-                    del self.access_count[min_key]
-                self.cache[key] = result
-                self.access_count[key] = 0
+                # 双重检查：其他线程可能已经写入了
+                if key not in self.cache:
+                    if len(self.cache) >= self.max_size:
+                        min_key = min(self.access_count, key=self.access_count.get)
+                        del self.cache[min_key]
+                        del self.access_count[min_key]
+                    self.cache[key] = result
+                    self.access_count[key] = 1  # 初始值为 1，避免立即被淘汰
 
             return result
 

@@ -227,7 +227,7 @@ class DQNAgent(BaseRLAgent):
         agent = DQNAgent(n_stocks=10, lookback=20)
 
         # 训练
-        for episode in range(MIN_SHARES):
+        for episode in range(num_episodes):
             state = env.reset()
             done = False
 

@@ -180,7 +180,7 @@ class DataManager:
         if use_cache and self.cache_dir:
             cached = self._load_cache(cache_key)
             if cached is not None:
-                print(f"[DataManager] Loaded from cache: {cache_key}")
+                logger.debug(f"Loaded from cache: {cache_key}")
                 return cached
 
         # 创建数据源并加载
@@ -190,7 +190,7 @@ class DataManager:
         # 保存缓存
         if self.cache_dir:
             self._save_cache(cache_key, df)
-            print(f"[DataManager] Saved to cache: {cache_key}")
+            logger.debug(f"Saved to cache: {cache_key}")
 
         return df
 
@@ -263,7 +263,7 @@ class DataManager:
             try:
                 df = self.load(**config)
                 dfs.append(df)
-                print(f"[DataManager] Loaded {i+1}/{len(configs)}")
+                logger.info(f"Loaded {i+1}/{len(configs)}")
             except Exception as e:
                 logger.error(f"[DataManager] Failed to load config {i+1}: {config} — {e}")
                 errors.append({'index': i, 'config': config, 'error': str(e)})
@@ -348,7 +348,7 @@ class DataManager:
                     if datetime.now() - cached_time > timedelta(hours=self.cache_expire):
                         cache_file.unlink()
                         meta_file.unlink()
-            print("[DataManager] Expired cache cleared")
+            logger.info("Expired cache cleared")
             return
 
         for cache_file in self.cache_dir.glob('*.parquet'):
@@ -361,7 +361,7 @@ class DataManager:
                     cache_file.unlink()
                     meta_file.unlink()
 
-        print(f"[DataManager] Cache older than {older_than}h cleared")
+        logger.info(f"Cache older than {older_than}h cleared")
 
 
 def load_data(
