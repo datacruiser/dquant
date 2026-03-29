@@ -245,12 +245,15 @@ else:
             # order_type: 23=市价, 24=限价
             order_type = 23 if order.order_type == 'MARKET' else 24
 
+            # price_type: 1=限价, 2=市价（最优五档即时成交剩余撤销）, 5=市价（最优五档即时成交剩余转限价）
+            price_type = 2 if order.order_type == 'MARKET' else 1
+
             result = xttrade.order_stock(
                 account=self.account,
                 stock_code=order.symbol,
                 order_type=order_type,
                 order_volume=order.quantity,
-                price_type=1,  # 1=限价, 2=市价
+                price_type=price_type,
                 price=order.price or 0,
             )
 
@@ -318,9 +321,11 @@ else:
             orders = xttrade.get_stock_orders(self.account)
             for o in orders:
                 if str(o.order_id) == order_id:
+                    # order_side: 23=买入, 24=卖出 (与 order_type 市价/限价不同)
+                    side = 'BUY' if getattr(o, 'order_side', 0) == 23 else 'SELL'
                     return Order(
                         symbol=o.stock_code,
-                        side='BUY' if o.order_type == 23 else 'SELL',
+                        side=side,
                         quantity=o.order_volume,
                         price=o.price,
                         order_id=str(o.order_id),
@@ -386,3 +391,94 @@ class QMTSimulator(QMTBroker):
             'market_value': total_value - self.cash,
             'available': self.cash,
         }
+
+    def place_order(self, order: Order) -> OrderResult:
+        """模拟下单（不需要 xtquant）"""
+        if not self._connected:
+            return OrderResult(
+                order_id='',
+                symbol=order.symbol,
+                side=order.side,
+                filled_quantity=0,
+                filled_price=0,
+                commission=0,
+                timestamp=datetime.now(),
+                status='REJECTED',
+            )
+
+        # 模拟成交价格
+        fill_price = order.price or 10.0  # 市价单使用默认价格
+
+        if order.side.upper() == 'BUY':
+            cost = fill_price * order.quantity
+            if cost > self.cash:
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+            self.cash -= cost
+            if order.symbol in self.positions:
+                pos = self.positions[order.symbol]
+                total_qty = pos['quantity'] + order.quantity
+                pos['avg_cost'] = (pos['avg_cost'] * pos['quantity'] + fill_price * order.quantity) / total_qty
+                pos['quantity'] = total_qty
+                pos['price'] = fill_price
+            else:
+                self.positions[order.symbol] = {
+                    'quantity': order.quantity,
+                    'avg_cost': fill_price,
+                    'price': fill_price,
+                }
+
+        elif order.side.upper() == 'SELL':
+            if order.symbol not in self.positions:
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+            pos = self.positions[order.symbol]
+            if order.quantity > pos['quantity']:
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+            revenue = fill_price * order.quantity
+            self.cash += revenue
+            pos['quantity'] -= order.quantity
+            pos['price'] = fill_price
+            if pos['quantity'] <= 0:
+                del self.positions[order.symbol]
+
+        order_id = f"SIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        order.order_id = order_id
+        order.status = 'FILLED'
+        self.orders[order_id] = order
+
+        return OrderResult(
+            order_id=order_id,
+            symbol=order.symbol,
+            side=order.side,
+            filled_quantity=order.quantity,
+            filled_price=fill_price,
+            commission=0,
+            timestamp=datetime.now(),
+            status='FILLED',
+        )
