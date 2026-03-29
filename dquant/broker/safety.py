@@ -6,10 +6,12 @@
 
 import re
 import logging
+import os
 from datetime import datetime, time
 from typing import Optional, Tuple
 from dquant.broker.base import Order
 from dquant.constants import MIN_SHARES
+from dquant.calendar import is_trading_day as _calendar_is_trading_day
 
 
 # 配置日志
@@ -301,7 +303,7 @@ class TradingTimeChecker:
     @staticmethod
     def is_trading_day(dt: Optional[datetime] = None) -> bool:
         """
-        检查是否为交易日 (周一到周五)
+        检查是否为交易日 (使用交易日历，含节假日判断)
 
         Args:
             dt: 日期时间 (默认当前时间)
@@ -312,8 +314,7 @@ class TradingTimeChecker:
         if dt is None:
             dt = datetime.now()
 
-        # 周一到周五 (0-4)
-        return dt.weekday() < 5
+        return _calendar_is_trading_day(dt)
 
     @staticmethod
     def is_trading_time(dt: Optional[datetime] = None) -> Tuple[bool, str]:

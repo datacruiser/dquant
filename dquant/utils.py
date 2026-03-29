@@ -5,7 +5,7 @@ DQuant 工具函数
 """
 
 from typing import List, Union, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from dquant.constants import (
@@ -14,6 +14,12 @@ from dquant.constants import (
     DEFAULT_STAMP_DUTY,
     DEFAULT_INITIAL_CASH,
     DEFAULT_WINDOW,
+)
+from dquant.calendar import (
+    is_trading_day as _calendar_is_trading_day,
+    get_trading_days as _calendar_get_trading_days,
+    get_previous_trading_day as _calendar_prev,
+    get_next_trading_day as _calendar_next,
 )
 
 
@@ -37,56 +43,22 @@ def get_trading_days(
     Returns:
         交易日列表
     """
-    # 简化版本：周一到周五
-    # 实际应用中应该使用交易日历
-    if isinstance(start, str):
-        start = pd.to_datetime(start)
-    if isinstance(end, str):
-        end = pd.to_datetime(end)
-
-    days = pd.date_range(start, end, freq='B')  # 工作日
-    return days.tolist()
+    return _calendar_get_trading_days(start, end, market=market)
 
 
 def is_trading_day(date: Union[str, datetime], market: str = 'cn') -> bool:
     """判断是否为交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    # 简化：周一到周五
-    return date.weekday() < 5
+    return _calendar_is_trading_day(date, market=market)
 
 
 def get_previous_trading_day(date: Union[str, datetime], n: int = 1) -> datetime:
     """获取前 n 个交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    result = date
-    count = 0
-
-    while count < n:
-        result -= timedelta(days=1)
-        if is_trading_day(result):
-            count += 1
-
-    return result
+    return _calendar_prev(date, n=n)
 
 
 def get_next_trading_day(date: Union[str, datetime], n: int = 1) -> datetime:
     """获取后 n 个交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    result = date
-    count = 0
-
-    while count < n:
-        result += timedelta(days=1)
-        if is_trading_day(result):
-            count += 1
-
-    return result
+    return _calendar_next(date, n=n)
 
 
 # ============================================================
