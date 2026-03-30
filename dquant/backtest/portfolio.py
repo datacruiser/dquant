@@ -62,6 +62,10 @@ class Portfolio:
 
     def update_prices(self, prices: Dict[str, float], timestamp: datetime = None):
         """更新持仓价格"""
+        # 防止同一日期重复追加 NAV
+        if self.timestamp_history and self.timestamp_history[-1] == timestamp:
+            return
+
         for symbol, price in prices.items():
             if symbol in self.positions:
                 self.positions[symbol].current_price = price
@@ -72,15 +76,20 @@ class Portfolio:
 
     def buy(self, symbol: str, shares: float, price: float, commission: float = 0):
         """买入"""
+        # 整手买入
+        shares = int(shares // MIN_SHARES) * MIN_SHARES
+        if shares <= 0:
+            return
+
         cost = shares * price * (1 + commission)
 
         if cost > self.cash:
-            # 调整为可买入的最大数量
-            shares = self.cash / (price * (1 + commission))
-            cost = self.cash
-
-        if shares <= 0:
-            return
+            # 调整为可买入的最大整手数量
+            max_shares = int(self.cash / (price * (1 + commission)) // MIN_SHARES) * MIN_SHARES
+            if max_shares <= 0:
+                return
+            shares = max_shares
+            cost = shares * price * (1 + commission)
 
         self.cash -= cost
 
@@ -97,19 +106,19 @@ class Portfolio:
                 current_price=price,
             )
 
-    def sell(self, symbol: str, shares: float, price: float, commission: float = 0):
-        """卖出"""
+    def sell(self, symbol: str, shares: float, price: float, commission: float = 0, stamp_duty: float = DEFAULT_STAMP_DUTY):
+        """卖出（含印花税）"""
         if symbol not in self.positions:
             return
 
         pos = self.positions[symbol]
         shares = min(shares, pos.shares)
 
-        revenue = shares * price * (1 - commission)
+        revenue = shares * price * (1 - commission - stamp_duty)
         self.cash += revenue
         pos.shares -= shares
 
-        if pos.shares <= 0:
+        if pos.shares <= 1e-10:
             del self.positions[symbol]
 
     def rebalance(
@@ -137,6 +146,12 @@ class Portfolio:
                 # 清仓
                 pos = self.positions[symbol]
                 self.sell(symbol, pos.shares, prices.get(symbol, pos.current_price), commission)
+
+        # 卖出后重新计算总资产（现金已变化）
+        total = self.total_value
+
+        # 重新计算目标市值（基于卖出后的总资产）
+        target_values = {s: total * w for s, w in target_weights.items()}
 
         # 再买入调整
         for symbol, target_value in target_values.items():

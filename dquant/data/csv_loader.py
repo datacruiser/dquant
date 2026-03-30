@@ -6,6 +6,9 @@ from typing import Optional, List, Union
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class CSVLoader(DataSource):
@@ -41,7 +44,17 @@ class CSVLoader(DataSource):
         dfs = []
 
         for p in self.path:
-            df = pd.read_csv(p)
+            try:
+                df = pd.read_csv(p)
+            except FileNotFoundError:
+                logger.error(f"CSV 文件不存在: {p}")
+                raise
+            except pd.errors.EmptyDataError:
+                logger.error(f"CSV 文件为空: {p}")
+                raise
+            except Exception as e:
+                logger.error(f"读取 CSV 文件失败: {p} — {e}")
+                raise
 
             # 转换日期列
             if self.date_col in df.columns:

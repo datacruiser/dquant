@@ -56,6 +56,8 @@ class AKShareLoader(DataSource):
     def _load_single_symbol(self, symbol):
         """加载单个股票数据"""
         try:
+            import akshare as ak
+
             df = ak.stock_zh_a_hist(
                 symbol=symbol,
                 period="daily",
@@ -166,6 +168,8 @@ class AKShareLoader(DataSource):
                 return df['成分券代码'].tolist()
 
         # 单只股票
+        if self.symbols is None:
+            raise ValueError("symbols 参数不能为 None")
         return [self.symbols]
 
     def _get_stock_data(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -206,6 +210,8 @@ class AKShareLoader(DataSource):
             # 添加后缀
             if symbol.startswith('6'):
                 df['symbol'] = symbol + '.SH'
+            elif symbol.startswith(('4', '8')):
+                df['symbol'] = symbol + '.BJ'
             else:
                 df['symbol'] = symbol + '.SZ'
 
@@ -251,7 +257,7 @@ class AKShareLoader(DataSource):
 
             # 成交量因子
             group['volume_ma_5'] = group['volume'].rolling(5).mean()
-            group['volume_ratio'] = group['volume'] / group['volume_ma_5']
+            group['volume_ratio'] = group['volume'] / group['volume_ma_5'].replace(0, np.nan)
 
             results.append(group)
 

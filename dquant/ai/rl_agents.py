@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from abc import ABC, abstractmethod
+from collections import deque
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
 
 
@@ -101,6 +102,7 @@ class TradingEnvironment:
         self.cash = self.initial_cash
         self.positions = np.zeros(self.n_stocks)
         self.position_values = np.zeros(self.n_stocks)
+        self.prev_total_value = self.initial_cash
 
         return self._get_state()
 
@@ -143,7 +145,11 @@ class TradingEnvironment:
             if act == 2:  # 买入
                 # 用可用资金的 1/n_stocks 买入
                 buy_amount = self.cash / self.n_stocks
-                shares = buy_amount / price
+                if price <= 0:
+                    continue
+                shares = int((buy_amount / price) // MIN_SHARES) * MIN_SHARES
+                if shares <= 0:
+                    continue
                 cost = shares * price * (1 + self.commission)
 
                 if cost <= self.cash:
@@ -162,9 +168,6 @@ class TradingEnvironment:
         total_value = self.cash + np.sum(self.position_values)
 
         # 计算奖励 (收益率)
-        if not hasattr(self, 'prev_total_value'):
-            self.prev_total_value = self.initial_cash
-
         reward = (total_value - self.prev_total_value) / self.prev_total_value
         self.prev_total_value = total_value
 
@@ -226,7 +229,7 @@ class DQNAgent(BaseRLAgent):
         agent = DQNAgent(n_stocks=10, lookback=20)
 
         # 训练
-        for episode in range(MIN_SHARES):
+        for episode in range(num_episodes):
             state = env.reset()
             done = False
 
@@ -265,7 +268,7 @@ class DQNAgent(BaseRLAgent):
 
         self._model = None
         self._target_model = None
-        self._buffer = []
+        self._buffer: deque = deque(maxlen=buffer_size)
 
     def _build_model(self, state_dim: int, action_dim: int):
         """构建神经网络"""
@@ -322,7 +325,7 @@ class DQNAgent(BaseRLAgent):
                 actions = q_values.argmax(dim=1).numpy()
 
                 return actions
-        except Exception:
+        except (RuntimeError, ValueError):
             return np.ones(self.n_stocks, dtype=int)  # 默认持有
 
     def update(self, experience: Tuple):
@@ -330,10 +333,8 @@ class DQNAgent(BaseRLAgent):
         if self._model is None:
             return
 
-        # 存储经验
+        # 存储经验 (deque 自动淘汰旧数据)
         self._buffer.append(experience)
-        if len(self._buffer) > self.buffer_size:
-            self._buffer.pop(0)
 
         # 批量训练
         if len(self._buffer) < self.batch_size:

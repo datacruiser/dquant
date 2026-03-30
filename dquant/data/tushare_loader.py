@@ -8,6 +8,7 @@ Tushare 是国内最流行的免费金融数据接口之一。
 from typing import Optional, List, Union
 from datetime import datetime
 import pandas as pd
+import numpy as np
 
 from dquant.data.base import DataSource
 from dquant.constants import MIN_SHARES
@@ -95,7 +96,7 @@ class TushareLoader(DataSource):
     def _load_single_symbol(self, symbol):
         """加载单个股票数据"""
         try:
-            df = self.pro.daily(
+            df = self._pro.daily(
                 ts_code=symbol,
                 start_date=self.start.replace('-', ''),
                 end_date=self.end.replace('-', ''),
@@ -236,8 +237,14 @@ class TushareLoader(DataSource):
                         df['low'] = df['low'] * df['adj_factor']
                         df['close'] = df['close'] * df['adj_factor']
                     elif self.adj == 'hfq':
-                        # 后复权需要更多信息，这里简化处理
-                        pass
+                        # 后复权：从最新日期往前累积复权因子
+                        df = df.sort_values('trade_date')
+                        last_factor = df['adj_factor'].iloc[-1]
+                        hfq_factor = last_factor / df['adj_factor']
+                        df['open'] = df['open'] * hfq_factor
+                        df['high'] = df['high'] * hfq_factor
+                        df['low'] = df['low'] * hfq_factor
+                        df['close'] = df['close'] * hfq_factor
 
             # 分钟线数据
             elif self.freq in ['1', '5', '15', '30', '60']:
@@ -299,7 +306,7 @@ class TushareLoader(DataSource):
             # 成交量因子
             group['volume_ma_5'] = group['volume'].rolling(5).mean()
             group['volume_ma_10'] = group['volume'].rolling(10).mean()
-            group['volume_ratio'] = group['volume'] / group['volume_ma_5']
+            group['volume_ratio'] = group['volume'] / group['volume_ma_5'].replace(0, np.nan)
 
             # 价格位置
             group['price_position_20'] = (group['close'] - group['low'].rolling(20).min()) / (

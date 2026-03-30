@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from functools import wraps
 import time
+import threading
 
 from dquant.logger import get_logger
 
@@ -232,9 +233,11 @@ class VectorizedOperations:
         func: Callable,
     ) -> np.ndarray:
         """
-        滚动应用函数（向量化）
+        滚动应用函数（滑动窗口视图）
 
-        比 pandas rolling 更快
+        使用 numpy sliding_window_view 创建零拷贝窗口视图，
+        然后对每个窗口应用函数。当 func 无法向量化时，
+        内部使用列表推导，性能优势来自窗口视图的零拷贝。
         """
         from numpy.lib.stride_tricks import sliding_window_view
 
@@ -298,46 +301,69 @@ class CacheManager:
         self.cache = {}
         self.max_size = max_size
         self.access_count = {}
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Any]:
         """获取缓存"""
-        if key in self.cache:
-            self.access_count[key] += 1
-            return self.cache[key]
+        with self._lock:
+            if key in self.cache:
+                self.access_count[key] += 1
+                return self.cache[key]
         return None
 
     def set(self, key: str, value: Any):
         """设置缓存"""
-        # LRU 淘汰
-        if len(self.cache) >= self.max_size:
-            # 移除访问次数最少的
-            min_key = min(self.access_count, key=self.access_count.get)
-            del self.cache[min_key]
-            del self.access_count[min_key]
+        with self._lock:
+            # LFU 淘汰
+            if len(self.cache) >= self.max_size:
+                # 移除访问次数最少的
+                min_key = min(self.access_count, key=self.access_count.get)
+                del self.cache[min_key]
+                del self.access_count[min_key]
 
-        self.cache[key] = value
-        self.access_count[key] = 0
+            self.cache[key] = value
+            self.access_count[key] = 1  # 初始值为 1，避免立即被淘汰
 
     def clear(self):
         """清空缓存"""
-        self.cache.clear()
-        self.access_count.clear()
+        with self._lock:
+            self.cache.clear()
+            self.access_count.clear()
+
+    # Sentinel for distinguishing "not cached" from "cached None"
+    _MISS = object()
 
     def memoize(self, func: Callable) -> Callable:
         """记忆化装饰器"""
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 生成缓存键
-            key = f"{func.__name__}:{args}:{kwargs}"
+            # 生成缓存键（避免对不可哈希参数使用 repr）
+            try:
+                key = f"{func.__name__}:{args}:{kwargs}"
+            except Exception:
+                # 如果参数不可哈希，跳过缓存
+                return func(*args, **kwargs)
 
-            # 尝试从缓存获取
-            cached = self.get(key)
-            if cached is not None:
-                return cached
+            # 在同一锁内完成查找 + 计数更新
+            with self._lock:
+                cached = self.cache.get(key, CacheManager._MISS)
+                if cached is not CacheManager._MISS:
+                    self.access_count[key] += 1
+                    return cached
 
-            # 计算并缓存
+            # 在锁外计算（避免持锁阻塞）
             result = func(*args, **kwargs)
-            self.set(key, result)
+
+            # 在同一锁内完成写入
+            with self._lock:
+                # 双重检查：其他线程可能已经写入了
+                if key not in self.cache:
+                    if len(self.cache) >= self.max_size:
+                        min_key = min(self.access_count, key=self.access_count.get)
+                        del self.cache[min_key]
+                        del self.access_count[min_key]
+                    self.cache[key] = result
+                    self.access_count[key] = 1  # 初始值为 1，避免立即被淘汰
 
             return result
 
@@ -386,25 +412,34 @@ class PerformanceMonitor:
         @wraps(func)
         def wrapper(*args, **kwargs):
             start = time.time()
+            tracemalloc_started = False
 
             try:
                 import tracemalloc
                 tracemalloc.start()
+                tracemalloc_started = True
             except Exception as e:
                 logger.debug(f"tracemalloc not available: {e}")
 
-            result = func(*args, **kwargs)
-
-            elapsed = time.time() - start
-
             try:
-                current, peak = tracemalloc.get_traced_memory()
-                tracemalloc.stop()
-                memory = peak / 1024 / 1024  # MB
-            except Exception:
-                memory = None
+                result = func(*args, **kwargs)
+            finally:
+                elapsed = time.time() - start
 
-            self.record(func.__name__, elapsed, memory)
+                memory = None
+                if tracemalloc_started:
+                    try:
+                        _, peak = tracemalloc.get_traced_memory()
+                        memory = peak / 1024 / 1024  # MB
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            tracemalloc.stop()
+                        except Exception:
+                            pass
+
+                self.record(func.__name__, elapsed, memory)
 
             return result
 

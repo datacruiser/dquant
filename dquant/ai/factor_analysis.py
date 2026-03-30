@@ -157,12 +157,16 @@ class FactorAnalyzer:
         if len(day_factors) == 0:
             return None
 
-        day_factors['group'] = pd.qcut(
-            day_factors['score'],
-            self.n_groups,
-            labels=False,
-            duplicates='drop'
-        )
+        try:
+            day_factors['group'] = pd.qcut(
+                day_factors['score'],
+                self.n_groups,
+                labels=False,
+                duplicates='drop'
+            )
+        except ValueError:
+            # 样本不足或全部相同，无法分组
+            return None
 
         return day_factors
 
@@ -213,10 +217,11 @@ class FactorAnalyzer:
 
             # 计算每组平均收益
             group_rets = {}
-            for group_id in range(self.n_groups):
+            actual_groups = sorted(day_factors['group'].dropna().unique())
+            for group_id in actual_groups:
                 group_ret = self._calculate_group_avg_return(day_factors, day_returns, group_id)
                 if group_ret is not None:
-                    group_rets[f'G{group_id+1}'] = group_ret
+                    group_rets[f'G{int(group_id)+1}'] = group_ret
 
             if group_rets:
                 group_rets['date'] = date
@@ -298,10 +303,24 @@ class FactorAnalyzer:
         returns: pd.DataFrame,
         period: int,
     ) -> pd.Series:
-        """计算未来 N 期收益"""
-        # 简化实现
-        # 实际应用中需要根据具体数据结构调整
-        return returns.groupby('symbol')['return'].rolling(period).sum().shift(-period)
+        """
+        计算未来 N 期收益
+
+        forward_return[T] = sum(r[T+1], r[T+2], ..., r[T+period])
+        即从 T+1 到 T+period 的累计日收益（近似多期复利）。
+        """
+        def calc_forward(group):
+            group = group.sort_index()
+            # rolling(period).sum() 在位置 i 给出 sum(r[i-period+1]..r[i])
+            # 在位置 T+period 给出 sum(r[T+1]..r[T+period])
+            # shift(-period) 将其移到位置 T
+            return group.rolling(period).sum().shift(-period)
+
+        result = returns.groupby('symbol')['return'].apply(calc_forward)
+        # groupby.apply 返回 MultiIndex (symbol, date)，对齐到单层 date 索引
+        if isinstance(result.index, pd.MultiIndex):
+            result = result.droplevel(0)
+        return result
 
 
 class FactorReport:

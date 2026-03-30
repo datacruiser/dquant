@@ -8,6 +8,9 @@ import pandas as pd
 
 from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.metrics import Metrics
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -100,13 +103,13 @@ class BacktestResult:
             # 保存或显示
             if save_path:
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
-                print(f"图表已保存: {save_path}")
+                logger.info(f"图表已保存: {save_path}")
             else:
                 plt.show()
 
             plt.close()
 
         except ImportError:
-            print("警告: matplotlib 未安装，无法绑图")
+            logger.warning("matplotlib 未安装，无法绘图")
         except Exception as e:
-            print(f"绘图错误: {e}")
+            logger.error(f"绘图错误: {e}")

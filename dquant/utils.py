@@ -5,7 +5,7 @@ DQuant 工具函数
 """
 
 from typing import List, Union, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import numpy as np
 from dquant.constants import (
@@ -13,8 +13,14 @@ from dquant.constants import (
     DEFAULT_SLIPPAGE,
     DEFAULT_STAMP_DUTY,
     DEFAULT_INITIAL_CASH,
-    MIN_SHARES,
     DEFAULT_WINDOW,
+    TRADING_DAYS_PER_YEAR,
+)
+from dquant.calendar import (
+    is_trading_day as _calendar_is_trading_day,
+    get_trading_days as _calendar_get_trading_days,
+    get_previous_trading_day as _calendar_prev,
+    get_next_trading_day as _calendar_next,
 )
 
 
@@ -38,56 +44,22 @@ def get_trading_days(
     Returns:
         交易日列表
     """
-    # 简化版本：周一到周五
-    # 实际应用中应该使用交易日历
-    if isinstance(start, str):
-        start = pd.to_datetime(start)
-    if isinstance(end, str):
-        end = pd.to_datetime(end)
-
-    days = pd.date_range(start, end, freq='B')  # 工作日
-    return days.tolist()
+    return _calendar_get_trading_days(start, end, market=market)
 
 
 def is_trading_day(date: Union[str, datetime], market: str = 'cn') -> bool:
     """判断是否为交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    # 简化：周一到周五
-    return date.weekday() < 5
+    return _calendar_is_trading_day(date, market=market)
 
 
 def get_previous_trading_day(date: Union[str, datetime], n: int = 1) -> datetime:
     """获取前 n 个交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    result = date
-    count = 0
-
-    while count < n:
-        result -= timedelta(days=1)
-        if is_trading_day(result):
-            count += 1
-
-    return result
+    return _calendar_prev(date, n=n)
 
 
 def get_next_trading_day(date: Union[str, datetime], n: int = 1) -> datetime:
     """获取后 n 个交易日"""
-    if isinstance(date, str):
-        date = pd.to_datetime(date)
-
-    result = date
-    count = 0
-
-    while count < n:
-        result += timedelta(days=1)
-        if is_trading_day(result):
-            count += 1
-
-    return result
+    return _calendar_next(date, n=n)
 
 
 # ============================================================
@@ -125,7 +97,7 @@ def calculate_cumulative_returns(returns: pd.Series) -> pd.Series:
 
 def annualized_return(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算年化收益率
@@ -148,7 +120,7 @@ def annualized_return(
 
 def annualized_volatility(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算年化波动率
@@ -169,7 +141,7 @@ def annualized_volatility(
 def sharpe_ratio(
     returns: pd.Series,
     risk_free_rate: float = 0.03,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Sharpe 比率
@@ -201,6 +173,9 @@ def max_drawdown(nav: pd.Series) -> Tuple[float, datetime, datetime]:
     Returns:
         (最大回撤, 开始日期, 结束日期)
     """
+    if len(nav) < 2:
+        return 0.0, None, None
+
     cummax = nav.cummax()
     drawdown = (nav - cummax) / cummax
 
@@ -216,7 +191,7 @@ def max_drawdown(nav: pd.Series) -> Tuple[float, datetime, datetime]:
 def sortino_ratio(
     returns: pd.Series,
     risk_free_rate: float = 0.03,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Sortino 比率
@@ -231,12 +206,9 @@ def sortino_ratio(
     """
     ann_ret = annualized_return(returns, periods_per_year)
 
-    # 下行波动率
-    negative_returns = returns[returns < 0]
-    if len(negative_returns) == 0:
-        return float('inf')
-
-    downside_std = negative_returns.std() * np.sqrt(periods_per_year)
+    # 下行波动率：使用 downside deviation（低于 target=0 的标准差）
+    downside = returns.clip(upper=0)
+    downside_std = downside.std() * np.sqrt(periods_per_year)
 
     if downside_std == 0:
         return float('inf')
@@ -246,7 +218,7 @@ def sortino_ratio(
 
 def calmar_ratio(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Calmar 比率
@@ -296,12 +268,18 @@ def winsorize(
 
 def standardize(data: pd.Series) -> pd.Series:
     """标准化"""
-    return (data - data.mean()) / data.std()
+    std = data.std()
+    if std == 0:
+        return pd.Series(0.0, index=data.index)
+    return (data - data.mean()) / std
 
 
 def normalize(data: pd.Series) -> pd.Series:
     """归一化到 [0, 1]"""
-    return (data - data.min()) / (data.max() - data.min())
+    data_range = data.max() - data.min()
+    if data_range == 0:
+        return pd.Series(0.5, index=data.index)
+    return (data - data.min()) / data_range
 
 
 # ============================================================
@@ -320,7 +298,7 @@ def format_money(amount: float) -> str:
 
 def format_percent(value: float) -> str:
     """格式化百分比"""
-    return f"{value*MIN_SHARES:.2f}%"
+    return f"{value*100:.2f}%"
 
 
 def format_sharpe(sharpe: float) -> str:

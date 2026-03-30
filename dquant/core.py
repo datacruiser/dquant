@@ -14,6 +14,9 @@ from dquant.backtest.portfolio import Portfolio
 from dquant.broker.base import BaseBroker
 from dquant.broker.simulator import Simulator
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Engine:
@@ -138,6 +141,7 @@ class Engine:
     def live(
         self,
         dry_run: bool = True,
+        interval: int = 60,
         **kwargs
     ) -> None:
         """
@@ -145,20 +149,21 @@ class Engine:
 
         Args:
             dry_run: 是否模拟运行 (不实际下单)
+            interval: 循环间隔（秒），默认 60
             **kwargs: 券商配置参数
         """
         if dry_run:
-            print("[LIVE] Running in dry-run mode (模拟运行)")
+            logger.info("[LIVE] Running in dry-run mode (模拟运行)")
         else:
-            print("[LIVE] Running in live mode (实盘运行)")
+            logger.info("[LIVE] Running in live mode (实盘运行)")
             if not isinstance(self.broker, Simulator):
-                print(f"[LIVE] Connected to broker: {self.broker.name}")
+                logger.info(f"[LIVE] Connected to broker: {self.broker.name}")
 
         # 实盘循环
         import time
         from datetime import datetime, time as dt_time
 
-        print(f"[LIVE] Starting live trading loop (interval: {interval}s)")
+        logger.info(f"[LIVE] Starting live trading loop (interval: {interval}s)")
 
         while True:
             try:
@@ -180,24 +185,24 @@ class Engine:
                 )
 
                 if not is_trading_time:
-                    print(f"[LIVE] Outside trading hours: {current_time}")
+                    logger.info(f"[LIVE] Outside trading hours: {current_time}")
                     time.sleep(interval)
                     continue
 
                 # 1. 获取最新数据
-                print(f"[LIVE] Fetching latest data...")
+                logger.info(f"[LIVE] Fetching latest data...")
                 # TODO: 实现数据获取 (需要数据源支持)
 
                 # 2. 生成信号
-                print(f"[LIVE] Generating signals...")
+                logger.info(f"[LIVE] Generating signals...")
                 # TODO: 实现信号生成 (需要策略支持)
 
                 # 3. 执行交易
-                print(f"[LIVE] Executing trades...")
+                logger.info(f"[LIVE] Executing trades...")
                 # TODO: 实现交易执行 (需要券商接口支持)
 
                 # 4. 更新持仓
-                print(f"[LIVE] Updating positions...")
+                logger.info(f"[LIVE] Updating positions...")
                 # TODO: 实现持仓更新
 
                 # 控制循环频率
@@ -208,10 +213,10 @@ class Engine:
                     time.sleep(sleep_time)
 
             except KeyboardInterrupt:
-                print("\n[LIVE] Stopped by user")
+                logger.info("\n[LIVE] Stopped by user")
                 break
             except Exception as e:
-                print(f"[LIVE] Error: {e}")
+                logger.error(f"[LIVE] Error: {e}")
                 time.sleep(interval)
 
     def optimize(
@@ -236,6 +241,13 @@ class Engine:
         best_params = None
         best_result = None
 
+        # 保存原始参数，出错时可恢复
+        original_params = {
+            name: getattr(self.strategy, name)
+            for name in param_grid
+            if hasattr(self.strategy, name)
+        }
+
         # 生成所有参数组合
         param_names = list(param_grid.keys())
         param_values = list(param_grid.values())
@@ -248,16 +260,25 @@ class Engine:
                 if hasattr(self.strategy, name):
                     setattr(self.strategy, name, value)
 
-            # 运行回测
-            result = self.backtest(**backtest_kwargs)
+            try:
+                # 运行回测
+                result = self.backtest(**backtest_kwargs)
 
-            # 获取评分
-            score = getattr(result.metrics, metric, 0)
+                # 获取评分
+                score = getattr(result.metrics, metric, 0)
 
-            if score > best_score:
-                best_score = score
-                best_params = params
-                best_result = result
+                if score > best_score:
+                    best_score = score
+                    best_params = params
+                    best_result = result
+            except Exception:
+                continue
+
+        # 恢复策略为最优参数（而非最后一个网格点的参数）
+        if best_params:
+            for name, value in best_params.items():
+                if hasattr(self.strategy, name):
+                    setattr(self.strategy, name, value)
 
         return {
             'best_params': best_params,

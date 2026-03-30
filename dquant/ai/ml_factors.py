@@ -7,7 +7,10 @@ import pandas as pd
 import numpy as np
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
+
+# ML 模型默认参数
+DEFAULT_N_ESTIMATORS = 100
 
 
 class XGBoostFactor(BaseFactor):
@@ -40,7 +43,7 @@ class XGBoostFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': MIN_SHARES,
+            'n_estimators': DEFAULT_N_ESTIMATORS,
             'max_depth': 5,
             'learning_rate': 0.1,
             'random_state': 42,
@@ -130,7 +133,7 @@ class LGBMFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': MIN_SHARES,
+            'n_estimators': DEFAULT_N_ESTIMATORS,
             'max_depth': 5,
             'learning_rate': 0.1,
             'random_state': 42,

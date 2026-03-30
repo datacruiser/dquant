@@ -5,40 +5,14 @@
 """
 
 import re
-import logging
 from datetime import datetime, time
 from typing import Optional, Tuple
 from dquant.broker.base import Order
 from dquant.constants import MIN_SHARES
+from dquant.calendar import is_trading_day as _calendar_is_trading_day
+from dquant.logger import get_logger
 
-
-# 配置日志
-logger = logging.getLogger('dquant.trading')
-logger.setLevel(logging.INFO)
-
-# 创建文件处理器
-if not logger.handlers:
-    # 控制台输出
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
-    # 文件输出
-    try:
-        file_handler = logging.FileHandler('logs/trading.log', encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)
-
-        # 格式
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        console_handler.setFormatter(formatter)
-        file_handler.setFormatter(formatter)
-
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
-    except:
-        # 如果无法创建文件，只使用控制台
-        logger.addHandler(console_handler)
+logger = get_logger('dquant.trading')
 
 
 class OrderValidator:
@@ -298,7 +272,7 @@ class TradingTimeChecker:
     @staticmethod
     def is_trading_day(dt: Optional[datetime] = None) -> bool:
         """
-        检查是否为交易日 (周一到周五)
+        检查是否为交易日 (使用交易日历，含节假日判断)
 
         Args:
             dt: 日期时间 (默认当前时间)
@@ -309,8 +283,7 @@ class TradingTimeChecker:
         if dt is None:
             dt = datetime.now()
 
-        # 周一到周五 (0-4)
-        return dt.weekday() < 5
+        return _calendar_is_trading_day(dt)
 
     @staticmethod
     def is_trading_time(dt: Optional[datetime] = None) -> Tuple[bool, str]:
@@ -392,6 +365,7 @@ class TradingSafety:
         order: Order,
         available_cash: float = 0,
         positions: dict = None,
+        estimated_price: Optional[float] = None,
     ) -> Tuple[bool, str]:
         """
         综合检查订单
@@ -400,6 +374,7 @@ class TradingSafety:
             order: 订单对象
             available_cash: 可用资金
             positions: 持仓字典
+            estimated_price: 市价单的估计价格（用于资金检查）
 
         Returns:
             (是否通过检查, 错误信息)
@@ -424,9 +399,12 @@ class TradingSafety:
 
         # 3. 资金/持仓检查
         if order.side.upper() == 'BUY':
-            if self.enable_fund_check and order.price:
+            if self.enable_fund_check:
+                check_price = order.price or estimated_price
+                if check_price is None:
+                    return False, "市价单需提供 estimated_price 用于资金检查"
                 valid, msg, _ = FundChecker.check_buy_fund(
-                    order.price,
+                    check_price,
                     order.quantity,
                     available_cash,
                 )
@@ -436,7 +414,9 @@ class TradingSafety:
                 logger.info("✓ 资金检查通过")
 
         elif order.side.upper() == 'SELL':
-            if self.enable_position_check and positions:
+            if self.enable_position_check:
+                if positions is None:
+                    return False, "卖出订单需提供 positions 用于持仓检查"
                 valid, msg = FundChecker.check_sell_position(
                     order.symbol,
                     order.quantity,

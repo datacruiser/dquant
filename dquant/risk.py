@@ -130,7 +130,8 @@ class PositionSizer:
         volatilities: Dict[str, float],
     ) -> Dict[str, float]:
         """风险平价"""
-        # 默认波动率
+        # 使用副本，避免修改调用方传入的字典
+        volatilities = dict(volatilities)
         for symbol in symbols:
             if symbol not in volatilities:
                 volatilities[symbol] = 0.02  # 默认 2% 日波动
@@ -205,6 +206,8 @@ class RiskManager:
         Returns:
             (是否通过, 原因)
         """
+        if total_value <= 0:
+            return False, "总价值为零或负，无法计算仓位比例"
         pct = position_value / total_value
 
         if pct > self.limits.max_single_pct:
@@ -325,6 +328,8 @@ class RiskManager:
         Returns:
             (是否止损, 原因)
         """
+        if initial_value <= 0:
+            return False, "初始价值为零或负"
         loss = (initial_value - current_value) / initial_value
 
         if loss >= self.max_drawdown:

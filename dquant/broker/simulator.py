@@ -7,7 +7,7 @@ from datetime import datetime
 import uuid
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
 
 
 class Simulator(BaseBroker):
@@ -54,21 +54,42 @@ class Simulator(BaseBroker):
 
     def place_order(self, order: Order) -> OrderResult:
         """下单"""
-        order.order_id = str(uuid.uuid4())[:8]
+        order.order_id = str(uuid.uuid4())
         order.timestamp = datetime.now()
 
         # 模拟成交
         filled_price = order.price or self._get_simulated_price(order.symbol)
+
+        # 应用滑点
+        if order.side == 'BUY':
+            filled_price *= (1 + DEFAULT_SLIPPAGE)
+        elif order.side == 'SELL':
+            filled_price *= (1 - DEFAULT_SLIPPAGE)
+
         filled_quantity = order.quantity
 
         if order.side == 'BUY':
-            # 买入
-            cost = filled_price * filled_quantity
-            if cost > self.cash:
-                filled_quantity = self.cash / filled_price
-                cost = self.cash
+            # 买入：成本 = 价格 * 数量 * (1 + 佣金率)
+            total_cost = filled_price * filled_quantity * (1 + DEFAULT_COMMISSION)
+            if total_cost > self.cash:
+                # 按整手调整
+                filled_quantity = int(self.cash / (filled_price * (1 + DEFAULT_COMMISSION)) // MIN_SHARES) * MIN_SHARES
+                if filled_quantity <= 0:
+                    order.status = 'REJECTED'
+                    self.orders[order.order_id] = order
+                    return OrderResult(
+                        order_id=order.order_id,
+                        symbol=order.symbol,
+                        side=order.side,
+                        filled_quantity=0,
+                        filled_price=0,
+                        commission=0,
+                        timestamp=order.timestamp,
+                        status='REJECTED',
+                    )
+                total_cost = filled_price * filled_quantity * (1 + DEFAULT_COMMISSION)
 
-            self.cash -= cost
+            self.cash -= total_cost
 
             if order.symbol in self.positions:
                 pos = self.positions[order.symbol]
@@ -83,14 +104,16 @@ class Simulator(BaseBroker):
                 }
 
         elif order.side == 'SELL':
-            # 卖出
+            # 卖出：收入 = 价格 * 数量 * (1 - 佣金率 - 印花税)
             if order.symbol not in self.positions:
                 filled_quantity = 0
             else:
                 pos = self.positions[order.symbol]
                 filled_quantity = min(filled_quantity, pos['quantity'])
                 revenue = filled_price * filled_quantity
-                self.cash += revenue
+                # A 股卖出：扣佣金 + 印花税
+                total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+                self.cash += revenue - total_cost
                 pos['quantity'] -= filled_quantity
 
                 if pos['quantity'] <= 0:
