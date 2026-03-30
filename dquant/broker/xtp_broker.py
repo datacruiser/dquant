@@ -253,6 +253,33 @@ class XTPBroker(BaseBroker):
             )
 
         try:
+            # 安全检查
+            account_info = self.get_account()
+            positions = self.get_positions()
+
+            valid, msg = self.safety.check_order(
+                order,
+                available_cash=account_info.get('cash', 0),
+                positions=positions,
+            )
+
+            if not valid:
+                log_error("PLACE_ORDER", Exception(msg), {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                })
+                return OrderResult(
+                    order_id='',
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status='REJECTED',
+                )
+
             # 转换订单类型
             # XTP: 23=市价单, 24=限价单
             price_type = 23 if order.order_type == 'MARKET' else 24

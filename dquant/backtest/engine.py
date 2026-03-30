@@ -74,9 +74,13 @@ class BacktestEngine:
                 continue
             prices = dict(zip(daily_data['symbol'], daily_data['close']))
 
-            # 构建滑点调整后的交易价格 (买入加滑点，卖出发方向相反)
-            trade_prices = {
+            # 构建滑点调整后的交易价格
+            # 买入加滑点（实际成交价更高），卖出减滑点（实际成交价更低）
+            buy_trade_prices = {
                 s: p * (1 + self.slippage) for s, p in prices.items()
+            }
+            sell_trade_prices = {
+                s: p * (1 - self.slippage) for s, p in prices.items()
             }
 
             # 更新持仓价格
@@ -98,7 +102,7 @@ class BacktestEngine:
 
                 self.portfolio.rebalance(
                     target_weights,
-                    trade_prices,
+                    buy_trade_prices,
                     self.commission
                 )
 
@@ -119,7 +123,7 @@ class BacktestEngine:
                     pos = self.portfolio.positions[symbol]
                     self.portfolio.sell(
                         symbol, pos.shares,
-                        trade_prices.get(symbol, pos.current_price),
+                        sell_trade_prices.get(symbol, pos.current_price),
                         self.commission,
                     )
                     self.trades.append({
@@ -140,6 +144,9 @@ class BacktestEngine:
         metrics = Metrics.from_nav(nav_df['nav'])
         metrics.total_trades = len(self.trades)
 
+        # 计算基准净值
+        benchmark_nav = self._compute_benchmark_nav()
+
         # 创建交易记录 DataFrame
         trades_df = pd.DataFrame(self.trades) if self.trades else pd.DataFrame()
 
@@ -147,4 +154,26 @@ class BacktestEngine:
             portfolio=self.portfolio,
             trades=trades_df,
             metrics=metrics,
+            benchmark_nav=benchmark_nav,
         )
+
+    def _compute_benchmark_nav(self) -> Optional[pd.Series]:
+        """计算基准净值曲线"""
+        if not self.benchmark:
+            return None
+
+        # 从数据中筛选 benchmark 股票
+        if 'symbol' not in self.data.columns:
+            return None
+
+        bench_data = self.data[self.data['symbol'] == self.benchmark]
+        if bench_data.empty:
+            return None
+
+        if 'close' not in bench_data.columns:
+            return None
+
+        close = bench_data['close']
+        bench_nav = close / close.iloc[0]
+        bench_nav.index = bench_data.index
+        return bench_nav

@@ -142,10 +142,12 @@ class DataManager:
         cache_dir: Optional[str] = None,
         cache_expire: int = 24,  # 缓存过期时间(小时)
         default_source: str = 'akshare',
+        validate_after_load: bool = False,
     ):
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.cache_expire = cache_expire
         self.default_source = default_source
+        self.validate_after_load = validate_after_load
 
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -186,6 +188,17 @@ class DataManager:
         # 创建数据源并加载
         loader = DataSourceRegistry.create(source, symbols=symbols, start=start, end=end, **kwargs)
         df = loader.load()
+
+        # 数据完整性校验
+        if self.validate_after_load and df is not None and not df.empty:
+            try:
+                from dquant.data.validators import DataValidator
+                validator = DataValidator()
+                results = validator.validate(df)
+                if not results.get('passed', True):
+                    logger.warning(f"[DataManager] 数据校验发现问题: {results.get('issues', {})}")
+            except Exception as e:
+                logger.debug(f"[DataManager] 数据校验跳过: {e}")
 
         # 保存缓存
         if self.cache_dir:
@@ -278,9 +291,16 @@ class DataManager:
         return dfs
 
     def _get_cache_key(self, source: str, symbols, start, end, kwargs) -> str:
-        """生成缓存键"""
+        """生成缓存键（使用完整 symbol 列表避免碰撞）"""
         if isinstance(symbols, list):
-            symbols = ','.join(symbols[:5]) + f'...{len(symbols)}'
+            sorted_symbols = sorted(symbols)
+            symbols_str = ','.join(sorted_symbols)
+            # 长列表用 hash 避免文件名过长
+            if len(symbols_str) > 200:
+                import hashlib
+                symbols = hashlib.md5(symbols_str.encode()).hexdigest()[:16]
+            else:
+                symbols = symbols_str
 
         key_parts = [source, str(symbols), str(start), str(end)]
         key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])

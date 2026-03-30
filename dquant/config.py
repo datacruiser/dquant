@@ -92,12 +92,42 @@ class MLConfig:
 
 
 @dataclass
+class LiveConfig:
+    """实盘交易配置"""
+    # 券商
+    broker: str = 'simulator'
+    broker_config: Dict[str, Any] = field(default_factory=dict)
+
+    # 交易循环
+    interval: int = 60             # 轮询间隔 (秒)
+    dry_run: bool = True           # 模拟运行
+
+    # 风控
+    max_drawdown: float = 0.15     # 最大回撤
+    max_daily_loss: float = 0.03   # 单日最大亏损
+    max_consecutive_errors: int = 10  # 连续错误上限
+
+    # 仓位
+    position_method: str = 'equal_weight'
+    max_single_pct: float = 0.1   # 单票最大仓位
+
+    # 日志
+    log_dir: str = './logs'
+    log_max_bytes: int = 10 * 1024 * 1024  # 10MB
+    log_backup_count: int = 5
+
+    # 审计
+    journal_dir: str = './trade_journal'
+
+
+@dataclass
 class DQuantConfig:
     """DQuant 总配置"""
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     data: DataConfig = field(default_factory=DataConfig)
     factor: FactorConfig = field(default_factory=FactorConfig)
     ml: MLConfig = field(default_factory=MLConfig)
+    live: 'LiveConfig' = field(default_factory=lambda: LiveConfig())
 
     @classmethod
     def from_file(cls, path: str) -> 'DQuantConfig':
@@ -134,7 +164,7 @@ class DQuantConfig:
         config = cls()
 
         # 应用各配置段
-        for section_name in ['backtest', 'data', 'factor', 'ml']:
+        for section_name in ['backtest', 'data', 'factor', 'ml', 'live']:
             if section_name in data:
                 config._apply_config_section(section_name, data[section_name])
 

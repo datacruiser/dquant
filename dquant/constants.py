@@ -62,6 +62,17 @@ MAX_RETRIES = 3
 RETRY_DELAY = 1.0  # 秒
 BATCH_SIZE = 100
 
+# 订单重试
+ORDER_MAX_RETRIES = 3
+ORDER_RETRY_DELAY = 1.0       # 首次重试延迟 (秒)
+ORDER_RETRY_BACKOFF = 2.0     # 指数退避因子
+ORDER_TIMEOUT_SECONDS = 30    # 单次订单超时
+
+# Broker 重连
+BROKER_MAX_RECONNECT = 5           # 最大重连次数
+BROKER_RECONNECT_DELAY = 2.0       # 首次重连延迟 (秒)
+BROKER_RECONNECT_BACKOFF = 2.0     # 指数退避因子
+
 # 缓存
 CACHE_EXPIRE_DAYS = 7
 

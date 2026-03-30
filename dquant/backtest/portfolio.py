@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import pandas as pd
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -179,3 +182,36 @@ class Portfolio:
             'timestamp': self.timestamp_history,
             'nav': self.nav_history,
         }).set_index('timestamp')
+
+    def apply_corporate_action(self, action: "CorporateAction"):
+        """
+        应用公司行动（存根 — 仅日志记录）
+
+        回测使用前复权数据，无需实际处理分红/送股。
+        实盘模式需要数据源提供公司行动数据后实现完整逻辑。
+        """
+        logger.info(
+            f"[CorporateAction] {action.action_type} for {action.symbol} "
+            f"on {action.ex_date}: amount={action.amount}, ratio={action.ratio}"
+        )
+
+
+@dataclass
+class CorporateAction:
+    """
+    公司行动事件（存根）
+
+    用于记录分红、送股、拆股等事件。
+    回测模式使用前复权数据，不需要实际处理。
+    实盘模式需要数据源支持。
+    """
+    symbol: str
+    action_type: str  # 'dividend', 'split', 'bonus_shares'
+    ex_date: str
+    amount: float = 0.0       # 每股分红金额 (dividend) 或拆股比例 (split)
+    ratio: float = 1.0        # 送股比例 (bonus_shares: 0.1 = 每10股送1股)
+    metadata: Optional[Dict] = None
+
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}

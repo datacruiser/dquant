@@ -43,6 +43,7 @@ class BaseBroker(ABC):
 
     def __init__(self, name: str = "BaseBroker"):
         self.name = name
+        self._connected = False
 
     @abstractmethod
     def connect(self, **kwargs) -> bool:
@@ -83,3 +84,7 @@ class BaseBroker(ABC):
     def get_market_data(self, symbol: str) -> dict:
         """获取实时行情"""
         pass
+
+    def is_connected(self) -> bool:
+        """检查连接状态（子类可覆盖）"""
+        return self._connected

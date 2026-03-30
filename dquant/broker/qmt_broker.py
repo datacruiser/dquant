@@ -329,7 +329,9 @@ else:
                         quantity=o.order_volume,
                         price=o.price,
                         order_id=str(o.order_id),
-                        status='FILLED' if o.traded_volume > 0 else 'PENDING',
+                        status=('FILLED' if o.traded_volume >= o.order_volume
+                            else 'PARTIAL_FILLED' if o.traded_volume > 0
+                            else 'PENDING'),
                     )
             return None
         except Exception as e:

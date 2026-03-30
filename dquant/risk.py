@@ -194,6 +194,11 @@ class RiskManager:
         self.peak_value = 0.0
         self.current_drawdown = 0.0
 
+        # 日亏损追踪
+        self.daily_start_value: float = 0.0
+        self.daily_start_date: Optional[str] = None
+        self.halt_trading: bool = False
+
     def check_position_limit(
         self,
         symbol: str,
@@ -234,8 +239,44 @@ class RiskManager:
             self.current_drawdown = 0.0
 
         triggered = self.current_drawdown >= self.max_drawdown
+        if triggered:
+            self.halt_trading = True
 
         return triggered, self.current_drawdown
+
+    def reset_daily_start(self, current_value: float, date_str: str):
+        """
+        每日开盘时重置日亏损基准
+
+        Args:
+            current_value: 当前组合价值
+            date_str: 当日日期字符串 (YYYY-MM-DD)
+        """
+        if self.daily_start_date != date_str:
+            self.daily_start_value = current_value
+            self.daily_start_date = date_str
+
+    def check_daily_loss(self, current_value: float) -> Tuple[bool, float]:
+        """
+        检查日亏损
+
+        Returns:
+            (是否触发日亏损风控, 当前日亏损比例)
+        """
+        if self.daily_start_value <= 0:
+            return False, 0.0
+
+        daily_loss = (self.daily_start_value - current_value) / self.daily_start_value
+        triggered = daily_loss >= self.max_daily_loss
+
+        if triggered:
+            self.halt_trading = True
+
+        return triggered, daily_loss
+
+    def should_halt(self) -> bool:
+        """综合判断是否应停止交易（回撤 + 日亏损）"""
+        return self.halt_trading
 
     def calculate_var(
         self,
