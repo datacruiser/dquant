@@ -58,52 +58,77 @@ class BacktestEngine:
         # 按日期分组信号
         signal_df = pd.DataFrame([s.to_dict() for s in signals])
         if len(signal_df) == 0:
-            print("[WARN] No signals generated")
             return self._create_result()
 
         signal_df['timestamp'] = pd.to_datetime(signal_df['timestamp'])
         daily_signals = signal_df.groupby('timestamp')
 
-        # 遍历每个交易日
+        # 预分区数据避免 O(n²) 扫描
         dates = sorted(self.data.index.unique())
+        data_by_date = dict(iter(self.data.groupby(self.data.index)))
 
-        for i, date in enumerate(dates):
-            # 获取当日价格
-            daily_data = self.data[self.data.index == date]
+        for date in dates:
+            # O(1) 获取当日数据
+            daily_data = data_by_date.get(date)
+            if daily_data is None:
+                continue
             prices = dict(zip(daily_data['symbol'], daily_data['close']))
+
+            # 构建滑点调整后的交易价格 (买入加滑点，卖出发方向相反)
+            trade_prices = {
+                s: p * (1 + self.slippage) for s, p in prices.items()
+            }
 
             # 更新持仓价格
             self.portfolio.update_prices(prices, date)
 
             # 检查是否有调仓信号
-            if date in daily_signals.groups:
-                # 获取当日信号
-                day_signals = daily_signals.get_group(date)
+            if date not in daily_signals.groups:
+                continue
 
-                # 计算目标权重
-                buy_signals = day_signals[day_signals['signal_type'] == 1]
-                if len(buy_signals) > 0:
-                    target_weights = dict(zip(
-                        buy_signals['symbol'],
-                        buy_signals['strength']
-                    ))
+            day_signals = daily_signals.get_group(date)
 
-                    # 再平衡
-                    self.portfolio.rebalance(
-                        target_weights,
-                        prices,
-                        self.commission
+            # 处理买入信号 (signal_type == 1)
+            buy_signals = day_signals[day_signals['signal_type'] == 1]
+            if len(buy_signals) > 0:
+                target_weights = dict(zip(
+                    buy_signals['symbol'],
+                    buy_signals['strength']
+                ))
+
+                self.portfolio.rebalance(
+                    target_weights,
+                    trade_prices,
+                    self.commission
+                )
+
+                for _, row in buy_signals.iterrows():
+                    self.trades.append({
+                        'date': date,
+                        'symbol': row['symbol'],
+                        'action': 'BUY',
+                        'price': prices.get(row['symbol'], 0),
+                        'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
+                    })
+
+            # 处理卖出信号 (signal_type == -1)
+            sell_signals = day_signals[day_signals['signal_type'] == -1]
+            for _, row in sell_signals.iterrows():
+                symbol = row['symbol']
+                if symbol in self.portfolio.positions:
+                    pos = self.portfolio.positions[symbol]
+                    self.portfolio.sell(
+                        symbol, pos.shares,
+                        trade_prices.get(symbol, pos.current_price),
+                        self.commission,
                     )
-
-                    # 记录交易
-                    for _, row in buy_signals.iterrows():
-                        self.trades.append({
-                            'date': date,
-                            'symbol': row['symbol'],
-                            'action': 'BUY',
-                            'price': prices.get(row['symbol'], 0),
-                            'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
-                        })
+                    self.trades.append({
+                        'date': date,
+                        'symbol': symbol,
+                        'action': 'SELL',
+                        'price': prices.get(symbol, 0),
+                        'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
+                    })
 
         return self._create_result()
 

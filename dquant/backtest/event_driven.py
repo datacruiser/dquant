@@ -385,10 +385,20 @@ class EventDrivenBacktest:
 
     def _on_order(self, event: OrderEvent):
         """处理订单事件"""
-        # 执行订单
+        # 使用订单对应股票的价格 (而非 current_bar 的价格)
+        if event.symbol in self.last_prices:
+            price = self.last_prices[event.symbol]
+            volume = 0
+        elif self.current_bar and self.current_bar.symbol == event.symbol:
+            price = self.current_bar.close
+            volume = self.current_bar.volume
+        else:
+            price = 0
+            volume = 0
+
         market_data = {
-            'close': self.current_bar.close if self.current_bar else 0,
-            'volume': self.current_bar.volume if self.current_bar else 0,
+            'close': price,
+            'volume': volume,
         }
 
         fill = self.execution_handler.execute_order(event, market_data)

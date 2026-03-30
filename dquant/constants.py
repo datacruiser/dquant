@@ -103,8 +103,8 @@ DEFAULT_N_GROUPS = 5
 # ============================================================
 
 # 交易日
-TRADING_DAYS_PER_YEAR = 250
-TRADING_DAYS_PER_MONTH = 20
+TRADING_DAYS_PER_YEAR = 252
+TRADING_DAYS_PER_MONTH = 21
 
 # 时间格式
 DATE_FORMAT = '%Y-%m-%d'

@@ -87,13 +87,13 @@ class MomentumFactor(RuleFactor):
             group = group.sort_index()
             momentum = group['close'].pct_change(self.window)
 
-            for date, value in momentum.items():
-                if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+            valid = momentum.dropna()
+            for date, value in valid.items():
+                results.append({
+                    'date': date,
+                    'symbol': symbol,
+                    'score': value,
+                })
 
         df = pd.DataFrame(results)
         if len(df) > 0:

@@ -237,8 +237,14 @@ class TushareLoader(DataSource):
                         df['low'] = df['low'] * df['adj_factor']
                         df['close'] = df['close'] * df['adj_factor']
                     elif self.adj == 'hfq':
-                        # 后复权需要更多信息，这里简化处理
-                        pass
+                        # 后复权：从最新日期往前累积复权因子
+                        df = df.sort_values('trade_date')
+                        last_factor = df['adj_factor'].iloc[-1]
+                        hfq_factor = last_factor / df['adj_factor']
+                        df['open'] = df['open'] * hfq_factor
+                        df['high'] = df['high'] * hfq_factor
+                        df['low'] = df['low'] * hfq_factor
+                        df['close'] = df['close'] * hfq_factor
 
             # 分钟线数据
             elif self.freq in ['1', '5', '15', '30', '60']:

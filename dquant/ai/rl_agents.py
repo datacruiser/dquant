@@ -147,7 +147,9 @@ class TradingEnvironment:
                 buy_amount = self.cash / self.n_stocks
                 if price <= 0:
                     continue
-                shares = buy_amount / price
+                shares = int((buy_amount / price) // MIN_SHARES) * MIN_SHARES
+                if shares <= 0:
+                    continue
                 cost = shares * price * (1 + self.commission)
 
                 if cost <= self.cash:

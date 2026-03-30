@@ -210,6 +210,8 @@ class AKShareLoader(DataSource):
             # 添加后缀
             if symbol.startswith('6'):
                 df['symbol'] = symbol + '.SH'
+            elif symbol.startswith(('4', '8')):
+                df['symbol'] = symbol + '.BJ'
             else:
                 df['symbol'] = symbol + '.SZ'
 

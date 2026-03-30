@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import os
 import json
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH
 
 
 @dataclass
@@ -104,11 +104,17 @@ class DQuantConfig:
         """从文件加载配置"""
         path = Path(path)
 
-        if path.suffix == '.json':
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        else:
-            raise ValueError(f"Unsupported config format: {path.suffix}")
+        if not path.exists():
+            raise FileNotFoundError(f"配置文件不存在: {path}")
+
+        try:
+            if path.suffix == '.json':
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                raise ValueError(f"不支持的配置格式: {path.suffix}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"配置文件 JSON 格式错误: {path} — {e}")
 
         return cls.from_dict(data)
 

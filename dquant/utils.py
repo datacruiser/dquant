@@ -14,6 +14,7 @@ from dquant.constants import (
     DEFAULT_STAMP_DUTY,
     DEFAULT_INITIAL_CASH,
     DEFAULT_WINDOW,
+    TRADING_DAYS_PER_YEAR,
 )
 from dquant.calendar import (
     is_trading_day as _calendar_is_trading_day,
@@ -96,7 +97,7 @@ def calculate_cumulative_returns(returns: pd.Series) -> pd.Series:
 
 def annualized_return(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算年化收益率
@@ -119,7 +120,7 @@ def annualized_return(
 
 def annualized_volatility(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算年化波动率
@@ -140,7 +141,7 @@ def annualized_volatility(
 def sharpe_ratio(
     returns: pd.Series,
     risk_free_rate: float = 0.03,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Sharpe 比率
@@ -172,6 +173,9 @@ def max_drawdown(nav: pd.Series) -> Tuple[float, datetime, datetime]:
     Returns:
         (最大回撤, 开始日期, 结束日期)
     """
+    if len(nav) < 2:
+        return 0.0, None, None
+
     cummax = nav.cummax()
     drawdown = (nav - cummax) / cummax
 
@@ -187,7 +191,7 @@ def max_drawdown(nav: pd.Series) -> Tuple[float, datetime, datetime]:
 def sortino_ratio(
     returns: pd.Series,
     risk_free_rate: float = 0.03,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Sortino 比率
@@ -203,7 +207,7 @@ def sortino_ratio(
     ann_ret = annualized_return(returns, periods_per_year)
 
     # 下行波动率：使用 downside deviation（低于 target=0 的标准差）
-    downside = returns.apply(lambda x: min(x - 0, 0))
+    downside = returns.clip(upper=0)
     downside_std = downside.std() * np.sqrt(periods_per_year)
 
     if downside_std == 0:
@@ -214,7 +218,7 @@ def sortino_ratio(
 
 def calmar_ratio(
     returns: pd.Series,
-    periods_per_year: int = 252,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
 ) -> float:
     """
     计算 Calmar 比率

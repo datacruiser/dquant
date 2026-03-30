@@ -409,3 +409,82 @@ class XTPSimulator(XTPBroker):
             'market_value': total_value - self.cash,
             'available': self.cash,
         }
+
+    def get_positions(self) -> Dict[str, dict]:
+        return dict(self.positions)
+
+    def place_order(self, order: Order) -> OrderResult:
+        """模拟下单"""
+        if not self._connected:
+            return OrderResult(
+                order_id='', symbol=order.symbol, side=order.side,
+                filled_quantity=0, filled_price=0, commission=0,
+                timestamp=datetime.now(), status='REJECTED',
+            )
+
+        fill_price = order.price or 10.0
+
+        if order.side.upper() == 'BUY':
+            cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
+            if cost > self.cash:
+                return OrderResult(
+                    order_id='', symbol=order.symbol, side=order.side,
+                    filled_quantity=0, filled_price=0, commission=0,
+                    timestamp=datetime.now(), status='REJECTED',
+                )
+            self.cash -= cost
+            if order.symbol in self.positions:
+                pos = self.positions[order.symbol]
+                total_qty = pos['quantity'] + order.quantity
+                pos['avg_cost'] = (pos['avg_cost'] * pos['quantity'] + fill_price * order.quantity) / total_qty
+                pos['quantity'] = total_qty
+                pos['price'] = fill_price
+            else:
+                self.positions[order.symbol] = {
+                    'quantity': order.quantity,
+                    'avg_cost': fill_price,
+                    'price': fill_price,
+                }
+
+        elif order.side.upper() == 'SELL':
+            if order.symbol not in self.positions:
+                return OrderResult(
+                    order_id='', symbol=order.symbol, side=order.side,
+                    filled_quantity=0, filled_price=0, commission=0,
+                    timestamp=datetime.now(), status='REJECTED',
+                )
+            pos = self.positions[order.symbol]
+            if order.quantity > pos['quantity']:
+                return OrderResult(
+                    order_id='', symbol=order.symbol, side=order.side,
+                    filled_quantity=0, filled_price=0, commission=0,
+                    timestamp=datetime.now(), status='REJECTED',
+                )
+            revenue = fill_price * order.quantity
+            total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+            self.cash += revenue - total_cost
+            pos['quantity'] -= order.quantity
+            pos['price'] = fill_price
+            if pos['quantity'] <= 0:
+                del self.positions[order.symbol]
+
+        order_id = f"XTPSIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        order.order_id = order_id
+        order.status = 'FILLED'
+        self.orders[order_id] = order
+
+        return OrderResult(
+            order_id=order_id, symbol=order.symbol, side=order.side,
+            filled_quantity=order.quantity, filled_price=fill_price,
+            commission=fill_price * order.quantity * DEFAULT_COMMISSION,
+            timestamp=datetime.now(), status='FILLED',
+        )
+
+    def cancel_order(self, order_id: str) -> bool:
+        if order_id in self.orders:
+            self.orders[order_id].status = 'CANCELLED'
+            return True
+        return False
+
+    def get_order_status(self, order_id: str) -> Order:
+        return self.orders.get(order_id)

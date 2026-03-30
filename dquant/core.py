@@ -241,6 +241,13 @@ class Engine:
         best_params = None
         best_result = None
 
+        # 保存原始参数，出错时可恢复
+        original_params = {
+            name: getattr(self.strategy, name)
+            for name in param_grid
+            if hasattr(self.strategy, name)
+        }
+
         # 生成所有参数组合
         param_names = list(param_grid.keys())
         param_values = list(param_grid.values())
@@ -253,16 +260,19 @@ class Engine:
                 if hasattr(self.strategy, name):
                     setattr(self.strategy, name, value)
 
-            # 运行回测
-            result = self.backtest(**backtest_kwargs)
+            try:
+                # 运行回测
+                result = self.backtest(**backtest_kwargs)
 
-            # 获取评分
-            score = getattr(result.metrics, metric, 0)
+                # 获取评分
+                score = getattr(result.metrics, metric, 0)
 
-            if score > best_score:
-                best_score = score
-                best_params = params
-                best_result = result
+                if score > best_score:
+                    best_score = score
+                    best_params = params
+                    best_result = result
+            except Exception:
+                continue
 
         # 恢复策略为最优参数（而非最后一个网格点的参数）
         if best_params:

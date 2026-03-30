@@ -7,6 +7,8 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
+from dquant.constants import TRADING_DAYS_PER_YEAR
+
 
 @dataclass
 class Metrics:
@@ -41,18 +43,18 @@ class Metrics:
         # 总收益率
         total_return = nav_series.iloc[-1] / nav_series.iloc[0] - 1
 
-        # 年化收益率（统一使用 252 交易日）
-        days = (nav_series.index[-1] - nav_series.index[0]).days
+        # 年化收益率
         trading_days = len(returns)
-        annual_return = (1 + total_return) ** (252 / trading_days) - 1 if trading_days > 0 else 0
+        annual_return = (1 + total_return) ** (TRADING_DAYS_PER_YEAR / trading_days) - 1 if trading_days > 0 else 0
 
         # 年化波动率
-        volatility = returns.std() * np.sqrt(252)
+        volatility = returns.std() * np.sqrt(TRADING_DAYS_PER_YEAR)
 
         # 夏普比率
-        rf_daily = rf / 252
+        rf_daily = rf / TRADING_DAYS_PER_YEAR
         excess_returns = returns - rf_daily
-        sharpe = excess_returns.mean() / excess_returns.std() * np.sqrt(252) if excess_returns.std() > 0 else 0
+        excess_std = excess_returns.std()
+        sharpe = excess_returns.mean() / excess_std * np.sqrt(TRADING_DAYS_PER_YEAR) if excess_std > 0 else 0
 
         # 最大回撤
         cummax = nav_series.cummax()
