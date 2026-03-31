@@ -225,23 +225,20 @@ class FlowDivergenceStrategy(BaseStrategy):
 
         # 按日期分组
         for date, group in data_with_change.groupby(data_with_change.index):
-            # 底背离: 价格下跌但主力流入
+            # 底背离: 价格下跌但主力流入 → 买入
             bottom_divergence = (
                 (group['price_change'] < -0.05) &  # 价格下跌 > 5%
                 (group['main_net_inflow'] > 0)  # 主力流入
             )
 
-            # 选 TopK
             candidates = group[bottom_divergence]
-
             if len(candidates) > 0:
                 top_stocks = candidates.nlargest(
                     min(self.top_k, len(candidates)),
                     'main_net_inflow'
                 )
-
                 for _, row in top_stocks.iterrows():
-                    signal = Signal(
+                    signals.append(Signal(
                         symbol=row['symbol'],
                         signal_type=SignalType.BUY,
                         strength=1.0 / self.top_k,
@@ -250,7 +247,30 @@ class FlowDivergenceStrategy(BaseStrategy):
                             'divergence_type': 'bottom',
                             'price_change': row['price_change'],
                         }
-                    )
-                    signals.append(signal)
+                    ))
+
+            # 顶背离: 价格上涨但主力流出 → 卖出
+            top_divergence = (
+                (group['price_change'] > 0.05) &  # 价格上涨 > 5%
+                (group['main_net_inflow'] < 0)  # 主力流出
+            )
+
+            sell_candidates = group[top_divergence]
+            if len(sell_candidates) > 0:
+                sell_stocks = sell_candidates.nsmallest(
+                    min(self.top_k, len(sell_candidates)),
+                    'main_net_inflow'  # 流出最多优先
+                )
+                for _, row in sell_stocks.iterrows():
+                    signals.append(Signal(
+                        symbol=row['symbol'],
+                        signal_type=SignalType.SELL,
+                        strength=1.0 / self.top_k,
+                        timestamp=date,
+                        metadata={
+                            'divergence_type': 'top',
+                            'price_change': row['price_change'],
+                        }
+                    ))
 
         return signals

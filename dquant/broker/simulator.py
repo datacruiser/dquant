@@ -4,9 +4,11 @@
 
 from typing import Dict, Optional
 from datetime import datetime
+from copy import deepcopy
 import uuid
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
+from dquant.broker.safety import OrderValidator
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
 
 
@@ -26,11 +28,13 @@ class Simulator(BaseBroker):
 
     def connect(self, **kwargs) -> bool:
         """模拟连接"""
+        self._connected = True
         print(f"[{self.name}] Connected (simulated)")
         return True
 
     def disconnect(self) -> bool:
         """模拟断开"""
+        self._connected = False
         print(f"[{self.name}] Disconnected")
         return True
 
@@ -49,13 +53,28 @@ class Simulator(BaseBroker):
         }
 
     def get_positions(self) -> Dict[str, dict]:
-        """获取持仓"""
-        return self.positions
+        """获取持仓（防御性拷贝）"""
+        return deepcopy(self.positions)
 
     def place_order(self, order: Order) -> OrderResult:
         """下单"""
         order.order_id = str(uuid.uuid4())
         order.timestamp = datetime.now()
+
+        # 基本订单验证
+        valid, msg = OrderValidator.validate_order(order)
+        if not valid:
+            order.status = 'REJECTED'
+            return OrderResult(
+                order_id=order.order_id,
+                symbol=order.symbol,
+                side=order.side,
+                filled_quantity=0,
+                filled_price=0,
+                commission=0,
+                timestamp=order.timestamp,
+                status='REJECTED',
+            )
 
         # 模拟成交
         filled_price = order.price or self._get_simulated_price(order.symbol)

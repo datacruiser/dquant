@@ -21,6 +21,9 @@ def get_logger(
     level: str = 'INFO',
     log_file: Optional[str] = None,
     format_style: str = 'simple',
+    rotating: bool = False,
+    max_bytes: int = 10 * 1024 * 1024,
+    backup_count: int = 5,
 ) -> logging.Logger:
     """
     获取 Logger 实例
@@ -30,6 +33,9 @@ def get_logger(
         level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: 日志文件路径
         format_style: 格式样式 (simple, detailed)
+        rotating: 使用 RotatingFileHandler (适合实盘长时间运行)
+        max_bytes: 单个日志文件最大字节数 (默认 10MB)
+        backup_count: 保留的备份文件数
 
     Returns:
         Logger 实例
@@ -70,7 +76,17 @@ def get_logger(
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        if rotating:
+            from logging.handlers import RotatingFileHandler
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8',
+            )
+        else:
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)

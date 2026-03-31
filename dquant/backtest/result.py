@@ -20,6 +20,7 @@ class BacktestResult:
     portfolio: Portfolio
     trades: pd.DataFrame
     metrics: Metrics
+    benchmark_nav: Optional[pd.Series] = None  # 基准净值曲线
 
     def __repr__(self):
         return f"BacktestResult(sharpe={self.metrics.sharpe:.2f}, return={self.metrics.total_return:.2%})"
