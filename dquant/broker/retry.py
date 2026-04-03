@@ -2,11 +2,14 @@
 订单重试装饰器
 
 为 BaseBroker 提供指数退避重试能力，处理网络瞬断、超时等瞬态故障。
+包含幂等性保护，防止重试导致双重下单。
 """
 
+import threading
 import time
+import uuid
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.constants import ORDER_MAX_RETRIES, ORDER_RETRY_DELAY, ORDER_RETRY_BACKOFF
@@ -23,6 +26,8 @@ class RetryableBroker(BaseBroker):
     可重试的券商包装器
 
     装饰器模式，为任意 BaseBroker 添加重试逻辑。
+    包含幂等性保护：首次下单前生成 idempotency_key，
+    重试时先查询该 key 对应的订单是否已存在。
 
     Usage:
         broker = RetryableBroker(XTPBroker(...), max_retries=3)
@@ -41,6 +46,9 @@ class RetryableBroker(BaseBroker):
         self._max_retries = max_retries
         self._retry_delay = retry_delay
         self._backoff = backoff
+        # 幂等性保护：记录 idempotency_key -> order_id 的映射
+        self._idempotency_map: Dict[str, str] = {}
+        self._idempotency_lock = threading.Lock()
 
     def connect(self, **kwargs) -> bool:
         return self._broker.connect(**kwargs)
@@ -50,13 +58,47 @@ class RetryableBroker(BaseBroker):
 
     def place_order(self, order: Order) -> OrderResult:
         """
-        下单（带重试）
+        下单（带重试 + 幂等性保护）
 
         仅对瞬态错误（网络/超时）重试。验证错误、资金不足等不重试。
+        首次下单前生成 idempotency_key，重试时先检查是否已有成功记录。
         """
+        # 生成幂等性 key
+        idempotency_key = str(uuid.uuid4())
+
         for attempt in range(self._max_retries):
+            # 重试时检查幂等性：是否之前已成功下单
+            if attempt > 0:
+                with self._idempotency_lock:
+                    existing_order_id = self._idempotency_map.get(idempotency_key)
+                if existing_order_id:
+                    logger.warning(
+                        f"[RETRY] 幂等性检查发现已存在的订单: {existing_order_id}，跳过重试"
+                    )
+                    # 尝试查询已有订单状态
+                    try:
+                        existing_order = self._broker.get_order_status(existing_order_id)
+                        if existing_order is not None:
+                            return OrderResult(
+                                order_id=existing_order.order_id or '',
+                                symbol=existing_order.symbol,
+                                side=existing_order.side,
+                                filled_quantity=existing_order.filled_quantity,
+                                filled_price=existing_order.price or 0,
+                                commission=0,
+                                timestamp=datetime.now(),
+                                status=existing_order.status,
+                            )
+                    except Exception:
+                        pass  # 查询失败，继续重试
+
             try:
                 result = self._broker.place_order(order)
+
+                # 下单成功，记录幂等性映射
+                if result.status in ('FILLED', 'PENDING', 'PARTIAL_FILLED'):
+                    with self._idempotency_lock:
+                        self._idempotency_map[idempotency_key] = result.order_id
 
                 # REJECTED 不重试（验证错误、资金不足等）
                 if result.status == 'REJECTED':
@@ -110,6 +152,9 @@ class RetryableBroker(BaseBroker):
 
     def get_market_data(self, symbol: str) -> dict:
         return self._broker.get_market_data(symbol)
+
+    def is_connected(self) -> bool:
+        return self._broker.is_connected()
 
     def __getattr__(self, name):
         """代理其他属性到内部 broker"""

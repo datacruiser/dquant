@@ -8,6 +8,7 @@ from datetime import datetime
 import pandas as pd
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
 from dquant.logger import get_logger
+from dquant.constants import DEFAULT_INITIAL_CASH as DEFAULT_INITIAL_CASH_CONST
 
 logger = get_logger(__name__)
 
@@ -19,7 +20,7 @@ class Position:
     shares: float
     avg_cost: float
     current_price: float = 0.0
-    timestamp: datetime = None
+    timestamp: Optional[datetime] = None
 
     @property
     def market_value(self) -> float:
@@ -121,7 +122,7 @@ class Portfolio:
         self.cash += revenue
         pos.shares -= shares
 
-        if pos.shares <= 1e-10:
+        if pos.shares < MIN_SHARES:
             del self.positions[symbol]
 
     def rebalance(

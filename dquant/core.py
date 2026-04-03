@@ -593,7 +593,8 @@ class Engine:
                     best_score = score
                     best_params = params
                     best_result = result
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[OPTIMIZE] 参数组合 {params} 回测失败: {e}")
                 continue
 
         # 恢复策略为最优参数（而非最后一个网格点的参数）

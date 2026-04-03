@@ -9,7 +9,6 @@ import pandas as pd
 import numpy as np
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import MIN_SHARES
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -26,7 +25,7 @@ class ADXFactor(BaseFactor):
     平均趋向指标，衡量趋势强度。
     """
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"ADX_{window}")
         self.window = window
 
@@ -60,11 +59,11 @@ class ADXFactor(BaseFactor):
 
             # 平滑
             atr = tr.rolling(self.window).mean()
-            plus_di = MIN_SHARES * (plus_dm.rolling(self.window).mean() / atr)
-            minus_di = MIN_SHARES * (minus_dm.rolling(self.window).mean() / atr)
+            plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr)
+            minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr)
 
             # DX
-            dx = MIN_SHARES * abs(plus_di - minus_di) / (plus_di + minus_di)
+            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
 
             # ADX
             adx = dx.rolling(self.window).mean()
@@ -92,7 +91,7 @@ class AroonFactor(BaseFactor):
     阿隆指标，衡量趋势的开始和强度。
     """
 
-    def __init__(self, window: int = 25, name: str = None):
+    def __init__(self, window: int = 25, name: Optional[str] = None):
         super().__init__(name=name or f"Aroon_{window}")
         self.window = window
 
@@ -110,14 +109,14 @@ class AroonFactor(BaseFactor):
             # Aroon Up
             aroon_up = group['high'].rolling(self.window).apply(
                 lambda x: (self.window - (self.window - 1 - np.argmax(x)))
-                / self.window * MIN_SHARES,
+                / self.window * 100,
                 raw=False
             )
 
             # Aroon Down
             aroon_down = group['low'].rolling(self.window).apply(
                 lambda x: (self.window - (self.window - 1 - np.argmin(x)))
-                / self.window * MIN_SHARES,
+                / self.window * 100,
                 raw=False
             )
 
@@ -147,7 +146,7 @@ class StochasticFactor(BaseFactor):
     随机指标。
     """
 
-    def __init__(self, k_window: int = 14, d_window: int = 3, name: str = None):
+    def __init__(self, k_window: int = 14, d_window: int = 3, name: Optional[str] = None):
         super().__init__(name=name or f"Stochastic_{k_window}")
         self.k_window = k_window
         self.d_window = d_window
@@ -167,7 +166,7 @@ class StochasticFactor(BaseFactor):
             high_max = group['high'].rolling(self.k_window).max()
 
             # %K
-            k = MIN_SHARES * (group['close'] - low_min) / (high_max - low_min)
+            k = 100 * (group['close'] - low_min) / (high_max - low_min)
 
             # %D
             d = k.rolling(self.d_window).mean()
@@ -195,7 +194,7 @@ class ROCFactor(BaseFactor):
     变动率指标。
     """
 
-    def __init__(self, window: int = 12, name: str = None):
+    def __init__(self, window: int = 12, name: Optional[str] = None):
         super().__init__(name=name or f"ROC_{window}")
         self.window = window
 
@@ -210,7 +209,7 @@ class ROCFactor(BaseFactor):
         for symbol, group in data.groupby('symbol'):
             group = group.sort_index()
             roc = ((group['close'] - group['close'].shift(self.window)) /
-                   group['close'].shift(self.window) * MIN_SHARES)
+                   group['close'].shift(self.window) * 100)
 
             for date, value in roc.items():
                 if pd.notna(value):
@@ -235,7 +234,7 @@ class CMOFactor(BaseFactor):
     钱德动量摆动指标。
     """
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"CMO_{window}")
         self.window = window
 
@@ -255,7 +254,7 @@ class CMOFactor(BaseFactor):
             sum_up = diff.where(diff > 0, 0).rolling(self.window).sum()
             sum_down = abs(diff.where(diff < 0, 0).rolling(self.window).sum())
 
-            cmo = MIN_SHARES * (sum_up - sum_down) / (sum_up + sum_down)
+            cmo = 100 * (sum_up - sum_down) / (sum_up + sum_down)
 
             for date, value in cmo.items():
                 if pd.notna(value):
@@ -280,7 +279,7 @@ class MFIFactor(BaseFactor):
     资金流量指标。
     """
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"MFI_{window}")
         self.window = window
 
@@ -308,7 +307,7 @@ class MFIFactor(BaseFactor):
             nmf = mf.where(diff < 0, 0).rolling(self.window).sum()
 
             # MFI
-            mfi = MIN_SHARES - MIN_SHARES / (1 + pmf / nmf)
+            mfi = 100 - 100 / (1 + pmf / nmf)
 
             for date, value in mfi.items():
                 if pd.notna(value):
@@ -386,7 +385,7 @@ class ChaikinOscillatorFactor(BaseFactor):
     佳庆振荡器。
     """
 
-    def __init__(self, fast: int = 3, slow: int = 10, name: str = None):
+    def __init__(self, fast: int = 3, slow: int = 10, name: Optional[str] = None):
         super().__init__(name=name or f"ChaikinOsc_{fast}_{slow}")
         self.fast = fast
         self.slow = slow
@@ -436,7 +435,7 @@ class EaseOfMovementFactor(BaseFactor):
     简易波动指标。
     """
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"EOM_{window}")
         self.window = window
 
@@ -485,7 +484,7 @@ class ForceIndexFactor(BaseFactor):
     强力指数。
     """
 
-    def __init__(self, window: int = 13, name: str = None):
+    def __init__(self, window: int = 13, name: Optional[str] = None):
         super().__init__(name=name or f"ForceIndex_{window}")
         self.window = window
 
@@ -576,7 +575,7 @@ class HurstExponentFactor(BaseFactor):
     赫斯特指数，衡量时间序列的长期记忆性。
     """
 
-    def __init__(self, window: int = MIN_SHARES, name: str = None):
+    def __init__(self, window: int = 100, name: Optional[str] = None):
         super().__init__(name=name or f"Hurst_{window}")
         self.window = window
 
@@ -634,7 +633,7 @@ class AutocorrelationFactor(BaseFactor):
     自相关系数。
     """
 
-    def __init__(self, window: int = 20, lag: int = 1, name: str = None):
+    def __init__(self, window: int = 20, lag: int = 1, name: Optional[str] = None):
         super().__init__(name=name or f"Autocorr_{window}")
         self.window = window
         self.lag = lag
@@ -678,7 +677,7 @@ class VarianceRatioFactor(BaseFactor):
     方差比率检验。
     """
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"VR_{window}")
         self.window = window
 
@@ -730,7 +729,7 @@ class BetaFactor(BaseFactor):
     相对基准的 Beta 系数。
     """
 
-    def __init__(self, window: int = 60, name: str = None):
+    def __init__(self, window: int = 60, name: Optional[str] = None):
         super().__init__(name=name or f"Beta_{window}")
         self.window = window
 
@@ -789,7 +788,7 @@ class AlphaFactor(BaseFactor):
     相对基准的超额收益。
     """
 
-    def __init__(self, window: int = 60, name: str = None):
+    def __init__(self, window: int = 60, name: Optional[str] = None):
         super().__init__(name=name or f"Alpha_{window}")
         self.window = window
 

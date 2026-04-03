@@ -2,9 +2,6 @@
 基础测试
 """
 
-import sys
-sys.path.insert(0, '/Users/datacruiser/github/dquant')
-
 import pandas as pd
 import numpy as np
 
@@ -55,6 +52,7 @@ def test_metrics():
     from dquant.backtest.metrics import Metrics
     
     # 模拟净值
+    np.random.seed(42)
     dates = pd.date_range('2023-01-01', periods=100, freq='D')
     nav = pd.Series(1 + np.cumsum(np.random.randn(100) * 0.01), index=dates)
     

@@ -8,7 +8,7 @@ import re
 from datetime import datetime, time
 from typing import Optional, Tuple
 from dquant.broker.base import Order
-from dquant.constants import MIN_SHARES
+from dquant.constants import MIN_SHARES, SH_TRANSFER_FEE
 from dquant.calendar import is_trading_day as _calendar_is_trading_day
 from dquant.logger import get_logger
 
@@ -186,6 +186,7 @@ class FundChecker:
         available_cash: float,
         commission_rate: float = 0.0003,
         slippage: float = 0.0,
+        symbol: str = '',
     ) -> Tuple[bool, str, float]:
         """
         检查买入资金是否充足
@@ -196,6 +197,7 @@ class FundChecker:
             available_cash: 可用资金
             commission_rate: 佣金费率 (默认万分之三)
             slippage: 滑点 (默认0)
+            symbol: 股票代码 (用于判断是否收取过户费)
 
         Returns:
             (是否充足, 错误信息, 需要的资金)
@@ -210,8 +212,10 @@ class FundChecker:
         # 佣金 (最低5元)
         commission = max(amount * commission_rate, 5.0)
 
-        # 过户费 (万分之二，仅上海)
-        transfer_fee = amount * 0.00002
+        # 过户费 (仅上海市场: 代码以 SH 结尾)
+        transfer_fee = 0.0
+        if symbol.endswith('.SH'):
+            transfer_fee = amount * SH_TRANSFER_FEE
 
         # 总需要资金
         total_need = amount + commission + transfer_fee

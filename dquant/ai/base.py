@@ -2,7 +2,7 @@
 AI 因子基类
 """
 
-from typing import Optional
+from typing import Optional, Any
 from abc import ABC, abstractmethod
 import pandas as pd
 
@@ -16,7 +16,7 @@ class BaseFactor(ABC):
 
     def __init__(self, name: str = "BaseFactor"):
         self.name = name
-        self._model = None
+        self._model: Any = None
         self._is_fitted = False
 
     @abstractmethod

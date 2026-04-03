@@ -71,6 +71,11 @@ class XGBoostFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
+        # Temporal split: use first 80% for training to avoid look-ahead bias
+        split_idx = int(len(X) * 0.8)
+        X = X[:split_idx]
+        y = y[:split_idx]
+
         # 训练
         self._model = xgb.XGBRegressor(**self.model_params)
         self._model.fit(X, y)
@@ -89,17 +94,15 @@ class XGBoostFactor(BaseFactor):
         # 预测
         scores = self._model.predict(X)
 
-        # 构建结果
-        results = []
-        for i, (idx, row) in enumerate(data.iterrows()):
-            if not np.isnan(scores[i]):
-                results.append({
-                    'date': idx if isinstance(idx, pd.Timestamp) else row.get('date'),
-                    'symbol': row.get('symbol', ''),
-                    'score': scores[i],
-                })
-
-        df = pd.DataFrame(results)
+        # 构建结果 (vectorized)
+        valid_mask = ~np.isnan(scores)
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get('date')
+        df = pd.DataFrame({
+            'date': dates,
+            'symbol': data['symbol'].values,
+            'score': scores,
+        })
+        df = df[valid_mask].copy()
         if len(df) > 0:
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date')
@@ -159,6 +162,11 @@ class LGBMFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
+        # Temporal split: use first 80% for training to avoid look-ahead bias
+        split_idx = int(len(X) * 0.8)
+        X = X[:split_idx]
+        y = y[:split_idx]
+
         self._model = lgb.LGBMRegressor(**self.model_params)
         self._model.fit(X, y)
         self._is_fitted = True
@@ -173,16 +181,15 @@ class LGBMFactor(BaseFactor):
         X = data[self.features].values
         scores = self._model.predict(X)
 
-        results = []
-        for i, (idx, row) in enumerate(data.iterrows()):
-            if not np.isnan(scores[i]):
-                results.append({
-                    'date': idx if isinstance(idx, pd.Timestamp) else row.get('date'),
-                    'symbol': row.get('symbol', ''),
-                    'score': scores[i],
-                })
-
-        df = pd.DataFrame(results)
+        # 构建结果 (vectorized)
+        valid_mask = ~np.isnan(scores)
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get('date')
+        df = pd.DataFrame({
+            'date': dates,
+            'symbol': data['symbol'].values,
+            'score': scores,
+        })
+        df = df[valid_mask].copy()
         if len(df) > 0:
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date')

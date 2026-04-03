@@ -79,6 +79,7 @@ class TradeJournal:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         except Exception as e:
             logger.error(f"写入交易日志失败: {e}")
+            raise  # 审计日志不可丢失，向上抛出
 
     def read_day(self, date_str: str) -> list:
         """读取某天的所有交易记录"""

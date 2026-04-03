@@ -29,7 +29,7 @@ class Signal:
     strength: float = 1.0  # 信号强度 0-1
     price: Optional[float] = None  # 目标价格
     timestamp: Optional[datetime] = None
-    metadata: Dict[str, Any] = None  # 额外信息
+    metadata: Optional[Dict[str, Any]] = None  # 额外信息
 
     def __post_init__(self):
         if self.metadata is None:
@@ -49,7 +49,7 @@ class Signal:
             'signal_type': self.signal_type.value,
             'strength': self.strength,
             'price': self.price,
-            'timestamp': self.timestamp,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
             'metadata': self.metadata,
         }
 

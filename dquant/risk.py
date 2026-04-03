@@ -161,13 +161,15 @@ class PositionSizer:
             signal = signals.get(symbol, 0)
 
             # 简化: 用信号强度近似期望收益
-            win_rate = 0.5 + signal * 0.1  # 胜率
+            # 上界保护: win_rate 不超过 0.95
+            win_rate = min(0.5 + signal * 0.1, 0.95)
             win_loss_ratio = 2.0  # 盈亏比
 
             # Kelly: f = (p * b - q) / b
             # p = 胜率, q = 1-p, b = 盈亏比
             kelly_pct = (win_rate * win_loss_ratio - (1 - win_rate)) / win_loss_ratio
-            kelly_pct = max(0, min(kelly_pct, self.limits.max_single_pct))  # 限制范围
+            # 限制范围 [0, max_single_pct]
+            kelly_pct = max(0, min(kelly_pct, self.limits.max_single_pct))
 
             positions[symbol] = self.total_value * kelly_pct
 
@@ -398,8 +400,10 @@ class StopLoss:
         highest_price: float,
         trailing_pct: float = 0.1,
     ) -> float:
-        """移动止损"""
-        return highest_price * (1 - trailing_pct)
+        """移动止损：基于最高价的回撤比例"""
+        stop = highest_price * (1 - trailing_pct)
+        # 确保 stop 不超过当前价格（否则无意义）
+        return min(stop, current_price)
 
     @staticmethod
     def atr_stop(
@@ -408,7 +412,9 @@ class StopLoss:
         multiplier: float = 2.0,
     ) -> float:
         """ATR 止损"""
-        return entry_price - multiplier * atr
+        stop = entry_price - multiplier * atr
+        # 确保 stop 不为负数
+        return max(stop, 0.0)
 
     @staticmethod
     def volatility_stop(
@@ -417,7 +423,9 @@ class StopLoss:
         multiplier: float = 2.0,
     ) -> float:
         """波动率止损"""
-        return entry_price * (1 - multiplier * volatility)
+        stop = entry_price * (1 - multiplier * volatility)
+        # 确保 stop 不为负数
+        return max(stop, 0.0)
 
 
 class TakeProfit:

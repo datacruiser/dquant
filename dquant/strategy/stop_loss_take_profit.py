@@ -103,7 +103,7 @@ class StopLossTakeProfitStrategy(BaseStrategy):
                 ))
                 logger.debug(
                     f"[SL] 止损触发: {symbol} "
-                    f"亏损 {pct_change:.1%} >= {self.stop_loss:.1%}"
+                    f"亏损 {pct_change:.1%} <= -{self.stop_loss:.1%}"
                 )
 
             elif pct_change >= self.take_profit:

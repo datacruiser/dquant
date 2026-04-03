@@ -23,7 +23,7 @@ from dquant.ai.base import BaseFactor
 class MomentumFactor(BaseFactor):
     """动量因子 - 过去 N 天的收益率"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Momentum_{window}")
         self.window = window
 
@@ -50,7 +50,7 @@ class MomentumFactor(BaseFactor):
 class ReversalFactor(BaseFactor):
     """反转因子 - 短期反转"""
 
-    def __init__(self, window: int = 5, name: str = None):
+    def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"Reversal_{window}")
         self.window = window
 
@@ -78,7 +78,7 @@ class ReversalFactor(BaseFactor):
 class AccMomentumFactor(BaseFactor):
     """累积动量因子 - 累积收益率"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"AccMomentum_{window}")
         self.window = window
 
@@ -110,7 +110,7 @@ class AccMomentumFactor(BaseFactor):
 class VolatilityFactor(BaseFactor):
     """波动率因子 - 收益率标准差"""
 
-    def __init__(self, window: int = 20, prefer_low: bool = True, name: str = None):
+    def __init__(self, window: int = 20, prefer_low: bool = True, name: Optional[str] = None):
         super().__init__(name=name or f"Volatility_{window}")
         self.window = window
         self.prefer_low = prefer_low
@@ -141,7 +141,7 @@ class VolatilityFactor(BaseFactor):
 class ATRFactor(BaseFactor):
     """ATR 因子 - Average True Range"""
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"ATR_{window}")
         self.window = window
 
@@ -174,7 +174,7 @@ class ATRFactor(BaseFactor):
 class SkewnessFactor(BaseFactor):
     """偏度因子 - 收益率偏度"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Skewness_{window}")
         self.window = window
 
@@ -202,7 +202,7 @@ class SkewnessFactor(BaseFactor):
 class KurtosisFactor(BaseFactor):
     """峰度因子 - 收益率峰度"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Kurtosis_{window}")
         self.window = window
 
@@ -230,7 +230,7 @@ class KurtosisFactor(BaseFactor):
 class MaxDrawdownFactor(BaseFactor):
     """最大回撤因子"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"MaxDrawdown_{window}")
         self.window = window
 
@@ -263,7 +263,7 @@ class MaxDrawdownFactor(BaseFactor):
 class RSIFactor(BaseFactor):
     """RSI 因子 - 相对强弱指标"""
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"RSI_{window}")
         self.window = window
 
@@ -295,7 +295,7 @@ class RSIFactor(BaseFactor):
 class MACDFactor(BaseFactor):
     """MACD 因子"""
 
-    def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9, name: str = None):
+    def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9, name: Optional[str] = None):
         super().__init__(name=name or f"MACD_{fast}_{slow}")
         self.fast = fast
         self.slow = slow
@@ -328,7 +328,7 @@ class MACDFactor(BaseFactor):
 class BollingerPositionFactor(BaseFactor):
     """布林带位置因子"""
 
-    def __init__(self, window: int = 20, num_std: float = 2.0, name: str = None):
+    def __init__(self, window: int = 20, num_std: float = 2.0, name: Optional[str] = None):
         super().__init__(name=name or f"Bollinger_{window}")
         self.window = window
         self.num_std = num_std
@@ -362,7 +362,7 @@ class BollingerPositionFactor(BaseFactor):
 class TrendStrengthFactor(BaseFactor):
     """趋势强度因子 - ADX"""
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"TrendStrength_{window}")
         self.window = window
 
@@ -405,7 +405,7 @@ class TrendStrengthFactor(BaseFactor):
 class KDJFactor(BaseFactor):
     """KDJ 因子"""
 
-    def __init__(self, n: int = 9, m1: int = 3, m2: int = 3, name: str = None):
+    def __init__(self, n: int = 9, m1: int = 3, m2: int = 3, name: Optional[str] = None):
         super().__init__(name=name or f"KDJ_{n}")
         self.n = n
         self.m1 = m1
@@ -444,7 +444,7 @@ class KDJFactor(BaseFactor):
 class CCIFactor(BaseFactor):
     """CCI 因子 - 顺势指标"""
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"CCI_{window}")
         self.window = window
 
@@ -478,7 +478,7 @@ class CCIFactor(BaseFactor):
 class WilliamsRFactor(BaseFactor):
     """威廉指标因子"""
 
-    def __init__(self, window: int = 14, name: str = None):
+    def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"WilliamsR_{window}")
         self.window = window
 
@@ -516,7 +516,7 @@ class WilliamsRFactor(BaseFactor):
 class VolumeRatioFactor(BaseFactor):
     """量比因子"""
 
-    def __init__(self, window: int = 5, name: str = None):
+    def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"VolumeRatio_{window}")
         self.window = window
 
@@ -544,7 +544,7 @@ class VolumeRatioFactor(BaseFactor):
 class TurnoverRateFactor(BaseFactor):
     """换手率因子"""
 
-    def __init__(self, window: int = 5, name: str = None):
+    def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"TurnoverRate_{window}")
         self.window = window
 
@@ -579,7 +579,7 @@ class TurnoverRateFactor(BaseFactor):
 class OBVFactor(BaseFactor):
     """OBV 因子 - 能量潮"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"OBV_{window}")
         self.window = window
 
@@ -613,7 +613,7 @@ class OBVFactor(BaseFactor):
 class VWAPFactor(BaseFactor):
     """VWAP 因子 - 成交量加权均价"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"VWAP_{window}")
         self.window = window
 
@@ -652,7 +652,7 @@ class VWAPFactor(BaseFactor):
 class PricePositionFactor(BaseFactor):
     """价格位置因子"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"PricePosition_{window}")
         self.window = window
 
@@ -765,7 +765,7 @@ class OvernightReturnFactor(BaseFactor):
 class MASlopeFactor(BaseFactor):
     """均线斜率因子"""
 
-    def __init__(self, window: int = 20, slope_window: int = 5, name: str = None):
+    def __init__(self, window: int = 20, slope_window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"MASlope_{window}")
         self.window = window
         self.slope_window = slope_window
@@ -794,7 +794,7 @@ class MASlopeFactor(BaseFactor):
 class MACrossFactor(BaseFactor):
     """均线交叉因子"""
 
-    def __init__(self, short: int = 5, long: int = 20, name: str = None):
+    def __init__(self, short: int = 5, long: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"MACross_{short}_{long}")
         self.short = short
         self.long = long
@@ -824,7 +824,7 @@ class MACrossFactor(BaseFactor):
 class BiasFactor(BaseFactor):
     """乖离率因子"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Bias_{window}")
         self.window = window
 
@@ -1020,7 +1020,7 @@ class MarketCapFactor(BaseFactor):
 class MoneyFlowFactor(BaseFactor):
     """资金流向因子"""
 
-    def __init__(self, window: int = 5, name: str = None):
+    def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"MoneyFlow_{window}")
         self.window = window
 
@@ -1061,7 +1061,7 @@ class MoneyFlowFactor(BaseFactor):
 class AmihudIlliquidityFactor(BaseFactor):
     """Amihud 非流动性因子"""
 
-    def __init__(self, window: int = 20, name: str = None):
+    def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Amihud_{window}")
         self.window = window
 

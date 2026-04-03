@@ -15,7 +15,7 @@ from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP
 @dataclass
 class BacktestConfig:
     """回测配置"""
-    initial_cash: float = 1000000.0
+    initial_cash: float = DEFAULT_INITIAL_CASH
     commission_rate: float = DEFAULT_COMMISSION  # 佣金率 0.03%
     stamp_duty: float = DEFAULT_STAMP_DUTY        # 印花税 0.1%
     slippage: float = DEFAULT_SLIPPAGE            # 滑点 0.01%
@@ -127,24 +127,24 @@ class DQuantConfig:
     data: DataConfig = field(default_factory=DataConfig)
     factor: FactorConfig = field(default_factory=FactorConfig)
     ml: MLConfig = field(default_factory=MLConfig)
-    live: 'LiveConfig' = field(default_factory=lambda: LiveConfig())
+    live: LiveConfig = field(default_factory=LiveConfig)
 
     @classmethod
-    def from_file(cls, path: str) -> 'DQuantConfig':
+    def from_file(cls, path) -> 'DQuantConfig':
         """从文件加载配置"""
-        path = Path(path)
+        p = Path(path) if not isinstance(path, Path) else path
 
-        if not path.exists():
-            raise FileNotFoundError(f"配置文件不存在: {path}")
+        if not p.exists():
+            raise FileNotFoundError(f"配置文件不存在: {p}")
 
         try:
-            if path.suffix == '.json':
-                with open(path, 'r', encoding='utf-8') as f:
+            if p.suffix == '.json':
+                with open(p, 'r', encoding='utf-8') as f:
                     data = json.load(f)
             else:
-                raise ValueError(f"不支持的配置格式: {path.suffix}")
+                raise ValueError(f"不支持的配置格式: {p.suffix}")
         except json.JSONDecodeError as e:
-            raise ValueError(f"配置文件 JSON 格式错误: {path} — {e}")
+            raise ValueError(f"配置文件 JSON 格式错误: {p} — {e}")
 
         return cls.from_dict(data)
 
@@ -186,8 +186,12 @@ class DQuantConfig:
             config.data.mongo_url = os.getenv('MONGO_URL')
 
         # 回测配置
-        if os.getenv('INITIAL_CASH'):
-            config.backtest.initial_cash = float(os.getenv('INITIAL_CASH'))
+        cash_env = os.getenv('INITIAL_CASH')
+        if cash_env:
+            try:
+                config.backtest.initial_cash = float(cash_env)
+            except (ValueError, TypeError):
+                raise ValueError(f"INITIAL_CASH 环境变量值无效: '{cash_env}'，应为数字")
 
         return config
 
@@ -196,11 +200,12 @@ class DQuantConfig:
         from dataclasses import asdict
         return asdict(self)
 
-    def save(self, path: str):
+    def save(self, path) -> None:
         """保存配置到文件"""
-        path = Path(path)
+        p = Path(path) if not isinstance(path, Path) else path
+        p.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(p, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
 

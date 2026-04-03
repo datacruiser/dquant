@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, '3.10']
+        python-version: [3.9, '3.10']
     
     steps:
     - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest tests/ -v --cov=dquant --cov-report=xml
+        pytest tests/ -v --cov=dquant --cov-report=xml --cov-fail-under=60
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4
@@ -54,20 +54,41 @@ jobs:
     
     - name: Run flake8
       run: |
-        flake8 dquant/ --max-line-length=100 --exclude=__pycache__ --ignore=F401,F841,W391,E501,E128,E226,W503,W504,E261,E303,F541,F821,E722,F811,E117,E301
+        flake8 dquant/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503
     
-    # 暂时禁用 black 和 isort 检查，因为它们只是代码风格问题
-    # - name: Check formatting with black
-    #   run: |
-    #     black --check dquant/ tests/
-    
-    # - name: Check imports with isort
-    #   run: |
-    #     isort --check-only dquant/ tests/
+    - name: Check formatting with black
+      run: |
+        black --check dquant/ tests/
+
+    - name: Check imports with isort
+      run: |
+        isort --check-only dquant/ tests/
+
+    - name: Type check with mypy
+      run: |
+        pip install mypy
+        mypy dquant/ --ignore-missing-imports --no-error-summary || true
+
+  security:
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.9
+
+    - name: Security scan
+      run: |
+        pip install bandit
+        bandit -r dquant/ -ll
 
   build:
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: [test, lint, security]
     
     steps:
     - uses: actions/checkout@v4

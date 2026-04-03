@@ -11,6 +11,9 @@ from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.metrics import Metrics
 from dquant.backtest.result import BacktestResult
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BacktestEngine:
@@ -52,6 +55,11 @@ class BacktestEngine:
 
     def run(self) -> BacktestResult:
         """运行回测"""
+        # 空数据保护
+        if self.data is None or self.data.empty:
+            logger.warning("[BACKTEST] 数据为空，返回空结果")
+            return self._create_result()
+
         # 生成信号
         signals = self.strategy.generate_signals(self.data)
 
@@ -92,8 +100,8 @@ class BacktestEngine:
 
             day_signals = daily_signals.get_group(date)
 
-            # 处理买入信号 (signal_type == 1)
-            buy_signals = day_signals[day_signals['signal_type'] == 1]
+            # 处理买入信号
+            buy_signals = day_signals[day_signals['signal_type'] == SignalType.BUY.value]
             if len(buy_signals) > 0:
                 target_weights = dict(zip(
                     buy_signals['symbol'],
@@ -115,8 +123,8 @@ class BacktestEngine:
                         'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
                     })
 
-            # 处理卖出信号 (signal_type == -1)
-            sell_signals = day_signals[day_signals['signal_type'] == -1]
+            # 处理卖出信号
+            sell_signals = day_signals[day_signals['signal_type'] == SignalType.SELL.value]
             for _, row in sell_signals.iterrows():
                 symbol = row['symbol']
                 if symbol in self.portfolio.positions:

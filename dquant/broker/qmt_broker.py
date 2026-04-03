@@ -4,16 +4,20 @@ miniQMT 券商接口 (迅投 QMT)
 注意: 需要开通 QMT 交易权限
 """
 
-from typing import Dict, Optional, List
-from datetime import datetime
+import sys
 import subprocess
 import json
 import os
 import re
-from dquant.constants import DEFAULT_INITIAL_CASH
+from typing import Dict, Optional
+from datetime import datetime
 
+from dquant.constants import DEFAULT_INITIAL_CASH, DEFAULT_COMMISSION, DEFAULT_STAMP_DUTY
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_trade, log_error
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class QMTBroker(BaseBroker):
@@ -60,19 +64,18 @@ class QMTBroker(BaseBroker):
             enable_position_check=kwargs.get('enable_position_check', True),
         )
 
-
     def connect(self, **kwargs) -> bool:
         """连接 QMT"""
         if not self.qmt_path:
-            print("[QMT] QMT path not configured")
+            logger.error("[QMT] QMT path not configured")
             return False
 
         if not os.path.exists(self.qmt_path):
-            print(f"[QMT] QMT path not found: {self.qmt_path}")
+            logger.error(f"[QMT] QMT path not found: {self.qmt_path}")
             return False
 
         self._connected = True
-        print(f"[QMT] Connected to {self.qmt_path}")
+        logger.info(f"[QMT] Connected to {self.qmt_path}")
         return True
 
     def disconnect(self) -> bool:
@@ -121,18 +124,18 @@ else:
             env['DQ_QMT_PATH'] = self.qmt_path
             env['DQ_QMT_FUNC'] = func_name
 
-            result = subprocess.run(
-                ['python', '-c', script],
+            proc_result = subprocess.run(
+                [sys.executable, '-c', script],
                 input=json.dumps(params),
                 capture_output=True,
                 text=True,
                 env=env,
             )
 
-            if result.returncode == 0:
-                return json.loads(result.stdout)
+            if proc_result.returncode == 0:
+                return json.loads(proc_result.stdout)
             else:
-                return {'error': result.stderr}
+                return {'error': proc_result.stderr}
 
         except Exception as e:
             return {'error': str(e)}
@@ -155,10 +158,10 @@ else:
                 'available': asset.cash,
             }
         except ImportError:
-            print("[QMT] xtquant not installed")
+            logger.error("[QMT] xtquant not installed")
             return {}
         except Exception as e:
-            print(f"[QMT] Query account error: {e}")
+            logger.error(f"[QMT] Query account error: {e}")
             return {}
 
     def get_positions(self) -> Dict[str, dict]:
@@ -183,7 +186,7 @@ else:
 
             return result
         except Exception as e:
-            print(f"[QMT] Query positions error: {e}")
+            logger.error(f"[QMT] Query positions error: {e}")
             return {}
 
     def place_order(self, order: Order) -> OrderResult:
@@ -248,7 +251,7 @@ else:
             # price_type: 1=限价, 2=市价（最优五档即时成交剩余撤销）, 5=市价（最优五档即时成交剩余转限价）
             price_type = 2 if order.order_type == 'MARKET' else 1
 
-            result = xttrade.order_stock(
+            api_result = xttrade.order_stock(
                 account=self.account,
                 stock_code=order.symbol,
                 order_type=order_type,
@@ -257,11 +260,11 @@ else:
                 price=order.price or 0,
             )
 
-            if result > 0:
-                order.order_id = str(result)
+            if api_result > 0:
+                order.order_id = str(api_result)
                 order.status = 'PENDING'
 
-                result = OrderResult(
+                order_result = OrderResult(
                     order_id=order.order_id,
                     symbol=order.symbol,
                     side=order.side,
@@ -271,6 +274,7 @@ else:
                     timestamp=datetime.now(),
                     status='PENDING',
                 )
+                return order_result
             else:
                 return OrderResult(
                     order_id='',
@@ -284,7 +288,7 @@ else:
                 )
 
         except Exception as e:
-            print(f"[QMT] Place order error: {e}")
+            logger.error(f"[QMT] Place order error: {e}")
             return OrderResult(
                 order_id='',
                 symbol=order.symbol,
@@ -307,7 +311,7 @@ else:
             result = xttrade.cancel_order(self.account, int(order_id))
             return result > 0
         except Exception as e:
-            print(f"[QMT] Cancel order error: {e}")
+            logger.error(f"[QMT] Cancel order error: {e}")
             return False
 
     def get_order_status(self, order_id: str) -> Order:
@@ -321,21 +325,22 @@ else:
             orders = xttrade.get_stock_orders(self.account)
             for o in orders:
                 if str(o.order_id) == order_id:
-                    # order_side: 23=买入, 24=卖出 (与 order_type 市价/限价不同)
                     side = 'BUY' if getattr(o, 'order_side', 0) == 23 else 'SELL'
+                    filled_qty = getattr(o, 'traded_volume', 0)
                     return Order(
                         symbol=o.stock_code,
                         side=side,
                         quantity=o.order_volume,
                         price=o.price,
                         order_id=str(o.order_id),
-                        status=('FILLED' if o.traded_volume >= o.order_volume
-                            else 'PARTIAL_FILLED' if o.traded_volume > 0
+                        filled_quantity=filled_qty,
+                        status=('FILLED' if filled_qty >= o.order_volume
+                            else 'PARTIAL_FILLED' if filled_qty > 0
                             else 'PENDING'),
                     )
             return None
         except Exception as e:
-            print(f"[QMT] Query order error: {e}")
+            logger.error(f"[QMT] Query order error: {e}")
             return None
 
     def get_market_data(self, symbol: str) -> dict:
@@ -356,7 +361,7 @@ else:
                 }
             return {}
         except Exception as e:
-            print(f"[QMT] Query market data error: {e}")
+            logger.error(f"[QMT] Query market data error: {e}")
             return {}
 
 
@@ -374,7 +379,7 @@ class QMTSimulator(QMTBroker):
         self.orders: Dict[str, Order] = {}
 
     def connect(self, **kwargs) -> bool:
-        print(f"[{self.name}] Connected (simulated)")
+        logger.info(f"[{self.name}] Connected (simulated)")
         self._connected = True
         return True
 
@@ -469,10 +474,15 @@ class QMTSimulator(QMTBroker):
             if pos['quantity'] <= 0:
                 del self.positions[order.symbol]
 
-        order_id = f"SIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        order_id = f"SIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{id(order)}"
         order.order_id = order_id
         order.status = 'FILLED'
+        order.filled_quantity = order.quantity
         self.orders[order_id] = order
+
+        # 卖出佣金包含印花税
+        commission_rate = (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY) if order.side.upper() == 'SELL' else DEFAULT_COMMISSION
+        commission = fill_price * order.quantity * commission_rate
 
         return OrderResult(
             order_id=order_id,
@@ -480,7 +490,7 @@ class QMTSimulator(QMTBroker):
             side=order.side,
             filled_quantity=order.quantity,
             filled_price=fill_price,
-            commission=0,
+            commission=commission,
             timestamp=datetime.now(),
             status='FILLED',
         )

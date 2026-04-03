@@ -50,6 +50,13 @@ class MLFactorStrategy(BaseStrategy):
 
         # 按日期分组
         for date, group in predictions.groupby(predictions.index):
+            # 只在调仓日生成信号
+            if not self.should_rebalance(date):
+                continue
+
+            # 记录调仓日期
+            self._last_rebalance = date
+
             # 排序选取 TopK
             top_stocks = group.nlargest(self.top_k, 'score')
 
@@ -66,12 +73,22 @@ class MLFactorStrategy(BaseStrategy):
         return signals
 
     def should_rebalance(self, date: pd.Timestamp) -> bool:
-        """判断是否应该调仓"""
+        """
+        判断是否应该调仓
+
+        Note: This uses calendar days (not trading days) to compute the
+        interval. Since rebalance_freq is specified in trading days, we
+        approximate by applying a 5/7 factor so that 5 trading days
+        roughly corresponds to 7 calendar days. This avoids pulling in a
+        full trading calendar dependency while keeping the behavior
+        reasonable for typical Monday-Friday schedules.
+        """
         if self._last_rebalance is None:
             return True
 
+        calendar_days_threshold = int(self.rebalance_freq * 7 / 5)
         days_since_last = (date - self._last_rebalance).days
-        return days_since_last >= self.rebalance_freq
+        return days_since_last >= calendar_days_threshold
 
 
 class TopKStrategy(BaseStrategy):

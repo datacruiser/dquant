@@ -44,10 +44,13 @@ class BacktestResult:
             fig, ax = plt.subplots(figsize=(12, 6))
 
             if kind == 'nav':
-                # 净值曲线
-                nav = self.portfolio.nav
-                ax.plot(nav.index, nav.values, label='策略净值', linewidth=2)
-                ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
+                # 净值曲线 — 使用 nav_history DataFrame 而非 nav 属性
+                nav_df = self.portfolio.to_dataframe()
+                if len(nav_df) == 0:
+                    ax.text(0.5, 0.5, '无净值数据', ha='center', va='center')
+                else:
+                    ax.plot(nav_df.index, nav_df['nav'], label='策略净值', linewidth=2)
+                    ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)
                 ax.set_title('策略净值曲线', fontsize=14, fontweight='bold')
                 ax.set_xlabel('日期')
                 ax.set_ylabel('净值')
@@ -56,10 +59,14 @@ class BacktestResult:
 
             elif kind == 'returns':
                 # 收益率分布
-                returns = self.portfolio.nav.pct_change().dropna()
-                ax.hist(returns, bins=50, alpha=0.7, edgecolor='black')
-                ax.axvline(returns.mean(), color='red', linestyle='--',
-                          label=f'均值: {returns.mean():.2%}')
+                nav_df = self.portfolio.to_dataframe()
+                if len(nav_df) < 2:
+                    ax.text(0.5, 0.5, '无收益率数据', ha='center', va='center')
+                else:
+                    returns = nav_df['nav'].pct_change().dropna()
+                    ax.hist(returns, bins=50, alpha=0.7, edgecolor='black')
+                    ax.axvline(returns.mean(), color='red', linestyle='--',
+                              label=f'均值: {returns.mean():.2%}')
                 ax.set_title('日收益率分布', fontsize=14, fontweight='bold')
                 ax.set_xlabel('收益率')
                 ax.set_ylabel('频数')
@@ -68,12 +75,16 @@ class BacktestResult:
 
             elif kind == 'drawdown':
                 # 回撤曲线
-                nav = self.portfolio.nav
-                running_max = nav.cummax()
-                drawdown = (nav - running_max) / running_max
-                ax.fill_between(drawdown.index, drawdown.values, 0,
-                               alpha=0.3, color='red', label='回撤')
-                ax.plot(drawdown.index, drawdown.values, color='red', linewidth=1)
+                nav_df = self.portfolio.to_dataframe()
+                if len(nav_df) < 2:
+                    ax.text(0.5, 0.5, '无净值数据', ha='center', va='center')
+                else:
+                    nav = nav_df['nav']
+                    running_max = nav.cummax()
+                    drawdown = (nav - running_max) / running_max
+                    ax.fill_between(drawdown.index, drawdown.values, 0,
+                                   alpha=0.3, color='red', label='回撤')
+                    ax.plot(drawdown.index, drawdown.values, color='red', linewidth=1)
                 ax.set_title('策略回撤', fontsize=14, fontweight='bold')
                 ax.set_xlabel('日期')
                 ax.set_ylabel('回撤')

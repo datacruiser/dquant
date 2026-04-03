@@ -4,6 +4,7 @@
 跟踪 PENDING/PARTIAL_FILLED 订单，支持超时检测。
 """
 
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -28,7 +29,7 @@ class TrackedOrder:
 
 class OrderTracker:
     """
-    订单状态追踪器
+    订单状态追踪器（线程安全）
 
     跟踪未完成（PENDING/PARTIAL_FILLED）订单的状态变化。
 
@@ -52,6 +53,7 @@ class OrderTracker:
     def __init__(self, timeout_seconds: int = ORDER_TIMEOUT_SECONDS):
         self._timeout = timeout_seconds
         self._pending: Dict[str, TrackedOrder] = {}
+        self._lock = threading.Lock()
 
     def add(self, order: Order, result: OrderResult) -> None:
         """将 PENDING/PARTIAL_FILLED 订单加入追踪"""
@@ -67,7 +69,8 @@ class OrderTracker:
             result=result,
             remaining_quantity=remaining,
         )
-        self._pending[order.order_id] = tracked
+        with self._lock:
+            self._pending[order.order_id] = tracked
         logger.info(
             f"[TRACKER] 追踪订单: {order.order_id} "
             f"{order.symbol} {order.side} "
@@ -76,48 +79,52 @@ class OrderTracker:
 
     def update(self, order_id: str, order: Order) -> Optional[TrackedOrder]:
         """更新订单状态（从 broker.get_order_status 获取）"""
-        tracked = self._pending.get(order_id)
-        if tracked is None:
-            return None
+        with self._lock:
+            tracked = self._pending.get(order_id)
+            if tracked is None:
+                return None
 
-        tracked.last_checked = datetime.now()
-        tracked.check_count += 1
-        tracked.order = order
+            tracked.last_checked = datetime.now()
+            tracked.check_count += 1
+            tracked.order = order
 
-        # 如果已完成，移除追踪
-        if order.status in ('FILLED', 'CANCELLED', 'REJECTED'):
-            self.remove(order_id)
-            logger.info(
-                f"[TRACKER] 订单完成: {order_id} status={order.status}"
-            )
-            return tracked
+            # 如果已完成，移除追踪
+            if order.status in ('FILLED', 'CANCELLED', 'REJECTED'):
+                self._pending.pop(order_id, None)
+                logger.info(
+                    f"[TRACKER] 订单完成: {order_id} status={order.status}"
+                )
+                return tracked
 
-        # 更新剩余数量
-        if hasattr(order, 'filled_quantity'):
+            # 更新剩余数量 — Order 已有 filled_quantity 字段
             tracked.remaining_quantity = order.quantity - order.filled_quantity
 
-        return tracked
+            return tracked
 
     def remove(self, order_id: str) -> None:
         """移除追踪"""
-        self._pending.pop(order_id, None)
+        with self._lock:
+            self._pending.pop(order_id, None)
 
     def get_pending(self) -> Dict[str, TrackedOrder]:
         """获取所有待完成订单"""
-        return dict(self._pending)
+        with self._lock:
+            return dict(self._pending)
 
     def has_pending(self) -> bool:
         """是否有待完成订单"""
-        return len(self._pending) > 0
+        with self._lock:
+            return len(self._pending) > 0
 
     def get_timed_out(self) -> List[TrackedOrder]:
         """获取超时的订单"""
         now = datetime.now()
         timed_out = []
-        for order_id, tracked in list(self._pending.items()):
-            elapsed = (now - tracked.first_seen).total_seconds()
-            if elapsed >= self._timeout:
-                timed_out.append(tracked)
+        with self._lock:
+            for order_id, tracked in list(self._pending.items()):
+                elapsed = (now - tracked.first_seen).total_seconds()
+                if elapsed >= self._timeout:
+                    timed_out.append(tracked)
         return timed_out
 
     def cancel_all(self, broker) -> List[str]:
@@ -131,7 +138,10 @@ class OrderTracker:
             成功取消的 order_id 列表
         """
         cancelled = []
-        for order_id, tracked in list(self._pending.items()):
+        with self._lock:
+            items = list(self._pending.items())
+            self._pending.clear()
+        for order_id, tracked in items:
             try:
                 ok = broker.cancel_order(order_id)
                 if ok:
@@ -141,5 +151,4 @@ class OrderTracker:
                     logger.warning(f"[TRACKER] 关机取消订单失败: {order_id}")
             except Exception as e:
                 logger.error(f"[TRACKER] 关机取消订单异常: {order_id} — {e}")
-        self._pending.clear()
         return cancelled

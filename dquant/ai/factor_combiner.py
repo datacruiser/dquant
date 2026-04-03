@@ -125,7 +125,7 @@ class FactorCombiner:
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged['factor'].corr(merged['target'])
+                        corr = merged['factor'].corr(merged['target'], method='spearman')
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -158,7 +158,7 @@ class FactorCombiner:
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged['factor'].corr(merged['target'])
+                        corr = merged['factor'].corr(merged['target'], method='spearman')
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -272,8 +272,11 @@ class FactorCombiner:
                     if len(row) > 0:
                         X[idx, i] = row['score'].values[0]
 
+        # Temporal split: fit PCA on first 80% of data to avoid look-ahead bias
+        split_idx = int(n_samples * 0.8)
         pca = PCA(n_components=1)
-        combined = pca.fit_transform(X)
+        pca.fit(X[:split_idx])
+        combined = pca.transform(X)
 
         result = pd.DataFrame({
             'date': np.repeat(dates, len(symbols)),
@@ -379,6 +382,8 @@ class CombinedFactor(BaseFactor):
         if not self._is_fitted:
             raise ValueError("Factor not fitted. Call fit() first.")
 
+        # Recompute factor values on the provided data
+        self._combiner.fit(data, calculate_ic=False)
         return self._combiner.combine(method=self.combine_method, weights=self.weights)
 
     def get_weights_summary(self) -> pd.DataFrame:

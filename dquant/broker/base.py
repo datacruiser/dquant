@@ -13,12 +13,13 @@ class Order:
     """订单"""
     symbol: str
     side: str  # 'BUY' or 'SELL'
-    quantity: float
+    quantity: int  # 股票数量必须为整数（A股为100的整数倍）
     price: Optional[float] = None  # None = 市价单
     order_type: str = 'MARKET'  # 'MARKET' or 'LIMIT'
-    timestamp: datetime = None
-    order_id: str = None
+    timestamp: Optional[datetime] = None
+    order_id: Optional[str] = None
     status: str = 'PENDING'  # PENDING, FILLED, CANCELLED, REJECTED
+    filled_quantity: int = 0  # 已成交数量
 
 
 @dataclass

@@ -24,11 +24,10 @@ install-dev:
 	pip install -r requirements-full.txt
 
 test:
-	python tests/test_basic.py
-	python tests/test_factors.py
+	pytest tests/ -v
 
 test-verbose:
-	pytest tests/ -v
+	pytest tests/ -v --cov=dquant --cov-report=term-missing
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

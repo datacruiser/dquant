@@ -9,7 +9,13 @@ import uuid
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import OrderValidator
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
+from dquant.constants import (
+    DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY,
+    DEFAULT_INITIAL_CASH, MIN_SHARES,
+)
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Simulator(BaseBroker):
@@ -29,13 +35,13 @@ class Simulator(BaseBroker):
     def connect(self, **kwargs) -> bool:
         """模拟连接"""
         self._connected = True
-        print(f"[{self.name}] Connected (simulated)")
+        logger.info(f"[{self.name}] Connected (simulated)")
         return True
 
     def disconnect(self) -> bool:
         """模拟断开"""
         self._connected = False
-        print(f"[{self.name}] Disconnected")
+        logger.info(f"[{self.name}] Disconnected")
         return True
 
     def get_account(self) -> dict:
@@ -44,12 +50,16 @@ class Simulator(BaseBroker):
             pos['quantity'] * pos['price']
             for pos in self.positions.values()
         )
+        profit_pct = (
+            (total_value - self.initial_cash) / self.initial_cash
+            if self.initial_cash != 0 else 0.0
+        )
         return {
             'cash': self.cash,
             'total_value': total_value,
             'initial_cash': self.initial_cash,
             'profit': total_value - self.initial_cash,
-            'profit_pct': (total_value - self.initial_cash) / self.initial_cash,
+            'profit_pct': profit_pct,
         }
 
     def get_positions(self) -> Dict[str, dict]:
@@ -122,22 +132,38 @@ class Simulator(BaseBroker):
                     'price': filled_price,
                 }
 
+            commission = filled_price * filled_quantity * DEFAULT_COMMISSION
+
         elif order.side == 'SELL':
-            # 卖出：收入 = 价格 * 数量 * (1 - 佣金率 - 印花税)
-            if order.symbol not in self.positions:
-                filled_quantity = 0
-            else:
-                pos = self.positions[order.symbol]
-                filled_quantity = min(filled_quantity, pos['quantity'])
-                revenue = filled_price * filled_quantity
-                # A 股卖出：扣佣金 + 印花税
-                total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
-                self.cash += revenue - total_cost
-                pos['quantity'] -= filled_quantity
+            if order.symbol not in self.positions or self.positions[order.symbol]['quantity'] <= 0:
+                order.status = 'REJECTED'
+                self.orders[order.order_id] = order
+                return OrderResult(
+                    order_id=order.order_id,
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=order.timestamp,
+                    status='REJECTED',
+                )
 
-                if pos['quantity'] <= 0:
-                    del self.positions[order.symbol]
+            pos = self.positions[order.symbol]
+            filled_quantity = min(filled_quantity, pos['quantity'])
+            revenue = filled_price * filled_quantity
+            # A 股卖出：扣佣金 + 印花税
+            total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+            self.cash += revenue - total_cost
+            pos['quantity'] -= filled_quantity
 
+            # 佣金包含基础佣金 + 印花税，确保 P&L 计算准确
+            commission = filled_price * filled_quantity * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+
+            if pos['quantity'] <= 0:
+                del self.positions[order.symbol]
+
+        order.filled_quantity = filled_quantity
         order.status = 'FILLED'
         self.orders[order.order_id] = order
 
@@ -147,7 +173,7 @@ class Simulator(BaseBroker):
             side=order.side,
             filled_quantity=filled_quantity,
             filled_price=filled_price,
-            commission=filled_price * filled_quantity * DEFAULT_COMMISSION,  # 万三
+            commission=commission,
             timestamp=order.timestamp,
             status='FILLED',
         )
@@ -179,6 +205,7 @@ class Simulator(BaseBroker):
         """获取模拟价格"""
         if symbol in self.positions:
             return self.positions[symbol].get('price', 10.0)
+        logger.warning(f"[Simulator] 使用默认价格 10.0 用于未知标的: {symbol}")
         return 10.0  # 默认价格
 
     def update_prices(self, prices: Dict[str, float]):
