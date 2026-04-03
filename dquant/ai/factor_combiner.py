@@ -382,9 +382,20 @@ class CombinedFactor(BaseFactor):
         if not self._is_fitted:
             raise ValueError("Factor not fitted. Call fit() first.")
 
-        # Recompute factor values on the provided data
-        self._combiner.fit(data, calculate_ic=False)
-        return self._combiner.combine(method=self.combine_method, weights=self.weights)
+        # Compute factor values on the provided data without mutating fitted state.
+        # We use a temporary combiner so that self._combiner.factor_values and
+        # self._combiner.weights (fitted during fit()) remain intact.
+        temp_combiner = FactorCombiner(
+            neutralize=self._combiner.neutralize,
+            standardize=self._combiner.standardize,
+            winsorize=self._combiner.winsorize,
+            winsorize_limit=self._combiner.winsorize_limit,
+        )
+        for name, factor in self.factors.items():
+            temp_combiner.add_factor(name, factor)
+
+        temp_combiner.fit(data, calculate_ic=False)
+        return temp_combiner.combine(method=self.combine_method, weights=self.weights)
 
     def get_weights_summary(self) -> pd.DataFrame:
         """获取权重摘要"""

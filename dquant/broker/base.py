@@ -28,7 +28,7 @@ class OrderResult:
     order_id: str
     symbol: str
     side: str
-    filled_quantity: float
+    filled_quantity: int
     filled_price: float
     commission: float
     timestamp: datetime

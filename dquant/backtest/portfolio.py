@@ -6,9 +6,8 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 import pandas as pd
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
 from dquant.logger import get_logger
-from dquant.constants import DEFAULT_INITIAL_CASH as DEFAULT_INITIAL_CASH_CONST
 
 logger = get_logger(__name__)
 

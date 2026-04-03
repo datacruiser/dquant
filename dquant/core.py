@@ -21,7 +21,7 @@ from dquant.broker.order_tracker import OrderTracker
 from dquant.notify import create_notifier
 from dquant.notify.base import Notifier
 from dquant.risk import RiskManager, PositionSizer, PositionLimit
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_INITIAL_CASH, MIN_SHARES
 from dquant.constants import BROKER_MAX_RECONNECT, BROKER_RECONNECT_DELAY, BROKER_RECONNECT_BACKOFF
 from dquant.logger import get_logger
 from dquant.calendar import is_trading_day
@@ -602,6 +602,12 @@ class Engine:
             for name, value in best_params.items():
                 if hasattr(self.strategy, name):
                     setattr(self.strategy, name, value)
+        else:
+            # 所有参数组合均失败，恢复原始参数
+            for name, value in original_params.items():
+                if hasattr(self.strategy, name):
+                    setattr(self.strategy, name, value)
+            logger.warning("[OPTIMIZE] 所有参数组合均失败，已恢复原始参数")
 
         return {
             'best_params': best_params,

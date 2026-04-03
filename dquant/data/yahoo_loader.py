@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from dquant.data.base import DataSource
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 
 class YahooLoader(DataSource):
@@ -214,7 +214,7 @@ class YahooLoader(DataSource):
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
         rs = gain / loss
-        return MIN_SHARES - (MIN_SHARES / (1 + rs))
+        return 100 - (100 / (1 + rs))
 
     @staticmethod
     def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):

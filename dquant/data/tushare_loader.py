@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 from dquant.data.base import DataSource
-from dquant.constants import MIN_SHARES
+from dquant.constants import BATCH_SIZE
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -325,7 +325,7 @@ class TushareLoader(DataSource):
         try:
             # 获取财务指标
             fin_df = self._pro.fina_indicator(
-                ts_code=','.join(symbols[:MIN_SHARES]),  # 限制数量
+                ts_code=','.join(symbols[:BATCH_SIZE]),  # 限制数量
                 start_date=self.start.replace('-', '') if self.start else '20200101',
             )
 
@@ -346,7 +346,7 @@ class TushareLoader(DataSource):
         self._init_tushare()
 
         if symbols is None:
-            symbols = self._get_symbol_list()[:MIN_SHARES]  # 限制数量
+            symbols = self._get_symbol_list()[:BATCH_SIZE]  # 限制数量
 
         try:
             df = self._pro.daily(

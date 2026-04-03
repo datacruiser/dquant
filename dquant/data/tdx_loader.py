@@ -10,7 +10,7 @@ import pandas as pd
 import struct
 
 from dquant.data.base import DataSource
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 
 class TDXLoader(DataSource):
@@ -151,8 +151,8 @@ class TDXLoader(DataSource):
 
                 # 日期转换
                 year = date_int // 10000
-                month = (date_int % 10000) // MIN_SHARES
-                day = date_int % MIN_SHARES
+                month = (date_int % 10000) // 100
+                day = date_int % 100
 
                 try:
                     date = pd.Timestamp(year=year, month=month, day=day)

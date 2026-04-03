@@ -10,7 +10,7 @@ from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.metrics import Metrics
 from dquant.backtest.result import BacktestResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)

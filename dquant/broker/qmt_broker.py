@@ -417,7 +417,7 @@ class QMTSimulator(QMTBroker):
         fill_price = order.price or 10.0  # 市价单使用默认价格
 
         if order.side.upper() == 'BUY':
-            cost = fill_price * order.quantity
+            cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
             if cost > self.cash:
                 return OrderResult(
                     order_id='',
@@ -468,7 +468,7 @@ class QMTSimulator(QMTBroker):
                     status='REJECTED',
                 )
             revenue = fill_price * order.quantity
-            self.cash += revenue
+            self.cash += revenue * (1 - DEFAULT_COMMISSION - DEFAULT_STAMP_DUTY)
             pos['quantity'] -= order.quantity
             pos['price'] = fill_price
             if pos['quantity'] <= 0:

@@ -11,7 +11,7 @@ import asyncio
 import json
 from datetime import datetime
 
-from dquant.constants import DEFAULT_STAMP_DUTY, MIN_SHARES
+from dquant.constants import DEFAULT_STAMP_DUTY
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -140,7 +140,7 @@ class MockRealtimeSource(RealtimeDataSource):
                         high=max(old_quote.high, new_price),
                         low=min(old_quote.low, new_price),
                         volume=old_quote.volume + int(random.random() * 1000),
-                        turnover=old_quote.turnover + new_price * random.random() * MIN_SHARES,
+                        turnover=old_quote.turnover + new_price * random.random() * 100,
                         timestamp=datetime.now(),
                     )
 

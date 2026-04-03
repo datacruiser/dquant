@@ -73,7 +73,7 @@ class OrderValidator:
         if quantity is None:
             return False, "交易数量不能为空"
 
-        if not isinstance(quantity, (int, float)):
+        if not isinstance(quantity, int):
             return False, f"交易数量类型错误: {type(quantity)}"
 
         if quantity <= 0:

@@ -44,12 +44,12 @@ class ADXFactor(BaseFactor):
             low = group['low']
             close = group['close']
 
-            # 计算 +DM 和 -DM
+            # 计算 +DM 和 -DM (Wilder's mutual exclusion rule)
             plus_dm = high.diff()
             minus_dm = -low.diff()
-
-            plus_dm[plus_dm < 0] = 0
-            minus_dm[minus_dm < 0] = 0
+            # Wilder's rule: only keep the larger directional movement
+            plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+            minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
 
             # 计算 TR
             tr1 = high - low
