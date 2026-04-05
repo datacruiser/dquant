@@ -192,3 +192,53 @@ ZZ500_SAMPLE = [
 VERSION = '0.1.0'
 AUTHOR = 'DQuant Team'
 LICENSE = 'MIT'
+
+
+# ============================================================
+# Symbol 标准化
+# ============================================================
+
+# 市场 → 代码前缀映射
+_MARKET_PREFIX = {
+    'SH': ('6',),        # 上海主板: 600xxx-689xxx
+    'SZ': ('0', '3'),    # 深圳: 000xxx-002xxx, 300xxx-301xxx
+    'BJ': ('4', '8'),    # 北交所: 430xxx-873xxx
+}
+
+
+def normalize_symbol(symbol: str) -> str:
+    """
+    标准化股票代码为 CODE.MARKET 格式
+
+    Examples:
+        '600000' → '600000.SH'
+        '000001' → '000001.SZ'
+        '600000.SH' → '600000.SH'
+        '600000.XSHG' → '600000.SH'
+
+    Args:
+        symbol: 任意格式的股票代码
+
+    Returns:
+        标准化后的 CODE.MARKET 格式
+    """
+    if not symbol:
+        return symbol
+
+    # 去除已知非标准后缀
+    for suffix in ('.XSHG', '.XSHE', '.BJ'):
+        symbol = symbol.replace(suffix, '')
+
+    parts = symbol.split('.')
+    code = parts[0]
+
+    # 如果已经是标准格式 (CODE.SH / CODE.SZ)，直接返回
+    if len(parts) == 2 and parts[1] in _MARKET_PREFIX:
+        return symbol
+
+    # 根据代码首位数字判断市场
+    for market, prefixes in _MARKET_PREFIX.items():
+        if code[0] in prefixes:
+            return f"{code}.{market}"
+
+    return symbol

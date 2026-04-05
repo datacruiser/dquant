@@ -20,7 +20,7 @@ from dquant.broker.trade_journal import TradeJournal
 from dquant.broker.order_tracker import OrderTracker
 from dquant.notify import create_notifier
 from dquant.notify.base import Notifier
-from dquant.risk import RiskManager, PositionSizer, PositionLimit
+from dquant.risk import RiskManager
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_INITIAL_CASH, MIN_SHARES
 from dquant.constants import BROKER_MAX_RECONNECT, BROKER_RECONNECT_DELAY, BROKER_RECONNECT_BACKOFF
 from dquant.logger import get_logger
@@ -190,7 +190,6 @@ class Engine:
         risk_mgr = RiskManager(max_drawdown=max_drawdown, max_daily_loss=max_daily_loss)
         journal = TradeJournal()
         tracker = OrderTracker()
-        sizer = PositionSizer(method='equal_weight', total_value=self.initial_cash)
         time_checker = TradingTimeChecker()
 
         # 信号处理：优雅关机
@@ -229,8 +228,9 @@ class Engine:
                         continue
 
                     # 2. 检查交易时间
-                    if not time_checker.is_trading_time():
-                        logger.debug(f"[LIVE] 非交易时间: {now.strftime('%H:%M:%S')}")
+                    can_trade, time_msg = time_checker.is_trading_time(now)
+                    if not can_trade:
+                        logger.debug(f"[LIVE] {time_msg}")
                         time.sleep(interval)
                         continue
 
@@ -287,11 +287,13 @@ class Engine:
 
                     # 8. 执行卖出信号
                     for sig in sell_signals:
-                        result = self._execute_sell(
+                        sell_res = self._execute_sell(
                             sig, positions, dry_run, journal, strategy_name,
                         )
-                        if result and result.status in ('PENDING', 'PARTIAL_FILLED'):
-                            tracker.add(sig, result)
+                        if sell_res:
+                            order, result = sell_res
+                            if result.status in ('PENDING', 'PARTIAL_FILLED'):
+                                tracker.add(order, result)
 
                     # 9. 轮询未完成订单
                     if tracker.has_pending() and not dry_run:
@@ -300,8 +302,8 @@ class Engine:
                     # 10. 执行买入信号 (等权仓位)
                     if buy_signals:
                         self._execute_buys(
-                            buy_signals, available_cash, sizer,
-                            dry_run, journal, strategy_name,
+                            buy_signals, available_cash,
+                            dry_run, journal, strategy_name, tracker,
                         )
 
                     # 10. 更新持仓价格
@@ -357,14 +359,19 @@ class Engine:
 
     def _execute_sell(
         self,
-        signal: Signal,
+        sig: Signal,
         positions: Dict[str, dict],
         dry_run: bool,
         journal: TradeJournal,
         strategy_name: str,
-    ) -> Optional[OrderResult]:
-        """执行卖出信号"""
-        symbol = signal.symbol
+    ) -> Optional[tuple]:
+        """
+        执行卖出信号
+
+        Returns:
+            (order, result) tuple, or None if skipped
+        """
+        symbol = sig.symbol
         if symbol not in positions:
             logger.debug(f"[LIVE] 无持仓，跳过卖出: {symbol}")
             return None
@@ -383,8 +390,8 @@ class Engine:
             symbol=symbol,
             side='SELL',
             quantity=quantity,
-            price=signal.price,
-            order_type='LIMIT' if signal.price else 'MARKET',
+            price=sig.price,
+            order_type='LIMIT' if sig.price else 'MARKET',
         )
 
         if dry_run:
@@ -393,42 +400,43 @@ class Engine:
 
         result = self.broker.place_order(order)
         journal.record("ORDER_PLACED", order, result, strategy_name=strategy_name,
-                       signal_info=signal.to_dict())
+                       signal_info=sig.to_dict())
 
         if result.status in ('FILLED', 'PARTIAL_FILLED'):
             logger.info(f"[LIVE] 卖出成交: {symbol} x {result.filled_quantity} @ {result.filled_price:.2f}")
         elif result.status == 'REJECTED':
             logger.warning(f"[LIVE] 卖出被拒: {symbol} — {result.status}")
 
-        return result
+        return (order, result)
 
     def _execute_buys(
         self,
         buy_signals: List[Signal],
         available_cash: float,
-        sizer: PositionSizer,
         dry_run: bool,
         journal: TradeJournal,
         strategy_name: str,
+        tracker: OrderTracker,
     ) -> None:
-        """执行买入信号 (等权仓位分配)"""
+        """执行买入信号 (等权仓位分配，动态扣减可用资金)"""
         if not buy_signals:
             return
 
-        symbols = [s.symbol for s in buy_signals]
-        position_values = sizer.size(symbols)
+        remaining_cash = available_cash
+        n = len(buy_signals)
 
-        for sig in buy_signals:
-            target_value = position_values.get(sig.symbol, 0)
-            if target_value <= 0:
-                continue
+        for idx, sig in enumerate(buy_signals):
+            remaining_slots = n - idx
+            per_stock_budget = remaining_cash / remaining_slots if remaining_slots > 0 else 0
+            if per_stock_budget <= 0:
+                break
 
             price = sig.price or 10.0  # 需要价格计算股数
             if price <= 0:
                 continue
 
             # 计算买入数量 (整手)
-            quantity = int(target_value / price // MIN_SHARES) * MIN_SHARES
+            quantity = int(per_stock_budget / price // MIN_SHARES) * MIN_SHARES
             if quantity <= 0:
                 logger.debug(f"[LIVE] 资金不足，跳过买入: {sig.symbol}")
                 continue
@@ -443,6 +451,7 @@ class Engine:
 
             if dry_run:
                 logger.info(f"[LIVE][DRY-RUN] 买入: {sig.symbol} x {quantity}")
+                remaining_cash -= quantity * price
                 continue
 
             result = self.broker.place_order(order)
@@ -453,6 +462,16 @@ class Engine:
                 logger.info(f"[LIVE] 买入成交: {sig.symbol} x {result.filled_quantity} @ {result.filled_price:.2f}")
             elif result.status == 'REJECTED':
                 logger.warning(f"[LIVE] 买入被拒: {sig.symbol} — {result.status}")
+            else:
+                logger.info(f"[LIVE] 买入挂单: {sig.symbol} x {quantity} — {result.status}")
+
+            if result.status in ('PENDING', 'PARTIAL_FILLED'):
+                tracker.add(order, result)
+
+            if result.status != 'REJECTED':
+                unit_price = result.filled_price if result.filled_price > 0 else price
+                reserved_cost = quantity * unit_price
+                remaining_cash = max(0, remaining_cash - reserved_cost)
 
     def _try_reconnect(self, **kwargs) -> bool:
         """
@@ -574,6 +593,14 @@ class Engine:
         param_names = list(param_grid.keys())
         param_values = list(param_grid.values())
 
+        # 指标别名映射 (支持 'return' → 'total_return')
+        metric_aliases = {
+            'return': 'total_return',
+            'sharpe': 'sharpe',
+            'max_drawdown': 'max_drawdown',
+        }
+        actual_metric = metric_aliases.get(metric, metric)
+
         for values in product(*param_values):
             params = dict(zip(param_names, values))
 
@@ -587,7 +614,7 @@ class Engine:
                 result = self.backtest(**backtest_kwargs)
 
                 # 获取评分
-                score = getattr(result.metrics, metric, 0)
+                score = getattr(result.metrics, actual_metric, 0)
 
                 if score > best_score:
                     best_score = score
@@ -614,5 +641,4 @@ class Engine:
             'best_score': best_score,
             'best_result': best_result,
         }
-
 

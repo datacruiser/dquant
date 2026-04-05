@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 
 from dquant.data.base import DataSource
+from dquant.constants import normalize_symbol
 
 
 class JQDataLoader(DataSource):
@@ -134,14 +135,10 @@ class JQDataLoader(DataSource):
         return [self._normalize_symbol(self.symbols)]
 
     def _normalize_symbol(self, symbol: str) -> str:
-        """标准化股票代码"""
-        symbol = symbol.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
-        if '.' not in symbol:
-            if symbol.startswith('6'):
-                return symbol + '.XSHG'
-            else:
-                return symbol + '.XSHE'
-        return symbol
+        """标准化股票代码 → 聚宽格式 (.XSHG/.XSHE)"""
+        # 先转为标准 CODE.MARKET 格式，再转聚宽格式
+        std = normalize_symbol(symbol)
+        return std.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
 
     def _get_index_constituents(self, index_code: str) -> List[str]:
         """获取指数成分股"""

@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 from dquant.data.base import DataSource
-from dquant.constants import BATCH_SIZE
+from dquant.constants import BATCH_SIZE, normalize_symbol
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -190,14 +190,9 @@ class TushareLoader(DataSource):
 
     def _normalize_symbol(self, symbol: str) -> str:
         """标准化股票代码"""
-        symbol = symbol.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
-        if symbol.startswith('6'):
-            return symbol + '.SH'
-        elif symbol.startswith('0') or symbol.startswith('3'):
-            return symbol + '.SZ'
-        elif symbol.startswith('4') or symbol.startswith('8'):
-            return symbol + '.BJ'
-        return symbol
+        # Tushare 返回纯数字代码，需要加后缀
+        code = symbol.replace('.SH', '').replace('.SZ', '').replace('.BJ', '')
+        return normalize_symbol(code)
 
     def _get_index_constituents(self, index_code: str) -> List[str]:
         """获取指数成分股"""

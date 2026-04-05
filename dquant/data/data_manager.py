@@ -201,7 +201,7 @@ class DataManager:
                 logger.debug(f"[DataManager] 数据校验跳过: {e}")
 
         # 保存缓存
-        if self.cache_dir:
+        if self.cache_dir and df is not None and not df.empty:
             self._save_cache(cache_key, df)
             logger.debug(f"Saved to cache: {cache_key}")
 
@@ -245,6 +245,10 @@ class DataManager:
             **kwargs
         )
 
+        # new_data 可能为 None
+        if new_data is None:
+            new_data = pd.DataFrame()
+
         # 合并
         if cached is not None and len(new_data) > 0:
             # 去重
@@ -252,7 +256,7 @@ class DataManager:
             combined = combined[~combined.index.duplicated(keep='last')]
             return combined.sort_index()
 
-        return new_data if len(new_data) > 0 else cached
+        return new_data if len(new_data) > 0 else (cached if cached is not None else pd.DataFrame())
 
     def load_batch(
         self,

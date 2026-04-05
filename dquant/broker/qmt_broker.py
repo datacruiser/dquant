@@ -218,10 +218,18 @@ else:
             account_info = self.get_account()
             positions = self.get_positions()
 
+            # 市价单需要 estimated_price 做资金检查
+            estimated_price = None
+            if order.order_type == 'MARKET' and order.price is None:
+                md = self.get_market_data(order.symbol)
+                if md and 'price' in md:
+                    estimated_price = md['price']
+
             valid, msg = self.safety.check_order(
                 order,
                 available_cash=account_info.get('cash', 0),
                 positions=positions,
+                estimated_price=estimated_price,
             )
 
             if not valid:

@@ -10,6 +10,7 @@ from datetime import datetime
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.constants import normalize_symbol
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -127,14 +128,9 @@ class RiceQuantLoader(DataSource):
         return [self._normalize_symbol(self.symbols)]
 
     def _normalize_symbol(self, symbol: str) -> str:
-        """标准化股票代码"""
-        symbol = symbol.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
-        if '.' not in symbol:
-            if symbol.startswith('6'):
-                return symbol + '.XSHG'
-            else:
-                return symbol + '.XSHE'
-        return symbol
+        """标准化股票代码 → RiceQuant 格式 (.XSHG/.XSHE)"""
+        std = normalize_symbol(symbol)
+        return std.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""

@@ -110,16 +110,31 @@ class Portfolio:
             )
 
     def sell(self, symbol: str, shares: float, price: float, commission: float = 0, stamp_duty: float = DEFAULT_STAMP_DUTY):
-        """卖出（含印花税）"""
+        """卖出（含印花税，整手约束）"""
         if symbol not in self.positions:
             return
 
         pos = self.positions[symbol]
         shares = min(shares, pos.shares)
 
-        revenue = shares * price * (1 - commission - stamp_duty)
+        # 整手处理：向下取整到 MIN_SHARES 的整数倍
+        lot_shares = int(shares // MIN_SHARES) * MIN_SHARES
+
+        # 若剩余不足一手，清仓
+        if lot_shares == 0:
+            lot_shares = pos.shares
+        else:
+            # 检查卖出后剩余是否不足一手
+            remaining = pos.shares - lot_shares
+            if 0 < remaining < MIN_SHARES:
+                lot_shares = pos.shares  # 清仓
+
+        if lot_shares <= 0:
+            return
+
+        revenue = lot_shares * price * (1 - commission - stamp_duty)
         self.cash += revenue
-        pos.shares -= shares
+        pos.shares -= lot_shares
 
         if pos.shares < MIN_SHARES:
             del self.positions[symbol]
