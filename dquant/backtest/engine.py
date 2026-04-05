@@ -2,15 +2,18 @@
 回测引擎
 """
 
-from typing import Optional, Dict, List
-from datetime import datetime
+from typing import Dict, List, Optional
+
 import pandas as pd
 
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
-from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.metrics import Metrics
+from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.result import BacktestResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_INITIAL_CASH, DEFAULT_SLIPPAGE
+from dquant.logger import get_logger
+from dquant.strategy.base import BaseStrategy, Signal
+
+logger = get_logger(__name__)
 
 
 class BacktestEngine:
@@ -18,6 +21,7 @@ class BacktestEngine:
     向量化回测引擎
 
     支持多股票、多策略的回测。
+    信号在 T 日产生，T+1 日执行，消除前视偏差。
     """
 
     def __init__(
@@ -51,97 +55,137 @@ class BacktestEngine:
         self.trades: List[dict] = []
 
     def run(self) -> BacktestResult:
-        """运行回测"""
-        # 生成信号
-        signals = self.strategy.generate_signals(self.data)
+        """
+        运行回测
 
-        # 按日期分组信号
-        signal_df = pd.DataFrame([s.to_dict() for s in signals])
-        if len(signal_df) == 0:
+        信号生成与执行时序:
+        1. 预先一次性生成所有信号 (O(N))
+        2. 按信号 timestamp 归组
+        3. 信号在 timestamp 的下一个交易日执行 (T+1)
+        """
+        if self.data is None or self.data.empty:
+            logger.warning("[BACKTEST] 数据为空，返回空结果")
             return self._create_result()
 
-        signal_df['timestamp'] = pd.to_datetime(signal_df['timestamp'])
-        daily_signals = signal_df.groupby('timestamp')
-
-        # 预分区数据避免 O(n²) 扫描
         dates = sorted(self.data.index.unique())
         data_by_date = dict(iter(self.data.groupby(self.data.index)))
 
+        # ---- 预计算信号，构建 T+1 执行映射 ----
+        exec_map = self._build_exec_map(dates)
+
+        # ---- 逐日执行 ----
         for date in dates:
-            # O(1) 获取当日数据
             daily_data = data_by_date.get(date)
             if daily_data is None:
                 continue
-            prices = dict(zip(daily_data['symbol'], daily_data['close']))
 
-            # 构建滑点调整后的交易价格
-            # 买入加滑点（实际成交价更高），卖出减滑点（实际成交价更低）
+            prices = dict(zip(daily_data["symbol"], daily_data["close"]))
             buy_trade_prices = {
-                s: p * (1 + self.slippage) for s, p in prices.items()
+                symbol: price * (1 + self.slippage) for symbol, price in prices.items()
             }
             sell_trade_prices = {
-                s: p * (1 - self.slippage) for s, p in prices.items()
+                symbol: price * (1 - self.slippage) for symbol, price in prices.items()
             }
 
-            # 更新持仓价格
+            # 更新持仓价格 (在执行交易前记录 NAV)
             self.portfolio.update_prices(prices, date)
 
-            # 检查是否有调仓信号
-            if date not in daily_signals.groups:
-                continue
+            # 取当日应执行的信号
+            date_key = pd.Timestamp(date).normalize()
+            day_signals = exec_map.get(date_key, [])
 
-            day_signals = daily_signals.get_group(date)
+            buy_sigs = [s for s in day_signals if s.is_buy]
+            sell_sigs = [s for s in day_signals if s.is_sell]
 
-            # 处理买入信号 (signal_type == 1)
-            buy_signals = day_signals[day_signals['signal_type'] == 1]
-            if len(buy_signals) > 0:
-                target_weights = dict(zip(
-                    buy_signals['symbol'],
-                    buy_signals['strength']
-                ))
-
+            # 执行买入
+            if buy_sigs:
+                target_weights = {s.symbol: s.strength for s in buy_sigs}
                 self.portfolio.rebalance(
                     target_weights,
                     buy_trade_prices,
-                    self.commission
+                    self.commission,
                 )
 
-                for _, row in buy_signals.iterrows():
-                    self.trades.append({
-                        'date': date,
-                        'symbol': row['symbol'],
-                        'action': 'BUY',
-                        'price': prices.get(row['symbol'], 0),
-                        'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
-                    })
+                for s in buy_sigs:
+                    self.trades.append(
+                        {
+                            "date": date,
+                            "symbol": s.symbol,
+                            "action": "BUY",
+                            "price": prices.get(s.symbol, 0),
+                            "score": s.metadata.get("score", 0) if s.metadata else 0,
+                        }
+                    )
 
-            # 处理卖出信号 (signal_type == -1)
-            sell_signals = day_signals[day_signals['signal_type'] == -1]
-            for _, row in sell_signals.iterrows():
-                symbol = row['symbol']
-                if symbol in self.portfolio.positions:
-                    pos = self.portfolio.positions[symbol]
+            # 执行卖出
+            for s in sell_sigs:
+                if s.symbol in self.portfolio.positions:
+                    pos = self.portfolio.positions[s.symbol]
                     self.portfolio.sell(
-                        symbol, pos.shares,
-                        sell_trade_prices.get(symbol, pos.current_price),
+                        s.symbol,
+                        pos.shares,
+                        sell_trade_prices.get(s.symbol, pos.current_price),
                         self.commission,
                     )
-                    self.trades.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'action': 'SELL',
-                        'price': prices.get(symbol, 0),
-                        'score': row['metadata'].get('score', 0) if row['metadata'] else 0,
-                    })
+                    self.trades.append(
+                        {
+                            "date": date,
+                            "symbol": s.symbol,
+                            "action": "SELL",
+                            "price": prices.get(s.symbol, 0),
+                            "score": s.metadata.get("score", 0) if s.metadata else 0,
+                        }
+                    )
 
         return self._create_result()
+
+    def _build_exec_map(self, dates: list) -> Dict[pd.Timestamp, List[Signal]]:
+        """
+        预计算信号并构建 T+1 执行映射
+
+        Returns:
+            {execution_date: [signals]} — 信号在 timestamp 的下一个交易日执行
+        """
+        signals = self.strategy.generate_signals(self.data)
+        if not signals:
+            return {}
+
+        # 构建 sorted dates 索引，用于快速查找下一个交易日
+        sorted_dates = sorted(pd.Timestamp(d).normalize() for d in dates)
+        date_index_map = {d: i for i, d in enumerate(sorted_dates)}
+
+        exec_map: Dict[pd.Timestamp, List[Signal]] = {}
+
+        for sig in signals:
+            # 信号无 timestamp → 分配数据最后一天（保守处理：不执行）
+            if sig.timestamp is None:
+                logger.debug(f"[BACKTEST] 信号无 timestamp，跳过: {sig.symbol} {sig.signal_type}")
+                continue
+
+            sig_date = pd.Timestamp(sig.timestamp).normalize()
+
+            # 查找下一个交易日 (T+1)
+            idx = date_index_map.get(sig_date)
+            if idx is None:
+                # 信号日期不在交易日列表中，找最近的后一个交易日
+                continue
+
+            if idx + 1 < len(sorted_dates):
+                exec_date = sorted_dates[idx + 1]
+            else:
+                # 信号在最后一个交易日产生，无后续执行日
+                continue
+
+            exec_map.setdefault(exec_date, []).append(sig)
+
+        return exec_map
 
     def _create_result(self) -> BacktestResult:
         """创建回测结果"""
         nav_df = self.portfolio.to_dataframe()
 
         # 计算绩效
-        metrics = Metrics.from_nav(nav_df['nav'])
+        metrics = Metrics.from_nav(nav_df["nav"])
         metrics.total_trades = len(self.trades)
 
         # 计算基准净值
@@ -163,17 +207,17 @@ class BacktestEngine:
             return None
 
         # 从数据中筛选 benchmark 股票
-        if 'symbol' not in self.data.columns:
+        if "symbol" not in self.data.columns:
             return None
 
-        bench_data = self.data[self.data['symbol'] == self.benchmark]
+        bench_data = self.data[self.data["symbol"] == self.benchmark]
         if bench_data.empty:
             return None
 
-        if 'close' not in bench_data.columns:
+        if "close" not in bench_data.columns:
             return None
 
-        close = bench_data['close']
+        close = bench_data["close"]
         bench_nav = close / close.iloc[0]
         bench_nav.index = bench_data.index
         return bench_nav

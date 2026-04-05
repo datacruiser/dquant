@@ -2,10 +2,11 @@
 Phase 2 Step 7: Corporate Action 测试
 """
 
-import pytest
 from datetime import datetime
 
-from dquant.backtest.portfolio import Portfolio, CorporateAction
+import pytest
+
+from dquant.backtest.portfolio import CorporateAction, Portfolio
 from dquant.constants import DEFAULT_INITIAL_CASH
 
 
@@ -82,5 +83,5 @@ class TestCorporateAction:
         assert action.metadata["note"] == "test"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

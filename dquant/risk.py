@@ -4,30 +4,33 @@
 提供仓位管理、风险控制、资金管理等功能。
 """
 
-from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass
-import pandas as pd
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
+import pandas as pd
 
 
 @dataclass
 class PositionLimit:
     """仓位限制"""
-    max_single_pct: float = 0.1      # 单只股票最大仓位 10%
-    max_sector_pct: float = 0.3      # 单个行业最大仓位 30%
-    max_total_pct: float = 0.95      # 最大总仓位 95%
-    min_cash_pct: float = 0.05       # 最小现金比例 5%
+
+    max_single_pct: float = 0.1  # 单只股票最大仓位 10%
+    max_sector_pct: float = 0.3  # 单个行业最大仓位 30%
+    max_total_pct: float = 0.95  # 最大总仓位 95%
+    min_cash_pct: float = 0.05  # 最小现金比例 5%
 
 
 @dataclass
 class RiskMetrics:
     """风险指标"""
-    var_95: float = 0.0              # 95% VaR
-    var_99: float = 0.0              # 99% VaR
-    cvar_95: float = 0.0             # 95% CVaR
-    beta: float = 0.0                # Beta
-    tracking_error: float = 0.0      # 跟踪误差
-    information_ratio: float = 0.0   # 信息比率
+
+    var_95: float = 0.0  # 95% VaR
+    var_99: float = 0.0  # 99% VaR
+    cvar_95: float = 0.0  # 95% CVaR
+    beta: float = 0.0  # Beta
+    tracking_error: float = 0.0  # 跟踪误差
+    information_ratio: float = 0.0  # 信息比率
 
 
 class PositionSizer:
@@ -43,7 +46,7 @@ class PositionSizer:
 
     def __init__(
         self,
-        method: str = 'equal_weight',
+        method: str = "equal_weight",
         total_value: float = 1000000,
         limits: Optional[PositionLimit] = None,
     ):
@@ -82,13 +85,13 @@ class PositionSizer:
         if n == 0:
             return {}
 
-        if self.method == 'equal_weight':
+        if self.method == "equal_weight":
             return self._equal_weight(symbols)
-        elif self.method == 'signal_weight':
+        elif self.method == "signal_weight":
             return self._signal_weight(symbols, signals or {})
-        elif self.method == 'risk_parity':
+        elif self.method == "risk_parity":
             return self._risk_parity(symbols, volatilities or {})
-        elif self.method == 'kelly':
+        elif self.method == "kelly":
             return self._kelly(symbols, signals or {})
         else:
             return self._equal_weight(symbols)
@@ -96,10 +99,7 @@ class PositionSizer:
     def _equal_weight(self, symbols: List[str]) -> Dict[str, float]:
         """等权分配"""
         max_position = self.total_value * self.limits.max_single_pct
-        per_stock = min(
-            self.total_value / len(symbols),
-            max_position
-        )
+        per_stock = min(self.total_value / len(symbols), max_position)
 
         return {symbol: per_stock for symbol in symbols}
 
@@ -161,13 +161,15 @@ class PositionSizer:
             signal = signals.get(symbol, 0)
 
             # 简化: 用信号强度近似期望收益
-            win_rate = 0.5 + signal * 0.1  # 胜率
+            # 上界保护: win_rate 不超过 0.95
+            win_rate = min(0.5 + signal * 0.1, 0.95)
             win_loss_ratio = 2.0  # 盈亏比
 
             # Kelly: f = (p * b - q) / b
             # p = 胜率, q = 1-p, b = 盈亏比
             kelly_pct = (win_rate * win_loss_ratio - (1 - win_rate)) / win_loss_ratio
-            kelly_pct = max(0, min(kelly_pct, self.limits.max_single_pct))  # 限制范围
+            # 限制范围 [0, max_single_pct]
+            kelly_pct = max(0, min(kelly_pct, self.limits.max_single_pct))
 
             positions[symbol] = self.total_value * kelly_pct
 
@@ -184,7 +186,7 @@ class RiskManager:
     def __init__(
         self,
         limits: Optional[PositionLimit] = None,
-        max_drawdown: float = 0.15,    # 最大回撤限制
+        max_drawdown: float = 0.15,  # 最大回撤限制
         max_daily_loss: float = 0.03,  # 单日最大亏损
     ):
         self.limits = limits or PositionLimit()
@@ -216,7 +218,10 @@ class RiskManager:
         pct = position_value / total_value
 
         if pct > self.limits.max_single_pct:
-            return False, f"单只股票仓位 {pct:.1%} 超过限制 {self.limits.max_single_pct:.1%}"
+            return (
+                False,
+                f"单只股票仓位 {pct:.1%} 超过限制 {self.limits.max_single_pct:.1%}",
+            )
 
         return True, "OK"
 
@@ -352,9 +357,7 @@ class RiskManager:
 
             # 信息比率
             if metrics.tracking_error > 0:
-                metrics.information_ratio = (
-                    excess_returns.mean() * 252 / metrics.tracking_error
-                )
+                metrics.information_ratio = excess_returns.mean() * 252 / metrics.tracking_error
 
         return metrics
 
@@ -398,8 +401,10 @@ class StopLoss:
         highest_price: float,
         trailing_pct: float = 0.1,
     ) -> float:
-        """移动止损"""
-        return highest_price * (1 - trailing_pct)
+        """移动止损：基于最高价的回撤比例"""
+        stop = highest_price * (1 - trailing_pct)
+        # 确保 stop 不超过当前价格（否则无意义）
+        return min(stop, current_price)
 
     @staticmethod
     def atr_stop(
@@ -408,7 +413,9 @@ class StopLoss:
         multiplier: float = 2.0,
     ) -> float:
         """ATR 止损"""
-        return entry_price - multiplier * atr
+        stop = entry_price - multiplier * atr
+        # 确保 stop 不为负数
+        return max(stop, 0.0)
 
     @staticmethod
     def volatility_stop(
@@ -417,7 +424,9 @@ class StopLoss:
         multiplier: float = 2.0,
     ) -> float:
         """波动率止损"""
-        return entry_price * (1 - multiplier * volatility)
+        stop = entry_price * (1 - multiplier * volatility)
+        # 确保 stop 不为负数
+        return max(stop, 0.0)
 
 
 class TakeProfit:

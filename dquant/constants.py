@@ -41,16 +41,17 @@ ATR_WINDOW = 14
 
 # 交易成本
 DEFAULT_COMMISSION = 0.0003  # 0.03%
-DEFAULT_SLIPPAGE = 0.0001   # 0.01%
+DEFAULT_SLIPPAGE = 0.0001  # 0.01%
 DEFAULT_STAMP_DUTY = 0.001  # 0.1% (卖出)
+SH_TRANSFER_FEE = 0.00002  # 过户费 万分之0.2 (仅上海)
 
 # 风险控制
-MAX_DRAWDOWN_LIMIT = 0.15   # 15%
+MAX_DRAWDOWN_LIMIT = 0.15  # 15%
 MAX_SINGLE_POSITION = 0.20  # 20%
-MAX_TOTAL_POSITION = 0.95   # 95%
+MAX_TOTAL_POSITION = 0.95  # 95%
 
 # 止损止盈
-DEFAULT_STOP_LOSS = 0.05    # 5%
+DEFAULT_STOP_LOSS = 0.05  # 5%
 DEFAULT_TAKE_PROFIT = 0.10  # 10%
 
 # ============================================================
@@ -64,14 +65,14 @@ BATCH_SIZE = 100
 
 # 订单重试
 ORDER_MAX_RETRIES = 3
-ORDER_RETRY_DELAY = 1.0       # 首次重试延迟 (秒)
-ORDER_RETRY_BACKOFF = 2.0     # 指数退避因子
-ORDER_TIMEOUT_SECONDS = 30    # 单次订单超时
+ORDER_RETRY_DELAY = 1.0  # 首次重试延迟 (秒)
+ORDER_RETRY_BACKOFF = 2.0  # 指数退避因子
+ORDER_TIMEOUT_SECONDS = 30  # 单次订单超时
 
 # Broker 重连
-BROKER_MAX_RECONNECT = 5           # 最大重连次数
-BROKER_RECONNECT_DELAY = 2.0       # 首次重连延迟 (秒)
-BROKER_RECONNECT_BACKOFF = 2.0     # 指数退避因子
+BROKER_MAX_RECONNECT = 5  # 最大重连次数
+BROKER_RECONNECT_DELAY = 2.0  # 首次重连延迟 (秒)
+BROKER_RECONNECT_BACKOFF = 2.0  # 指数退避因子
 
 # 缓存
 CACHE_EXPIRE_DAYS = 7
@@ -85,7 +86,7 @@ DEFAULT_INITIAL_CASH = 1_000_000
 
 # 交易单位
 MIN_SHARES = 100  # A股最小交易单位
-LOT_SIZE = 100    # 每手股数
+LOT_SIZE = 100  # 每手股数
 
 # ============================================================
 # 性能相关
@@ -103,7 +104,7 @@ CACHE_MAX_SIZE = 1000
 # ============================================================
 
 # IC 分析
-DEFAULT_IC_METHOD = 'spearman'
+DEFAULT_IC_METHOD = "spearman"
 MIN_IC_THRESHOLD = 0.02
 
 # 分组分析
@@ -118,16 +119,16 @@ TRADING_DAYS_PER_YEAR = 252
 TRADING_DAYS_PER_MONTH = 21
 
 # 时间格式
-DATE_FORMAT = '%Y-%m-%d'
-DATETIME_FORMAT = '%Y-%m-%d %H:%M:%S'
+DATE_FORMAT = "%Y-%m-%d"
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # ============================================================
 # 日志相关
 # ============================================================
 
 # 日志格式
-LOG_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s'
-LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # ============================================================
 # Web 相关
@@ -135,7 +136,7 @@ LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 # API
 DEFAULT_API_PORT = 8000
-DEFAULT_API_HOST = '0.0.0.0'
+DEFAULT_API_HOST = "0.0.0.0"
 
 # WebSocket
 DEFAULT_WS_PORT = 8765
@@ -165,9 +166,9 @@ PRICE_DECIMALS = 2
 # 颜色 (用于可视化)
 # ============================================================
 
-COLOR_UP = '#ff4136'      # 上涨 - 红色
-COLOR_DOWN = '#0074d9'    # 下跌 - 蓝色
-COLOR_NEUTRAL = '#aaaaaa' # 中性 - 灰色
+COLOR_UP = "#ff4136"  # 上涨 - 红色
+COLOR_DOWN = "#0074d9"  # 下跌 - 蓝色
+COLOR_NEUTRAL = "#aaaaaa"  # 中性 - 灰色
 
 # ============================================================
 # 常用列表
@@ -175,19 +176,78 @@ COLOR_NEUTRAL = '#aaaaaa' # 中性 - 灰色
 
 # 沪深300成分股 (示例)
 HS300_SAMPLE = [
-    '600000.SH', '600036.SH', '600519.SH', '600887.SH',
-    '000001.SZ', '000002.SZ', '000333.SZ', '000651.SZ',
+    "600000.SH",
+    "600036.SH",
+    "600519.SH",
+    "600887.SH",
+    "000001.SZ",
+    "000002.SZ",
+    "000333.SZ",
+    "000651.SZ",
 ]
 
 # 中证500成分股 (示例)
 ZZ500_SAMPLE = [
-    '000063.SZ', '000100.SZ', '000402.SZ', '000568.SZ',
+    "000063.SZ",
+    "000100.SZ",
+    "000402.SZ",
+    "000568.SZ",
 ]
 
 # ============================================================
 # 版本信息
 # ============================================================
 
-VERSION = '0.1.0'
-AUTHOR = 'DQuant Team'
-LICENSE = 'MIT'
+VERSION = "0.1.0"
+AUTHOR = "DQuant Team"
+LICENSE = "MIT"
+
+
+# ============================================================
+# Symbol 标准化
+# ============================================================
+
+# 市场 → 代码前缀映射
+_MARKET_PREFIX = {
+    "SH": ("6",),  # 上海主板: 600xxx-689xxx
+    "SZ": ("0", "3"),  # 深圳: 000xxx-002xxx, 300xxx-301xxx
+    "BJ": ("4", "8"),  # 北交所: 430xxx-873xxx
+}
+
+
+def normalize_symbol(symbol: str) -> str:
+    """
+    标准化股票代码为 CODE.MARKET 格式
+
+    Examples:
+        '600000' → '600000.SH'
+        '000001' → '000001.SZ'
+        '600000.SH' → '600000.SH'
+        '600000.XSHG' → '600000.SH'
+
+    Args:
+        symbol: 任意格式的股票代码
+
+    Returns:
+        标准化后的 CODE.MARKET 格式
+    """
+    if not symbol:
+        return symbol
+
+    # 去除已知非标准后缀
+    for suffix in (".XSHG", ".XSHE", ".BJ"):
+        symbol = symbol.replace(suffix, "")
+
+    parts = symbol.split(".")
+    code = parts[0]
+
+    # 如果已经是标准格式 (CODE.SH / CODE.SZ)，直接返回
+    if len(parts) == 2 and parts[1] in _MARKET_PREFIX:
+        return symbol
+
+    # 根据代码首位数字判断市场
+    for market, prefixes in _MARKET_PREFIX.items():
+        if code[0] in prefixes:
+            return f"{code}.{market}"
+
+    return symbol

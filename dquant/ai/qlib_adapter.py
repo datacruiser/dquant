@@ -2,10 +2,11 @@
 Qlib 模型适配器
 """
 
-from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
-import pandas as pd
+from typing import List, Optional, Union
+
 import numpy as np
+import pandas as pd
 
 from dquant.ai.base import BaseFactor
 
@@ -35,22 +36,22 @@ class QlibModelAdapter(BaseFactor):
 
     # Qlib 支持的模型
     SUPPORTED_MODELS = [
-        'gbdt',       # 梯度提升
-        'mlp',        # 多层感知机
-        'lstm',       # 长短期记忆
-        'gru',        # 门控循环单元
-        'gats',       # 图注意力网络
-        'transformer',
-        'tabnet',
-        'doubleml',
-        'ensemble',
+        "gbdt",  # 梯度提升
+        "mlp",  # 多层感知机
+        "lstm",  # 长短期记忆
+        "gru",  # 门控循环单元
+        "gats",  # 图注意力网络
+        "transformer",
+        "tabnet",
+        "doubleml",
+        "ensemble",
     ]
 
     def __init__(
         self,
-        model_name: str = 'gbdt',
+        model_name: str = "gbdt",
         features: Optional[List[str]] = None,
-        target: str = 'label',
+        target: str = "label",
         model_params: Optional[dict] = None,
         qlib_config: Optional[dict] = None,
         name: str = "QlibModelAdapter",
@@ -72,7 +73,7 @@ class QlibModelAdapter(BaseFactor):
 
         try:
             import qlib
-            from qlib.config import REG_CN, REG_US
+            from qlib.config import REG_CN
         except ImportError:
             raise ImportError(
                 "qlib not installed. Run: pip install pyqlib\n"
@@ -84,10 +85,10 @@ class QlibModelAdapter(BaseFactor):
             qlib.init(**self.qlib_config)
         else:
             # 默认使用本地数据
-            qlib.init(provider_uri='~/.qlib/qlib_data/cn_data', region=REG_CN)
+            qlib.init(provider_uri="~/.qlib/qlib_data/cn_data", region=REG_CN)
 
         self._qlib_initialized = True
-        print(f"[QlibAdapter] Qlib initialized")
+        print("[QlibAdapter] Qlib initialized")
 
     def fit(
         self,
@@ -111,9 +112,6 @@ class QlibModelAdapter(BaseFactor):
         """
         self._init_qlib()
 
-        from qlib.data.dataset import DatasetH
-        from qlib.data.dataset.handler import DataHandlerLP
-
         # 构建 Qlib Dataset
         # 这里简化实现，实际使用时需要按 Qlib 格式准备数据
 
@@ -128,7 +126,7 @@ class QlibModelAdapter(BaseFactor):
             if self._dataset is not None:
                 # 使用 Qlib 数据集训练
                 self._model.fit(self._dataset)
-                print(f"[QlibAdapter] Training completed with Qlib dataset")
+                print("[QlibAdapter] Training completed with Qlib dataset")
             else:
                 # 使用传入的 DataFrame 训练
                 if data is None or len(data) == 0:
@@ -138,7 +136,8 @@ class QlibModelAdapter(BaseFactor):
                 features = self.features or data.select_dtypes(include=[np.number]).columns.tolist()
 
                 # 训练 (简化版，实际 Qlib 训练更复杂)
-                X = data[features].values if isinstance(data, pd.DataFrame) else data
+                # NOTE: 实际使用时，此数据应传入模型训练
+                _ = data[features].values if isinstance(data, pd.DataFrame) else data  # noqa: F841
 
                 # 注意: 实际 Qlib 模型需要特定格式的数据
                 # 这里只是示例，真实场景需要按照 Qlib 文档准备数据
@@ -156,18 +155,18 @@ class QlibModelAdapter(BaseFactor):
         """创建 Qlib 模型"""
         from qlib.contrib.model import (
             GBDTModel,
-            MLPModel,
-            LSTMModel,
             GRUModel,
+            LSTMModel,
+            MLPModel,
             TransformerModel,
         )
 
         model_map = {
-            'gbdt': GBDTModel,
-            'mlp': MLPModel,
-            'lstm': LSTMModel,
-            'gru': GRUModel,
-            'transformer': TransformerModel,
+            "gbdt": GBDTModel,
+            "mlp": MLPModel,
+            "lstm": LSTMModel,
+            "gru": GRUModel,
+            "transformer": TransformerModel,
         }
 
         model_class = model_map.get(self.model_name)
@@ -206,8 +205,8 @@ class QlibModelAdapter(BaseFactor):
         results = []
 
         for idx, row in data.iterrows():
-            date = idx if isinstance(idx, pd.Timestamp) else row.get('date')
-            symbol = row.get('symbol', '')
+            date = idx if isinstance(idx, pd.Timestamp) else row.get("date")
+            symbol = row.get("symbol", "")
 
             # 简单打分: 使用第一个特征
             if self.features and self.features[0] in row:
@@ -216,15 +215,17 @@ class QlibModelAdapter(BaseFactor):
                 score = 0
 
             if pd.notna(score):
-                results.append({
-                    'date': pd.to_datetime(date),
-                    'symbol': symbol,
-                    'score': score,
-                })
+                results.append(
+                    {
+                        "date": pd.to_datetime(date),
+                        "symbol": symbol,
+                        "score": score,
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df = df.set_index('date')
+            df = df.set_index("date")
         return df
 
     @classmethod
@@ -278,11 +279,11 @@ class QlibFactorConverter:
         def calculator(data: pd.DataFrame) -> pd.Series:
             # 替换 Qlib 变量
             expr = expression
-            expr = expr.replace('$close', 'close')
-            expr = expr.replace('$open', 'open')
-            expr = expr.replace('$high', 'high')
-            expr = expr.replace('$low', 'low')
-            expr = expr.replace('$volume', 'volume')
+            expr = expr.replace("$close", "close")
+            expr = expr.replace("$open", "open")
+            expr = expr.replace("$high", "high")
+            expr = expr.replace("$low", "low")
+            expr = expr.replace("$volume", "volume")
 
             # TODO: 实现 Ref, Mean, Std 等函数
 
@@ -316,13 +317,13 @@ class QlibDataHandler:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # 按股票拆分
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             # Qlib 格式: 日期为索引
             stock_df = group.copy()
             stock_df = stock_df.reset_index()
 
-            if 'date' in stock_df.columns:
-                stock_df = stock_df.set_index('date')
+            if "date" in stock_df.columns:
+                stock_df = stock_df.set_index("date")
 
             # 保存为 bin 格式需要 Qlib 工具
             # 这里简化为 CSV

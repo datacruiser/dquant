@@ -23,6 +23,7 @@ def create_notifier(notifier_type: str = "log", **kwargs) -> Notifier:
         return LogNotifier(**kwargs)
     elif notifier_type == "dingtalk":
         from dquant.notify.dingtalk import DingTalkNotifier
+
         return DingTalkNotifier(**kwargs)
     else:
         raise ValueError(f"Unknown notifier type: {notifier_type}")

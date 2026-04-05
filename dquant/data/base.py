@@ -3,7 +3,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import List, Optional
+
 import pandas as pd
 
 
@@ -42,7 +43,7 @@ class DataSource(ABC):
 
     def validate(self, df: pd.DataFrame) -> bool:
         """验证数据格式"""
-        required_cols = ['symbol', 'open', 'high', 'low', 'close', 'volume']
+        required_cols = ["symbol", "open", "high", "low", "close", "volume"]
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
             raise ValueError(f"Missing required columns: {missing}")

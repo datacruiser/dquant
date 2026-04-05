@@ -2,8 +2,9 @@
 Phase 3 Step 4: Broker 自动重连测试
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from dquant.broker.base import BaseBroker
 from dquant.broker.simulator import Simulator
@@ -52,7 +53,7 @@ class TestTryReconnect:
         assert result is True
         assert broker.is_connected()
 
-    @patch('dquant.core.time.sleep')
+    @patch("dquant.core.time.sleep")
     def test_reconnect_after_failures(self, mock_sleep):
         """前几次失败，最后一次成功"""
         from dquant.core import Engine
@@ -71,7 +72,7 @@ class TestTryReconnect:
         assert result is True
         assert broker.connect.call_count == 3
 
-    @patch('dquant.core.time.sleep')
+    @patch("dquant.core.time.sleep")
     def test_reconnect_all_fail(self, mock_sleep):
         """所有重连尝试都失败"""
         from dquant.core import Engine
@@ -89,7 +90,7 @@ class TestTryReconnect:
         assert result is False
         assert broker.connect.call_count == 5  # BROKER_MAX_RECONNECT
 
-    @patch('dquant.core.time.sleep')
+    @patch("dquant.core.time.sleep")
     def test_reconnect_exception_handled(self, mock_sleep):
         """重连过程中异常被捕获"""
         from dquant.core import Engine
@@ -108,5 +109,5 @@ class TestTryReconnect:
         assert broker.connect.call_count == 5
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

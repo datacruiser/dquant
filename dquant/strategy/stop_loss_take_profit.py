@@ -4,12 +4,13 @@
 包装任意策略，自动检测持仓的止损/止盈条件并生成 SELL 信号。
 """
 
-from typing import List, Dict, Optional
+from typing import List, Optional
+
 import pandas as pd
 
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.constants import DEFAULT_STOP_LOSS, DEFAULT_TAKE_PROFIT
 from dquant.logger import get_logger
+from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ class StopLossTakeProfitStrategy(BaseStrategy):
         """
         sell_signals = []
 
-        if 'close' not in data.columns:
+        if "close" not in data.columns:
             return sell_signals
 
         # 只检查最新日期
@@ -78,9 +79,9 @@ class StopLossTakeProfitStrategy(BaseStrategy):
         latest = data[data.index == latest_date]
 
         for _, row in latest.iterrows():
-            symbol = row.get('symbol', '')
-            close = row.get('close', 0)
-            avg_cost = row.get('position_avg_cost', None)
+            symbol = row.get("symbol", "")
+            close = row.get("close", 0)
+            avg_cost = row.get("position_avg_cost", None)
 
             if avg_cost is None or avg_cost <= 0 or close <= 0:
                 continue
@@ -89,40 +90,42 @@ class StopLossTakeProfitStrategy(BaseStrategy):
 
             if pct_change <= -self.stop_loss:
                 # 止损
-                sell_signals.append(Signal(
-                    symbol=symbol,
-                    signal_type=SignalType.SELL,
-                    strength=1.0,
-                    price=close,
-                    timestamp=latest_date,
-                    metadata={
-                        'reason': 'stop_loss',
-                        'pct_change': pct_change,
-                        'avg_cost': avg_cost,
-                    }
-                ))
+                sell_signals.append(
+                    Signal(
+                        symbol=symbol,
+                        signal_type=SignalType.SELL,
+                        strength=1.0,
+                        price=close,
+                        timestamp=latest_date,
+                        metadata={
+                            "reason": "stop_loss",
+                            "pct_change": pct_change,
+                            "avg_cost": avg_cost,
+                        },
+                    )
+                )
                 logger.debug(
-                    f"[SL] 止损触发: {symbol} "
-                    f"亏损 {pct_change:.1%} >= {self.stop_loss:.1%}"
+                    f"[SL] 止损触发: {symbol} " f"亏损 {pct_change:.1%} <= -{self.stop_loss:.1%}"
                 )
 
             elif pct_change >= self.take_profit:
                 # 止盈
-                sell_signals.append(Signal(
-                    symbol=symbol,
-                    signal_type=SignalType.SELL,
-                    strength=1.0,
-                    price=close,
-                    timestamp=latest_date,
-                    metadata={
-                        'reason': 'take_profit',
-                        'pct_change': pct_change,
-                        'avg_cost': avg_cost,
-                    }
-                ))
+                sell_signals.append(
+                    Signal(
+                        symbol=symbol,
+                        signal_type=SignalType.SELL,
+                        strength=1.0,
+                        price=close,
+                        timestamp=latest_date,
+                        metadata={
+                            "reason": "take_profit",
+                            "pct_change": pct_change,
+                            "avg_cost": avg_cost,
+                        },
+                    )
+                )
                 logger.debug(
-                    f"[TP] 止盈触发: {symbol} "
-                    f"盈利 {pct_change:.1%} >= {self.take_profit:.1%}"
+                    f"[TP] 止盈触发: {symbol} " f"盈利 {pct_change:.1%} >= {self.take_profit:.1%}"
                 )
 
         return sell_signals

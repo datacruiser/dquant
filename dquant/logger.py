@@ -8,19 +8,17 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
-
 
 # 日志格式
-DEFAULT_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s'
-DETAILED_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(funcName)s | %(message)s'
+DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+DETAILED_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(funcName)s | %(message)s"
 
 
 def get_logger(
-    name: str = 'dquant',
-    level: str = 'INFO',
+    name: str = "dquant",
+    level: str = "INFO",
     log_file: Optional[str] = None,
-    format_style: str = 'simple',
+    format_style: str = "simple",
     rotating: bool = False,
     max_bytes: int = 10 * 1024 * 1024,
     backup_count: int = 5,
@@ -53,17 +51,17 @@ def get_logger(
 
     # 设置级别
     level_map = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL,
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL,
     }
     logger.setLevel(level_map.get(level.upper(), logging.INFO))
 
     # 选择格式
-    fmt = DEFAULT_FORMAT if format_style == 'simple' else DETAILED_FORMAT
-    formatter = logging.Formatter(fmt, datefmt='%Y-%m-%d %H:%M:%S')
+    fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
+    formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
     # 控制台 handler
     console_handler = logging.StreamHandler(sys.stdout)
@@ -78,14 +76,15 @@ def get_logger(
 
         if rotating:
             from logging.handlers import RotatingFileHandler
+
             file_handler = RotatingFileHandler(
                 log_file,
                 maxBytes=max_bytes,
                 backupCount=backup_count,
-                encoding='utf-8',
+                encoding="utf-8",
             )
         else:
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler = logging.FileHandler(log_file, encoding="utf-8")
 
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
@@ -108,16 +107,16 @@ class LoggerMixin:
 
     @property
     def logger(self) -> logging.Logger:
-        if not hasattr(self, '_logger'):
-            self._logger = get_logger(f'dquant.{self.__class__.__name__}')
+        if not hasattr(self, "_logger"):
+            self._logger = get_logger(f"dquant.{self.__class__.__name__}")
         return self._logger
 
 
 # 预定义的 logger
-backtest_logger = get_logger('dquant.backtest')
-data_logger = get_logger('dquant.data')
-strategy_logger = get_logger('dquant.strategy')
-factor_logger = get_logger('dquant.factor')
+backtest_logger = get_logger("dquant.backtest")
+data_logger = get_logger("dquant.data")
+strategy_logger = get_logger("dquant.strategy")
+factor_logger = get_logger("dquant.factor")
 
 
 def set_log_level(level: str):
@@ -128,20 +127,20 @@ def set_log_level(level: str):
         level: 日志级别 (DEBUG, INFO, WARNING, ERROR)
     """
     level_map = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
     }
 
-    logging.getLogger('dquant').setLevel(level_map.get(level.upper(), logging.INFO))
+    logging.getLogger("dquant").setLevel(level_map.get(level.upper(), logging.INFO))
 
 
 def quiet_mode():
     """静默模式 - 只显示 ERROR"""
-    set_log_level('ERROR')
+    set_log_level("ERROR")
 
 
 def debug_mode():
     """调试模式 - 显示所有日志"""
-    set_log_level('DEBUG')
+    set_log_level("DEBUG")

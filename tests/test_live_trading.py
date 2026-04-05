@@ -5,32 +5,32 @@ Phase 1 实盘交易基础设施测试
       OrderValidator 集成, LiveConfig, RotatingFileHandler
 """
 
-import os
 import json
 import logging
+import os
+import shutil
 import signal
 import tempfile
-import shutil
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
-from dquant.broker.trade_journal import TradeJournal
 from dquant.broker.base import Order, OrderResult
-from dquant.broker.simulator import Simulator
 from dquant.broker.safety import OrderValidator, TradingSafety
-from dquant.risk import RiskManager, PositionSizer, PositionLimit
+from dquant.broker.simulator import Simulator
+from dquant.broker.trade_journal import TradeJournal
 from dquant.config import DQuantConfig, LiveConfig
 from dquant.logger import get_logger
-
+from dquant.risk import PositionLimit, PositionSizer, RiskManager
 
 # ============================================================
 # TradeJournal 测试
 # ============================================================
+
 
 class TestTradeJournal:
     """交易审计日志测试"""
@@ -44,26 +44,26 @@ class TestTradeJournal:
 
     def _make_order(self, **overrides):
         defaults = dict(
-            symbol='000001.SZ',
-            side='BUY',
+            symbol="000001.SZ",
+            side="BUY",
             quantity=100,
             price=10.0,
-            order_type='LIMIT',
-            order_id='test-001',
+            order_type="LIMIT",
+            order_id="test-001",
         )
         defaults.update(overrides)
         return Order(**defaults)
 
     def _make_result(self, **overrides):
         defaults = dict(
-            order_id='test-001',
-            symbol='000001.SZ',
-            side='BUY',
+            order_id="test-001",
+            symbol="000001.SZ",
+            side="BUY",
             filled_quantity=100,
             filled_price=10.0,
             commission=3.0,
             timestamp=datetime.now(),
-            status='FILLED',
+            status="FILLED",
         )
         defaults.update(overrides)
         return OrderResult(**defaults)
@@ -73,8 +73,7 @@ class TestTradeJournal:
         order = self._make_order()
         result = self._make_result()
 
-        self.journal.record("ORDER_PLACED", order, result,
-                            strategy_name="TestStrategy")
+        self.journal.record("ORDER_PLACED", order, result, strategy_name="TestStrategy")
 
         date_str = datetime.now().strftime("%Y-%m-%d")
         records = self.journal.read_day(date_str)
@@ -121,7 +120,7 @@ class TestTradeJournal:
         """测试今日交易摘要"""
         # 写入一些记录
         order = self._make_order()
-        result = self._make_result(status='FILLED')
+        result = self._make_result(status="FILLED")
         self.journal.record("ORDER_PLACED", order, result)
 
         summary = self.journal.get_today_summary()
@@ -138,7 +137,7 @@ class TestTradeJournal:
         # 写入一条正常和一条损坏的
         with open(filepath, "a") as f:
             f.write('{"valid": true}\n')
-            f.write('corrupted line\n')
+            f.write("corrupted line\n")
             f.write('{"also_valid": true}\n')
 
         records = self.journal.read_day(date_str)
@@ -158,6 +157,7 @@ class TestTradeJournal:
 # ============================================================
 # RiskManager 日亏损追踪测试
 # ============================================================
+
 
 class TestRiskManagerDailyLoss:
     """RiskManager 日亏损追踪测试"""
@@ -200,7 +200,7 @@ class TestRiskManagerDailyLoss:
     def test_should_halt(self):
         rm = RiskManager(max_drawdown=0.10)
         rm.check_drawdown(1000000)  # peak
-        rm.check_drawdown(850000)   # 15% drawdown > 10%
+        rm.check_drawdown(850000)  # 15% drawdown > 10%
         assert rm.should_halt()
 
     def test_should_not_halt(self):
@@ -222,45 +222,46 @@ class TestRiskManagerDailyLoss:
 # Simulator 防御性拷贝 + 订单验证 测试
 # ============================================================
 
+
 class TestSimulatorSafety:
     """Simulator 安全增强测试"""
 
     def test_defensive_copy_positions(self):
         """get_positions 返回的是副本"""
         sim = Simulator()
-        sim.positions['000001.SZ'] = {'quantity': 100, 'avg_cost': 10.0, 'price': 10.0}
+        sim.positions["000001.SZ"] = {"quantity": 100, "avg_cost": 10.0, "price": 10.0}
         pos = sim.get_positions()
-        pos['000001.SZ']['quantity'] = 999
-        assert sim.positions['000001.SZ']['quantity'] == 100
+        pos["000001.SZ"]["quantity"] = 999
+        assert sim.positions["000001.SZ"]["quantity"] == 100
 
     def test_order_validation_rejects_bad_quantity(self):
         """非整手数量被拒绝"""
         sim = Simulator()
-        order = Order(symbol='000001.SZ', side='BUY', quantity=50, price=10.0)
+        order = Order(symbol="000001.SZ", side="BUY", quantity=50, price=10.0)
         result = sim.place_order(order)
-        assert result.status == 'REJECTED'
+        assert result.status == "REJECTED"
         assert result.filled_quantity == 0
 
     def test_order_validation_rejects_bad_symbol(self):
         """无效代码被拒绝"""
         sim = Simulator()
-        order = Order(symbol='INVALID', side='BUY', quantity=100, price=10.0)
+        order = Order(symbol="INVALID", side="BUY", quantity=100, price=10.0)
         result = sim.place_order(order)
-        assert result.status == 'REJECTED'
+        assert result.status == "REJECTED"
 
     def test_order_validation_rejects_bad_side(self):
         """无效方向被拒绝"""
         sim = Simulator()
-        order = Order(symbol='000001.SZ', side='HOLD', quantity=100, price=10.0)
+        order = Order(symbol="000001.SZ", side="HOLD", quantity=100, price=10.0)
         result = sim.place_order(order)
-        assert result.status == 'REJECTED'
+        assert result.status == "REJECTED"
 
     def test_valid_order_still_works(self):
         """合法订单仍然正常执行"""
         sim = Simulator()
-        order = Order(symbol='000001.SZ', side='BUY', quantity=100, price=10.0)
+        order = Order(symbol="000001.SZ", side="BUY", quantity=100, price=10.0)
         result = sim.place_order(order)
-        assert result.status == 'FILLED'
+        assert result.status == "FILLED"
         assert result.filled_quantity == 100
 
 
@@ -268,35 +269,36 @@ class TestSimulatorSafety:
 # LiveConfig 测试
 # ============================================================
 
+
 class TestLiveConfig:
     """LiveConfig 配置测试"""
 
     def test_default_values(self):
         cfg = LiveConfig()
-        assert cfg.broker == 'simulator'
+        assert cfg.broker == "simulator"
         assert cfg.dry_run is True
         assert cfg.interval == 60
         assert cfg.max_drawdown == 0.15
         assert cfg.max_daily_loss == 0.03
         assert cfg.max_consecutive_errors == 10
-        assert cfg.position_method == 'equal_weight'
+        assert cfg.position_method == "equal_weight"
 
     def test_config_in_dquant_config(self):
         cfg = DQuantConfig()
-        assert hasattr(cfg, 'live')
+        assert hasattr(cfg, "live")
         assert isinstance(cfg.live, LiveConfig)
 
     def test_from_dict(self):
         data = {
-            'live': {
-                'broker': 'xtp',
-                'dry_run': False,
-                'interval': 30,
-                'max_drawdown': 0.10,
+            "live": {
+                "broker": "xtp",
+                "dry_run": False,
+                "interval": 30,
+                "max_drawdown": 0.10,
             }
         }
         cfg = DQuantConfig.from_dict(data)
-        assert cfg.live.broker == 'xtp'
+        assert cfg.live.broker == "xtp"
         assert cfg.live.dry_run is False
         assert cfg.live.interval == 30
         assert cfg.live.max_drawdown == 0.10
@@ -306,13 +308,14 @@ class TestLiveConfig:
     def test_to_dict(self):
         cfg = DQuantConfig()
         d = cfg.to_dict()
-        assert 'live' in d
-        assert d['live']['broker'] == 'simulator'
+        assert "live" in d
+        assert d["live"]["broker"] == "simulator"
 
 
 # ============================================================
 # RotatingFileHandler 测试
 # ============================================================
+
 
 class TestRotatingLogger:
     """RotatingFileHandler 日志测试"""
@@ -330,7 +333,7 @@ class TestRotatingLogger:
         log_file = os.path.join(self.tmpdir, "test.log")
         # Use unique name to avoid handler cache
         logger = get_logger(
-            f'dquant.test.rotating.{id(self)}',
+            f"dquant.test.rotating.{id(self)}",
             log_file=log_file,
             rotating=True,
             max_bytes=1024,
@@ -346,15 +349,19 @@ class TestRotatingLogger:
         """rotating=False 使用普通 FileHandler"""
         log_file = os.path.join(self.tmpdir, "test.log")
         logger = get_logger(
-            f'dquant.test.nonrotating.{id(self)}',
+            f"dquant.test.nonrotating.{id(self)}",
             log_file=log_file,
             rotating=False,
         )
 
         from logging.handlers import RotatingFileHandler
+
         file_handlers = [h for h in logger.handlers if isinstance(h, RotatingFileHandler)]
-        normal_handlers = [h for h in logger.handlers
-                          if isinstance(h, logging.FileHandler) and not isinstance(h, RotatingFileHandler)]
+        normal_handlers = [
+            h
+            for h in logger.handlers
+            if isinstance(h, logging.FileHandler) and not isinstance(h, RotatingFileHandler)
+        ]
         assert len(file_handlers) == 0
         assert len(normal_handlers) == 1
 
@@ -362,6 +369,7 @@ class TestRotatingLogger:
 # ============================================================
 # Engine.live() 基本集成测试
 # ============================================================
+
 
 class TestEngineLive:
     """Engine.live() 基本测试 (使用 Simulator + MockStrategy)"""
@@ -385,9 +393,9 @@ class TestEngineLive:
         data = self._make_mock_data()
         strategy = self._make_mock_strategy()
 
-        engine = Engine(data, strategy, broker='simulator')
+        engine = Engine(data, strategy, broker="simulator")
         # Patch is_trading_day and TradingTimeChecker to force non-trading
-        with patch('dquant.core.is_trading_day', return_value=False):
+        with patch("dquant.core.is_trading_day", return_value=False):
             # Use _running flag to break after first iteration
             original_live = engine.live
             call_count = [0]
@@ -398,13 +406,13 @@ class TestEngineLive:
 
                 # Manually run one iteration of the loop logic
                 from dquant.broker.safety import TradingTimeChecker
-                from dquant.risk import RiskManager
                 from dquant.broker.trade_journal import TradeJournal
+                from dquant.risk import RiskManager
 
                 engine.broker.connect()
                 # Simulator connects successfully
                 account = engine.broker.get_account()
-                assert account['initial_cash'] == engine.initial_cash
+                assert account["initial_cash"] == engine.initial_cash
                 engine.broker.disconnect()
 
             limited_live()
@@ -422,8 +430,8 @@ class TestEngineLive:
         # max_single_pct 默认 0.1，所以 100000 * 0.1 = 10000 per stock max
         # 用更大的 total_value 或更宽的 limit
         limits = PositionLimit(max_single_pct=0.5)
-        sizer = PositionSizer(method='equal_weight', total_value=100000, limits=limits)
-        positions = sizer.size(['000001.SZ', '000002.SZ', '000003.SZ'])
+        sizer = PositionSizer(method="equal_weight", total_value=100000, limits=limits)
+        positions = sizer.size(["000001.SZ", "000002.SZ", "000003.SZ"])
         assert len(positions) == 3
         for v in positions.values():
             assert v == pytest.approx(100000 / 3, rel=0.01)
@@ -431,11 +439,11 @@ class TestEngineLive:
     def test_sizer_respects_max_single(self):
         """等权受 max_single_pct 限制"""
         limits = PositionLimit(max_single_pct=0.2)
-        sizer = PositionSizer(method='equal_weight', total_value=100000, limits=limits)
-        positions = sizer.size(['000001.SZ'])
+        sizer = PositionSizer(method="equal_weight", total_value=100000, limits=limits)
+        positions = sizer.size(["000001.SZ"])
         # 1 stock would get 100000, but max is 100000 * 0.2 = 20000
-        assert positions['000001.SZ'] == 20000
+        assert positions["000001.SZ"] == 20000
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

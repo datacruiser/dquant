@@ -2,7 +2,8 @@
 CSV 数据加载器
 """
 
-from typing import Optional, List, Union
+from typing import List, Union
+
 import pandas as pd
 
 from dquant.data.base import DataSource
@@ -30,9 +31,9 @@ class CSVLoader(DataSource):
     def __init__(
         self,
         path: Union[str, List[str]],
-        date_col: str = 'date',
-        symbol_col: str = 'symbol',
-        **kwargs
+        date_col: str = "date",
+        symbol_col: str = "symbol",
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.path = path if isinstance(path, list) else [path]

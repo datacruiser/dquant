@@ -4,15 +4,15 @@
 支持 MySQL、PostgreSQL、SQLite 等数据库。
 """
 
-from typing import Optional, List, Union
 import re
+from typing import List, Optional
+
 import pandas as pd
-import numpy as np
 
 from dquant.data.base import DataSource
 
 # SQL 标识符白名单校验
-_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class DatabaseLoader(DataSource):
@@ -41,12 +41,12 @@ class DatabaseLoader(DataSource):
     def __init__(
         self,
         connection_string: str,
-        table: str = 'daily_quotes',
+        table: str = "daily_quotes",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
-        date_col: str = 'date',
-        symbol_col: str = 'symbol',
+        date_col: str = "date",
+        symbol_col: str = "symbol",
         include_factors: bool = True,
     ):
         super().__init__(symbols=symbols, start=start, end=end)
@@ -76,9 +76,9 @@ class DatabaseLoader(DataSource):
 
         # 校验 SQL 标识符（表名、列名）
         for name, label in [
-            (self.table, 'table'),
-            (self.date_col, 'date_col'),
-            (self.symbol_col, 'symbol_col'),
+            (self.table, "table"),
+            (self.date_col, "date_col"),
+            (self.symbol_col, "symbol_col"),
         ]:
             if not _IDENTIFIER_RE.match(name):
                 raise ValueError(f"Invalid SQL identifier for {label}: {name}")
@@ -91,17 +91,17 @@ class DatabaseLoader(DataSource):
 
         if self.start:
             query_parts.append(f" AND {self.date_col} >= :start")
-            params['start'] = self.start
+            params["start"] = self.start
         if self.end:
             query_parts.append(f" AND {self.date_col} <= :end")
-            params['end'] = self.end
+            params["end"] = self.end
         if self.symbols:
-            placeholders = ', '.join([f':sym_{i}' for i in range(len(self.symbols))])
+            placeholders = ", ".join([f":sym_{i}" for i in range(len(self.symbols))])
             query_parts.append(f" AND {self.symbol_col} IN ({placeholders})")
             for i, symbol in enumerate(self.symbols):
-                params[f'sym_{i}'] = symbol
+                params[f"sym_{i}"] = symbol
 
-        query = text(''.join(query_parts))
+        query = text("".join(query_parts))
 
         # 执行查询
         df = pd.read_sql(query, self._engine, params=params)
@@ -128,17 +128,17 @@ class DatabaseLoader(DataSource):
         for symbol, group in df.groupby(self.symbol_col):
             group = group.sort_index()
 
-            if 'close' in group.columns:
-                group['momentum_5'] = group['close'].pct_change(5)
-                group['momentum_10'] = group['close'].pct_change(10)
-                group['momentum_20'] = group['close'].pct_change(20)
+            if "close" in group.columns:
+                group["momentum_5"] = group["close"].pct_change(5)
+                group["momentum_10"] = group["close"].pct_change(10)
+                group["momentum_20"] = group["close"].pct_change(20)
 
-                returns = group['close'].pct_change()
-                group['volatility_20'] = returns.rolling(20).std()
+                returns = group["close"].pct_change()
+                group["volatility_20"] = returns.rolling(20).std()
 
-                group['ma_5'] = group['close'].rolling(5).mean()
-                group['ma_10'] = group['close'].rolling(10).mean()
-                group['ma_20'] = group['close'].rolling(20).mean()
+                group["ma_5"] = group["close"].rolling(5).mean()
+                group["ma_10"] = group["close"].rolling(10).mean()
+                group["ma_20"] = group["close"].rolling(20).mean()
 
             results.append(group)
 
@@ -161,9 +161,9 @@ class MongoLoader(DataSource):
 
     def __init__(
         self,
-        connection_string: str = 'mongodb://localhost:27017',
-        database: str = 'stock',
-        collection: str = 'daily_quotes',
+        connection_string: str = "mongodb://localhost:27017",
+        database: str = "stock",
+        collection: str = "daily_quotes",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -199,14 +199,14 @@ class MongoLoader(DataSource):
         query = {}
 
         if self.start or self.end:
-            query['date'] = {}
+            query["date"] = {}
             if self.start:
-                query['date']['$gte'] = self.start
+                query["date"]["$gte"] = self.start
             if self.end:
-                query['date']['$lte'] = self.end
+                query["date"]["$lte"] = self.end
 
         if self.symbols:
-            query['symbol'] = {'$in': self.symbols}
+            query["symbol"] = {"$in": self.symbols}
 
         # 查询
         cursor = self._db[self.collection].find(query)
@@ -218,13 +218,13 @@ class MongoLoader(DataSource):
             raise ValueError("No data loaded")
 
         # 处理 MongoDB _id
-        if '_id' in df.columns:
-            df = df.drop(columns=['_id'])
+        if "_id" in df.columns:
+            df = df.drop(columns=["_id"])
 
         # 标准化日期
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         # 计算因子
         if self.include_factors:
@@ -238,20 +238,20 @@ class MongoLoader(DataSource):
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
-            if 'close' in group.columns:
-                group['momentum_5'] = group['close'].pct_change(5)
-                group['momentum_10'] = group['close'].pct_change(10)
-                group['momentum_20'] = group['close'].pct_change(20)
+            if "close" in group.columns:
+                group["momentum_5"] = group["close"].pct_change(5)
+                group["momentum_10"] = group["close"].pct_change(10)
+                group["momentum_20"] = group["close"].pct_change(20)
 
-                returns = group['close'].pct_change()
-                group['volatility_20'] = returns.rolling(20).std()
+                returns = group["close"].pct_change()
+                group["volatility_20"] = returns.rolling(20).std()
 
-                group['ma_5'] = group['close'].rolling(5).mean()
-                group['ma_10'] = group['close'].rolling(10).mean()
-                group['ma_20'] = group['close'].rolling(20).mean()
+                group["ma_5"] = group["close"].rolling(5).mean()
+                group["ma_10"] = group["close"].rolling(10).mean()
+                group["ma_20"] = group["close"].rolling(20).mean()
 
             results.append(group)
 

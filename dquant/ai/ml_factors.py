@@ -2,12 +2,12 @@
 ML 因子
 """
 
-from typing import Optional, List
-import pandas as pd
+from typing import List, Optional
+
 import numpy as np
+import pandas as pd
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 # ML 模型默认参数
 DEFAULT_N_ESTIMATORS = 100
@@ -35,7 +35,7 @@ class XGBoostFactor(BaseFactor):
     def __init__(
         self,
         features: List[str],
-        target: str = 'return_5d',
+        target: str = "return_5d",
         model_params: Optional[dict] = None,
         name: str = "XGBoostFactor",
     ):
@@ -43,10 +43,10 @@ class XGBoostFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': DEFAULT_N_ESTIMATORS,
-            'max_depth': 5,
-            'learning_rate': 0.1,
-            'random_state': 42,
+            "n_estimators": DEFAULT_N_ESTIMATORS,
+            "max_depth": 5,
+            "learning_rate": 0.1,
+            "random_state": 42,
         }
 
     def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "XGBoostFactor":
@@ -71,6 +71,11 @@ class XGBoostFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
+        # Temporal split: use first 80% for training to avoid look-ahead bias
+        split_idx = int(len(X) * 0.8)
+        X = X[:split_idx]
+        y = y[:split_idx]
+
         # 训练
         self._model = xgb.XGBRegressor(**self.model_params)
         self._model.fit(X, y)
@@ -89,30 +94,29 @@ class XGBoostFactor(BaseFactor):
         # 预测
         scores = self._model.predict(X)
 
-        # 构建结果
-        results = []
-        for i, (idx, row) in enumerate(data.iterrows()):
-            if not np.isnan(scores[i]):
-                results.append({
-                    'date': idx if isinstance(idx, pd.Timestamp) else row.get('date'),
-                    'symbol': row.get('symbol', ''),
-                    'score': scores[i],
-                })
-
-        df = pd.DataFrame(results)
+        # 构建结果 (vectorized)
+        valid_mask = ~np.isnan(scores)
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
+        df = pd.DataFrame(
+            {
+                "date": dates,
+                "symbol": data["symbol"].values,
+                "score": scores,
+            }
+        )
+        df = df[valid_mask].copy()
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
 
     def get_feature_importance(self) -> Optional[pd.Series]:
         """获取特征重要性"""
         if self._model is None:
             return None
-        return pd.Series(
-            self._model.feature_importances_,
-            index=self.features
-        ).sort_values(ascending=False)
+        return pd.Series(self._model.feature_importances_, index=self.features).sort_values(
+            ascending=False
+        )
 
 
 class LGBMFactor(BaseFactor):
@@ -125,7 +129,7 @@ class LGBMFactor(BaseFactor):
     def __init__(
         self,
         features: List[str],
-        target: str = 'return_5d',
+        target: str = "return_5d",
         model_params: Optional[dict] = None,
         name: str = "LGBMFactor",
     ):
@@ -133,11 +137,11 @@ class LGBMFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': DEFAULT_N_ESTIMATORS,
-            'max_depth': 5,
-            'learning_rate': 0.1,
-            'random_state': 42,
-            'verbose': -1,
+            "n_estimators": DEFAULT_N_ESTIMATORS,
+            "max_depth": 5,
+            "learning_rate": 0.1,
+            "random_state": 42,
+            "verbose": -1,
         }
 
     def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "LGBMFactor":
@@ -159,6 +163,11 @@ class LGBMFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
+        # Temporal split: use first 80% for training to avoid look-ahead bias
+        split_idx = int(len(X) * 0.8)
+        X = X[:split_idx]
+        y = y[:split_idx]
+
         self._model = lgb.LGBMRegressor(**self.model_params)
         self._model.fit(X, y)
         self._is_fitted = True
@@ -173,26 +182,26 @@ class LGBMFactor(BaseFactor):
         X = data[self.features].values
         scores = self._model.predict(X)
 
-        results = []
-        for i, (idx, row) in enumerate(data.iterrows()):
-            if not np.isnan(scores[i]):
-                results.append({
-                    'date': idx if isinstance(idx, pd.Timestamp) else row.get('date'),
-                    'symbol': row.get('symbol', ''),
-                    'score': scores[i],
-                })
-
-        df = pd.DataFrame(results)
+        # 构建结果 (vectorized)
+        valid_mask = ~np.isnan(scores)
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
+        df = pd.DataFrame(
+            {
+                "date": dates,
+                "symbol": data["symbol"].values,
+                "score": scores,
+            }
+        )
+        df = df[valid_mask].copy()
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
 
     def get_feature_importance(self) -> Optional[pd.Series]:
         """获取特征重要性"""
         if self._model is None:
             return None
-        return pd.Series(
-            self._model.feature_importances_,
-            index=self.features
-        ).sort_values(ascending=False)
+        return pd.Series(self._model.feature_importances_, index=self.features).sort_values(
+            ascending=False
+        )

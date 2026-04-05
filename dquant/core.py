@@ -4,27 +4,33 @@
 
 import signal
 import time
-from typing import Optional, Dict, Any, Union, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
 import pandas as pd
 
-from dquant.data.base import DataSource
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.backtest.engine import BacktestEngine
 from dquant.backtest.result import BacktestResult
-from dquant.backtest.portfolio import Portfolio
-from dquant.broker.base import BaseBroker, Order, OrderResult
-from dquant.broker.simulator import Simulator
-from dquant.broker.safety import TradingTimeChecker
-from dquant.broker.trade_journal import TradeJournal
+from dquant.broker.base import BaseBroker, Order
 from dquant.broker.order_tracker import OrderTracker
-from dquant.notify import create_notifier
-from dquant.notify.base import Notifier
-from dquant.risk import RiskManager, PositionSizer, PositionLimit
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
-from dquant.constants import BROKER_MAX_RECONNECT, BROKER_RECONNECT_DELAY, BROKER_RECONNECT_BACKOFF
-from dquant.logger import get_logger
+from dquant.broker.safety import TradingTimeChecker
+from dquant.broker.simulator import Simulator
+from dquant.broker.trade_journal import TradeJournal
 from dquant.calendar import is_trading_day
+from dquant.constants import (
+    BROKER_MAX_RECONNECT,
+    BROKER_RECONNECT_BACKOFF,
+    BROKER_RECONNECT_DELAY,
+    DEFAULT_COMMISSION,
+    DEFAULT_INITIAL_CASH,
+    DEFAULT_SLIPPAGE,
+    MIN_SHARES,
+)
+from dquant.data.base import DataSource
+from dquant.logger import get_logger
+from dquant.notify.base import Notifier
+from dquant.risk import RiskManager
+from dquant.strategy.base import BaseStrategy, Signal
 
 logger = get_logger(__name__)
 
@@ -75,12 +81,13 @@ class Engine:
 
     def _init_broker(self, broker_name: str, initial_cash: float) -> BaseBroker:
         """初始化券商接口"""
-        if broker_name == 'simulator':
+        if broker_name == "simulator":
             return Simulator(initial_cash=initial_cash)
-        elif broker_name == 'xtp':
+        elif broker_name == "xtp":
             # XTP 接口实现
             try:
                 from dquant.broker.xtp_broker import XTPBroker
+
                 return XTPBroker(initial_cash=initial_cash)
             except ImportError:
                 raise ImportError(
@@ -90,10 +97,11 @@ class Engine:
                     "2. Install: pip install xtp-python-api\n"
                     "3. Configure in config.py"
                 )
-        elif broker_name == 'qmt':
+        elif broker_name == "qmt":
             # miniQMT 接口实现
             try:
                 from dquant.broker.qmt_broker import QMTBroker
+
                 return QMTBroker(initial_cash=initial_cash)
             except ImportError:
                 raise ImportError(
@@ -158,7 +166,7 @@ class Engine:
         max_daily_loss: float = 0.03,
         max_consecutive_errors: int = 10,
         notifier: Optional[Notifier] = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         启动实盘交易
@@ -190,7 +198,6 @@ class Engine:
         risk_mgr = RiskManager(max_drawdown=max_drawdown, max_daily_loss=max_daily_loss)
         journal = TradeJournal()
         tracker = OrderTracker()
-        sizer = PositionSizer(method='equal_weight', total_value=self.initial_cash)
         time_checker = TradingTimeChecker()
 
         # 信号处理：优雅关机
@@ -229,15 +236,18 @@ class Engine:
                         continue
 
                     # 2. 检查交易时间
-                    if not time_checker.is_trading_time():
-                        logger.debug(f"[LIVE] 非交易时间: {now.strftime('%H:%M:%S')}")
+                    can_trade, time_msg = time_checker.is_trading_time(now)
+                    if not can_trade:
+                        logger.debug(f"[LIVE] {time_msg}")
                         time.sleep(interval)
                         continue
 
                     # 3. 新一天 → 重置日亏损基准
                     if date_str != last_date_str:
                         account = self.broker.get_account()
-                        total_value = account.get('total_value', account.get('cash', self.initial_cash))
+                        total_value = account.get(
+                            "total_value", account.get("cash", self.initial_cash)
+                        )
                         risk_mgr.reset_daily_start(total_value, date_str)
                         last_date_str = date_str
                         logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
@@ -274,8 +284,10 @@ class Engine:
                     # 6. 获取账户 & 持仓
                     account = self.broker.get_account()
                     positions = self.broker.get_positions()
-                    current_value = account.get('total_value', account.get('cash', self.initial_cash))
-                    available_cash = account.get('cash', 0)
+                    current_value = account.get(
+                        "total_value", account.get("cash", self.initial_cash)
+                    )
+                    available_cash = account.get("cash", 0)
 
                     # 7. 风控检查
                     risk_mgr.check_drawdown(current_value)
@@ -287,11 +299,17 @@ class Engine:
 
                     # 8. 执行卖出信号
                     for sig in sell_signals:
-                        result = self._execute_sell(
-                            sig, positions, dry_run, journal, strategy_name,
+                        sell_res = self._execute_sell(
+                            sig,
+                            positions,
+                            dry_run,
+                            journal,
+                            strategy_name,
                         )
-                        if result and result.status in ('PENDING', 'PARTIAL_FILLED'):
-                            tracker.add(sig, result)
+                        if sell_res:
+                            order, result = sell_res
+                            if result.status in ("PENDING", "PARTIAL_FILLED"):
+                                tracker.add(order, result)
 
                     # 9. 轮询未完成订单
                     if tracker.has_pending() and not dry_run:
@@ -300,8 +318,12 @@ class Engine:
                     # 10. 执行买入信号 (等权仓位)
                     if buy_signals:
                         self._execute_buys(
-                            buy_signals, available_cash, sizer,
-                            dry_run, journal, strategy_name,
+                            buy_signals,
+                            available_cash,
+                            dry_run,
+                            journal,
+                            strategy_name,
+                            tracker,
                         )
 
                     # 10. 更新持仓价格
@@ -311,7 +333,9 @@ class Engine:
 
                 except Exception as e:
                     consecutive_errors += 1
-                    logger.error(f"[LIVE] 循环异常 ({consecutive_errors}/{max_consecutive_errors}): {e}")
+                    logger.error(
+                        f"[LIVE] 循环异常 ({consecutive_errors}/{max_consecutive_errors}): {e}"
+                    )
 
                     if consecutive_errors >= max_consecutive_errors:
                         logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
@@ -329,9 +353,17 @@ class Engine:
                 logger.info(f"[LIVE] 关机：取消 {len(tracker.get_pending())} 个 pending 订单")
                 cancelled = tracker.cancel_all(self.broker)
                 for order_id in cancelled:
-                    journal.record("CANCELLED_ON_SHUTDOWN", Order(
-                        symbol='', side='', quantity=0, order_id=order_id,
-                    ), None, strategy_name=strategy_name)
+                    journal.record(
+                        "CANCELLED_ON_SHUTDOWN",
+                        Order(
+                            symbol="",
+                            side="",
+                            quantity=0,
+                            order_id=order_id,
+                        ),
+                        None,
+                        strategy_name=strategy_name,
+                    )
 
             # 清理
             signal.signal(signal.SIGINT, original_sigint)
@@ -343,6 +375,7 @@ class Engine:
         """获取实时行情数据"""
         try:
             from dquant.data.akshare_loader import AKShareRealTime
+
             return AKShareRealTime.get_realtime_quotes(symbols=symbols)
         except ImportError:
             logger.warning("[LIVE] akshare 未安装，尝试通过 data source 获取")
@@ -357,20 +390,25 @@ class Engine:
 
     def _execute_sell(
         self,
-        signal: Signal,
+        sig: Signal,
         positions: Dict[str, dict],
         dry_run: bool,
         journal: TradeJournal,
         strategy_name: str,
-    ) -> Optional[OrderResult]:
-        """执行卖出信号"""
-        symbol = signal.symbol
+    ) -> Optional[tuple]:
+        """
+        执行卖出信号
+
+        Returns:
+            (order, result) tuple, or None if skipped
+        """
+        symbol = sig.symbol
         if symbol not in positions:
             logger.debug(f"[LIVE] 无持仓，跳过卖出: {symbol}")
             return None
 
         pos = positions[symbol]
-        quantity = pos.get('quantity', pos.get('available', 0))
+        quantity = pos.get("quantity", pos.get("available", 0))
         if quantity <= 0:
             return None
 
@@ -381,10 +419,10 @@ class Engine:
 
         order = Order(
             symbol=symbol,
-            side='SELL',
+            side="SELL",
             quantity=quantity,
-            price=signal.price,
-            order_type='LIMIT' if signal.price else 'MARKET',
+            price=sig.price,
+            order_type="LIMIT" if sig.price else "MARKET",
         )
 
         if dry_run:
@@ -392,67 +430,93 @@ class Engine:
             return None
 
         result = self.broker.place_order(order)
-        journal.record("ORDER_PLACED", order, result, strategy_name=strategy_name,
-                       signal_info=signal.to_dict())
+        journal.record(
+            "ORDER_PLACED",
+            order,
+            result,
+            strategy_name=strategy_name,
+            signal_info=sig.to_dict(),
+        )
 
-        if result.status in ('FILLED', 'PARTIAL_FILLED'):
-            logger.info(f"[LIVE] 卖出成交: {symbol} x {result.filled_quantity} @ {result.filled_price:.2f}")
-        elif result.status == 'REJECTED':
+        if result.status in ("FILLED", "PARTIAL_FILLED"):
+            logger.info(
+                f"[LIVE] 卖出成交: {symbol} x {result.filled_quantity} @ {result.filled_price:.2f}"
+            )
+        elif result.status == "REJECTED":
             logger.warning(f"[LIVE] 卖出被拒: {symbol} — {result.status}")
 
-        return result
+        return (order, result)
 
     def _execute_buys(
         self,
         buy_signals: List[Signal],
         available_cash: float,
-        sizer: PositionSizer,
         dry_run: bool,
         journal: TradeJournal,
         strategy_name: str,
+        tracker: OrderTracker,
     ) -> None:
-        """执行买入信号 (等权仓位分配)"""
+        """执行买入信号 (等权仓位分配，动态扣减可用资金)"""
         if not buy_signals:
             return
 
-        symbols = [s.symbol for s in buy_signals]
-        position_values = sizer.size(symbols)
+        remaining_cash = available_cash
+        n = len(buy_signals)
 
-        for sig in buy_signals:
-            target_value = position_values.get(sig.symbol, 0)
-            if target_value <= 0:
-                continue
+        for idx, sig in enumerate(buy_signals):
+            remaining_slots = n - idx
+            per_stock_budget = remaining_cash / remaining_slots if remaining_slots > 0 else 0
+            if per_stock_budget <= 0:
+                break
 
             price = sig.price or 10.0  # 需要价格计算股数
             if price <= 0:
                 continue
 
             # 计算买入数量 (整手)
-            quantity = int(target_value / price // MIN_SHARES) * MIN_SHARES
+            quantity = int(per_stock_budget / price // MIN_SHARES) * MIN_SHARES
             if quantity <= 0:
                 logger.debug(f"[LIVE] 资金不足，跳过买入: {sig.symbol}")
                 continue
 
             order = Order(
                 symbol=sig.symbol,
-                side='BUY',
+                side="BUY",
                 quantity=quantity,
                 price=sig.price,
-                order_type='LIMIT' if sig.price else 'MARKET',
+                order_type="LIMIT" if sig.price else "MARKET",
             )
 
             if dry_run:
                 logger.info(f"[LIVE][DRY-RUN] 买入: {sig.symbol} x {quantity}")
+                remaining_cash -= quantity * price
                 continue
 
             result = self.broker.place_order(order)
-            journal.record("ORDER_PLACED", order, result, strategy_name=strategy_name,
-                           signal_info=sig.to_dict())
+            journal.record(
+                "ORDER_PLACED",
+                order,
+                result,
+                strategy_name=strategy_name,
+                signal_info=sig.to_dict(),
+            )
 
-            if result.status in ('FILLED', 'PARTIAL_FILLED'):
-                logger.info(f"[LIVE] 买入成交: {sig.symbol} x {result.filled_quantity} @ {result.filled_price:.2f}")
-            elif result.status == 'REJECTED':
+            if result.status in ("FILLED", "PARTIAL_FILLED"):
+                logger.info(
+                    f"[LIVE] 买入成交: {sig.symbol} x {result.filled_quantity} @ {result.filled_price:.2f}"
+                )
+            elif result.status == "REJECTED":
                 logger.warning(f"[LIVE] 买入被拒: {sig.symbol} — {result.status}")
+            else:
+                logger.info(f"[LIVE] 买入挂单: {sig.symbol} x {quantity} — {result.status}")
+
+            if result.status in ("PENDING", "PARTIAL_FILLED"):
+                tracker.add(order, result)
+
+            if result.status != "REJECTED":
+                unit_price = result.filled_price if result.filled_price > 0 else price
+                reserved_cost = quantity * unit_price
+                remaining_cash = max(0, remaining_cash - reserved_cost)
 
     def _try_reconnect(self, **kwargs) -> bool:
         """
@@ -462,7 +526,7 @@ class Engine:
             True 如果重连成功
         """
         for attempt in range(BROKER_MAX_RECONNECT):
-            delay = BROKER_RECONNECT_DELAY * (BROKER_RECONNECT_BACKOFF ** attempt)
+            delay = BROKER_RECONNECT_DELAY * (BROKER_RECONNECT_BACKOFF**attempt)
             logger.warning(
                 f"[LIVE] Broker 断线，{delay:.1f}s 后尝试重连 "
                 f"({attempt + 1}/{BROKER_MAX_RECONNECT})"
@@ -483,9 +547,9 @@ class Engine:
         """用最新价更新持仓价格（通用版）"""
         # Simulator: 直接更新
         if isinstance(self.broker, Simulator):
-            if 'symbol' not in realtime_df.columns or 'price' not in realtime_df.columns:
+            if "symbol" not in realtime_df.columns or "price" not in realtime_df.columns:
                 return
-            price_map = dict(zip(realtime_df['symbol'], realtime_df['price']))
+            price_map = dict(zip(realtime_df["symbol"], realtime_df["price"]))
             self.broker.update_prices(price_map)
             return
 
@@ -497,11 +561,9 @@ class Engine:
         for symbol in positions:
             try:
                 md = self.broker.get_market_data(symbol)
-                if md and 'price' in md:
+                if md and "price" in md:
                     # 实盘 broker 内部维护持仓状态，此处仅做风控估值
-                    logger.debug(
-                        f"[LIVE] 持仓估值: {symbol} price={md['price']:.2f}"
-                    )
+                    logger.debug(f"[LIVE] 持仓估值: {symbol} price={md['price']:.2f}")
             except Exception as e:
                 logger.debug(f"[LIVE] 获取 {symbol} 行情失败: {e}")
 
@@ -535,17 +597,18 @@ class Engine:
                         f"[LIVE] 超时取消订单: {tracked.order.order_id} "
                         f"{tracked.order.symbol} {tracked.order.side}"
                     )
-                    journal.record("CANCELLED_TIMEOUT", tracked.order, tracked.result,
-                                   strategy_name=strategy_name)
+                    journal.record(
+                        "CANCELLED_TIMEOUT",
+                        tracked.order,
+                        tracked.result,
+                        strategy_name=strategy_name,
+                    )
                 tracker.remove(tracked.order.order_id)
             except Exception as e:
                 logger.error(f"[LIVE] 取消超时订单失败: {tracked.order.order_id} — {e}")
 
     def optimize(
-        self,
-        param_grid: Dict[str, list],
-        metric: str = 'sharpe',
-        **backtest_kwargs
+        self, param_grid: Dict[str, list], metric: str = "sharpe", **backtest_kwargs
     ) -> Dict[str, Any]:
         """
         参数优化
@@ -559,7 +622,7 @@ class Engine:
         """
         from itertools import product
 
-        best_score = -float('inf')
+        best_score = -float("inf")
         best_params = None
         best_result = None
 
@@ -574,6 +637,14 @@ class Engine:
         param_names = list(param_grid.keys())
         param_values = list(param_grid.values())
 
+        # 指标别名映射 (支持 'return' → 'total_return')
+        metric_aliases = {
+            "return": "total_return",
+            "sharpe": "sharpe",
+            "max_drawdown": "max_drawdown",
+        }
+        actual_metric = metric_aliases.get(metric, metric)
+
         for values in product(*param_values):
             params = dict(zip(param_names, values))
 
@@ -587,13 +658,14 @@ class Engine:
                 result = self.backtest(**backtest_kwargs)
 
                 # 获取评分
-                score = getattr(result.metrics, metric, 0)
+                score = getattr(result.metrics, actual_metric, 0)
 
                 if score > best_score:
                     best_score = score
                     best_params = params
                     best_result = result
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[OPTIMIZE] 参数组合 {params} 回测失败: {e}")
                 continue
 
         # 恢复策略为最优参数（而非最后一个网格点的参数）
@@ -601,11 +673,15 @@ class Engine:
             for name, value in best_params.items():
                 if hasattr(self.strategy, name):
                     setattr(self.strategy, name, value)
+        else:
+            # 所有参数组合均失败，恢复原始参数
+            for name, value in original_params.items():
+                if hasattr(self.strategy, name):
+                    setattr(self.strategy, name, value)
+            logger.warning("[OPTIMIZE] 所有参数组合均失败，已恢复原始参数")
 
         return {
-            'best_params': best_params,
-            'best_score': best_score,
-            'best_result': best_result,
+            "best_params": best_params,
+            "best_score": best_score,
+            "best_result": best_result,
         }
-
-

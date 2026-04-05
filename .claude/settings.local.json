@@ -10,7 +10,24 @@
       "Bash(gh auth:*)",
       "Bash(ping:*)",
       "Bash(git fetch:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git:*)",
+      "Bash(gh run:*)",
+      "Bash(wc -l /Users/datacruiser/github/dquant/dquant/**/*.py /Users/datacruiser/github/dquant/dquant/*.py)",
+      "Bash(find /Users/datacruiser/github/dquant -name \"*.py\" -not -path \"*__pycache__*\" -exec wc -l {} +)",
+      "Bash(ruff check:*)",
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(grep -rn \"circuit\\\\|stop_loss\\\\|max_drawdown\\\\|halt\\\\|stale\\\\|freshness\" dquant/ --include=*.py)",
+      "Bash(grep -rn \"NaN\\\\|isna\\\\|isnull\\\\|dropna\\\\|fillna\\\\|zero.*volume\\\\|volume.*zero\" dquant/ --include=*.py)",
+      "Bash(grep -rn \"warm.?up\\\\|min_period\\\\|lookahead\\\\|survivorship\\\\|point.?in.?time\\\\|rebalance_freq\\\\|live\" dquant/ --include=*.py)",
+      "Bash(ls -la .env*)",
+      "Bash(find /Users/datacruiser/github/dquant -name test_safety* -o -name test_risk* -o -name test_core* -o -name test_qmt* -o -name test_xtp* -o -name test_simulator*)",
+      "Bash(find /Users/datacruiser/github/dquant/dquant -name notify* -o -name dingtalk* -o -name alert*)",
+      "Bash(find /Users/datacruiser/github/dquant/dquant/strategy -name *.py -type f)",
+      "Bash(find /Users/datacruiser/github/dquant/.github/workflows -name *.yml -o -name *.yaml)",
+      "Bash(ls:*)",
+      "Bash(find /Users/datacruiser/github/dquant/dquant/web -name *.py -type f)"
     ]
   }
 }

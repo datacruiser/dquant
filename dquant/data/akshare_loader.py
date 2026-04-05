@@ -2,10 +2,11 @@
 AKShare 数据加载器
 """
 
-from typing import Optional, List, Union
-from datetime import datetime, timedelta
-import pandas as pd
+from datetime import datetime
+from typing import List, Optional, Union
+
 import numpy as np
+import pandas as pd
 
 from dquant.data.base import DataSource
 
@@ -32,26 +33,25 @@ class AKShareLoader(DataSource):
 
     # 常用指数成分股
     INDEX_SYMBOLS = {
-        'hs300': '000300.SH',  # 沪深300
-        'zz500': '000905.SH',  # 中证500
-        'zz1000': '000852.SH', # 中证1000
-        'sz50': '000016.SH',   # 上证50
+        "hs300": "000300.SH",  # 沪深300
+        "zz500": "000905.SH",  # 中证500
+        "zz1000": "000852.SH",  # 中证1000
+        "sz50": "000016.SH",  # 上证50
     }
 
     def __init__(
         self,
-        symbols: Union[str, List[str]] = 'hs300',
+        symbols: Union[str, List[str]] = "hs300",
         start: Optional[str] = None,
         end: Optional[str] = None,
-        freq: str = 'd',  # d=日线, w=周线, m=月线
-        adjust: str = 'qfq',  # qfq=前复权, hfq=后复权, None=不复权
+        freq: str = "d",  # d=日线, w=周线, m=月线
+        adjust: str = "qfq",  # qfq=前复权, hfq=后复权, None=不复权
         include_factors: bool = True,  # 是否计算因子
     ):
         super().__init__(symbols=symbols, start=start, end=end)
         self.freq = freq
         self.adjust = adjust
         self.include_factors = include_factors
-
 
     def _load_single_symbol(self, symbol):
         """加载单个股票数据"""
@@ -61,26 +61,28 @@ class AKShareLoader(DataSource):
             df = ak.stock_zh_a_hist(
                 symbol=symbol,
                 period="daily",
-                start_date=self.start.replace('-', ''),
-                end_date=self.end.replace('-', ''),
-                adjust="" if not self.adjust else "qfq"
+                start_date=self.start.replace("-", ""),
+                end_date=self.end.replace("-", ""),
+                adjust="" if not self.adjust else "qfq",
             )
 
             if df is None or len(df) == 0:
                 return None
 
-            df = df.rename(columns={
-                '日期': 'date',
-                '开盘': 'open',
-                '最高': 'high',
-                '最低': 'low',
-                '收盘': 'close',
-                '成交量': 'volume',
-            })
+            df = df.rename(
+                columns={
+                    "日期": "date",
+                    "开盘": "open",
+                    "最高": "high",
+                    "最低": "low",
+                    "收盘": "close",
+                    "成交量": "volume",
+                }
+            )
 
-            df['symbol'] = symbol
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["symbol"] = symbol
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
             return df
 
@@ -90,7 +92,7 @@ class AKShareLoader(DataSource):
     def load(self) -> pd.DataFrame:
         """加载数据"""
         try:
-            import akshare as ak
+            import akshare as ak  # noqa: F401
         except ImportError:
             raise ImportError("akshare not installed. Run: pip install akshare")
 
@@ -109,9 +111,9 @@ class AKShareLoader(DataSource):
 
                 # 进度显示
                 if (i + 1) % 50 == 0:
-                    print(f"  [AKShare] 已加载 {i+1}/{len(symbol_list)} 只股票")
+                    print(f"  [AKShare] 已加载 {i + 1}/{len(symbol_list)} 只股票")
 
-            except Exception as e:
+            except Exception:
                 failed.append(symbol)
                 continue
 
@@ -146,26 +148,26 @@ class AKShareLoader(DataSource):
         if isinstance(self.symbols, list):
             return self.symbols
 
-        if self.symbols == 'all':
+        if self.symbols == "all":
             # 全市场 A 股
             df = ak.stock_zh_a_spot_em()
-            return df['代码'].tolist()
+            return df["代码"].tolist()
 
         if self.symbols in self.INDEX_SYMBOLS:
             # 指数成分股
             index_name = self.symbols
-            if index_name == 'hs300':
-                df = ak.index_stock_cons_weight_csindex(symbol='000300')
-                return df['成分券代码'].tolist()
-            elif index_name == 'zz500':
-                df = ak.index_stock_cons_weight_csindex(symbol='000905')
-                return df['成分券代码'].tolist()
-            elif index_name == 'zz1000':
-                df = ak.index_stock_cons_weight_csindex(symbol='000852')
-                return df['成分券代码'].tolist()
-            elif index_name == 'sz50':
-                df = ak.index_stock_cons_weight_csindex(symbol='000016')
-                return df['成分券代码'].tolist()
+            if index_name == "hs300":
+                df = ak.index_stock_cons_weight_csindex(symbol="000300")
+                return df["成分券代码"].tolist()
+            elif index_name == "zz500":
+                df = ak.index_stock_cons_weight_csindex(symbol="000905")
+                return df["成分券代码"].tolist()
+            elif index_name == "zz1000":
+                df = ak.index_stock_cons_weight_csindex(symbol="000852")
+                return df["成分券代码"].tolist()
+            elif index_name == "sz50":
+                df = ak.index_stock_cons_weight_csindex(symbol="000016")
+                return df["成分券代码"].tolist()
 
         # 单只股票
         if self.symbols is None:
@@ -181,8 +183,8 @@ class AKShareLoader(DataSource):
             df = ak.stock_zh_a_hist(
                 symbol=symbol,
                 period=self.freq,
-                start_date=self.start or '20200101',
-                end_date=self.end or datetime.now().strftime('%Y%m%d'),
+                start_date=self.start or "20200101",
+                end_date=self.end or datetime.now().strftime("%Y%m%d"),
                 adjust=self.adjust,
             )
 
@@ -190,74 +192,76 @@ class AKShareLoader(DataSource):
                 return None
 
             # 标准化列名
-            df = df.rename(columns={
-                '日期': 'date',
-                '开盘': 'open',
-                '最高': 'high',
-                '最低': 'low',
-                '收盘': 'close',
-                '成交量': 'volume',
-                '成交额': 'amount',
-                '振幅': 'amplitude',
-                '涨跌幅': 'pct_change',
-                '涨跌额': 'change',
-                '换手率': 'turnover',
-            })
+            df = df.rename(
+                columns={
+                    "日期": "date",
+                    "开盘": "open",
+                    "最高": "high",
+                    "最低": "low",
+                    "收盘": "close",
+                    "成交量": "volume",
+                    "成交额": "amount",
+                    "振幅": "amplitude",
+                    "涨跌幅": "pct_change",
+                    "涨跌额": "change",
+                    "换手率": "turnover",
+                }
+            )
 
-            df['date'] = pd.to_datetime(df['date'])
-            df['symbol'] = symbol
+            df["date"] = pd.to_datetime(df["date"])
+            df["symbol"] = symbol
 
             # 添加后缀
-            if symbol.startswith('6'):
-                df['symbol'] = symbol + '.SH'
-            elif symbol.startswith(('4', '8')):
-                df['symbol'] = symbol + '.BJ'
+            if symbol.startswith("6"):
+                df["symbol"] = symbol + ".SH"
+            elif symbol.startswith(("4", "8")):
+                df["symbol"] = symbol + ".BJ"
             else:
-                df['symbol'] = symbol + '.SZ'
+                df["symbol"] = symbol + ".SZ"
 
-            df = df.set_index('date')
+            df = df.set_index("date")
 
             return df
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
             # 动量因子
-            group['momentum_5'] = group['close'].pct_change(5)
-            group['momentum_10'] = group['close'].pct_change(10)
-            group['momentum_20'] = group['close'].pct_change(20)
+            group["momentum_5"] = group["close"].pct_change(5)
+            group["momentum_10"] = group["close"].pct_change(10)
+            group["momentum_20"] = group["close"].pct_change(20)
 
             # 波动率
-            returns = group['close'].pct_change()
-            group['volatility_5'] = returns.rolling(5).std()
-            group['volatility_10'] = returns.rolling(10).std()
-            group['volatility_20'] = returns.rolling(20).std()
+            returns = group["close"].pct_change()
+            group["volatility_5"] = returns.rolling(5).std()
+            group["volatility_10"] = returns.rolling(10).std()
+            group["volatility_20"] = returns.rolling(20).std()
 
             # 均线
-            group['ma_5'] = group['close'].rolling(5).mean()
-            group['ma_10'] = group['close'].rolling(10).mean()
-            group['ma_20'] = group['close'].rolling(20).mean()
+            group["ma_5"] = group["close"].rolling(5).mean()
+            group["ma_10"] = group["close"].rolling(10).mean()
+            group["ma_20"] = group["close"].rolling(20).mean()
 
             # 偏离均线
-            group['bias_5'] = (group['close'] - group['ma_5']) / group['ma_5']
-            group['bias_10'] = (group['close'] - group['ma_10']) / group['ma_10']
-            group['bias_20'] = (group['close'] - group['ma_20']) / group['ma_20']
+            group["bias_5"] = (group["close"] - group["ma_5"]) / group["ma_5"]
+            group["bias_10"] = (group["close"] - group["ma_10"]) / group["ma_10"]
+            group["bias_20"] = (group["close"] - group["ma_20"]) / group["ma_20"]
 
             # 换手率因子 (如果有)
-            if 'turnover' in group.columns:
-                group['turnover_ma_5'] = group['turnover'].rolling(5).mean()
-                group['turnover_ma_10'] = group['turnover'].rolling(10).mean()
+            if "turnover" in group.columns:
+                group["turnover_ma_5"] = group["turnover"].rolling(5).mean()
+                group["turnover_ma_10"] = group["turnover"].rolling(10).mean()
 
             # 成交量因子
-            group['volume_ma_5'] = group['volume'].rolling(5).mean()
-            group['volume_ratio'] = group['volume'] / group['volume_ma_5'].replace(0, np.nan)
+            group["volume_ma_5"] = group["volume"].rolling(5).mean()
+            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(0, np.nan)
 
             results.append(group)
 
@@ -280,21 +284,23 @@ class AKShareRealTime:
         df = ak.stock_zh_a_spot_em()
 
         if symbols:
-            df = df[df['代码'].isin(symbols)]
+            df = df[df["代码"].isin(symbols)]
 
-        df = df.rename(columns={
-            '代码': 'symbol',
-            '名称': 'name',
-            '最新价': 'price',
-            '涨跌幅': 'pct_change',
-            '涨跌额': 'change',
-            '成交量': 'volume',
-            '成交额': 'amount',
-            '最高': 'high',
-            '最低': 'low',
-            '今开': 'open',
-            '昨收': 'pre_close',
-        })
+        df = df.rename(
+            columns={
+                "代码": "symbol",
+                "名称": "name",
+                "最新价": "price",
+                "涨跌幅": "pct_change",
+                "涨跌额": "change",
+                "成交量": "volume",
+                "成交额": "amount",
+                "最高": "high",
+                "最低": "low",
+                "今开": "open",
+                "昨收": "pre_close",
+            }
+        )
 
         return df
 

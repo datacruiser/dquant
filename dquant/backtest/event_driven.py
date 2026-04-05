@@ -4,13 +4,14 @@
 支持逐笔成交、滑点、市场冲击等高级功能。
 """
 
-from typing import Optional, List, Dict, Callable, Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
 from collections import defaultdict, deque
-import pandas as pd
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Callable, Dict, Optional
+
 import numpy as np
+import pandas as pd
 
 from dquant.constants import (
     DEFAULT_COMMISSION,
@@ -25,23 +26,26 @@ logger = get_logger(__name__)
 
 class EventType(Enum):
     """事件类型"""
-    MARKET = "market"          # 市场数据
-    SIGNAL = "signal"          # 交易信号
-    ORDER = "order"            # 订单
-    FILL = "fill"              # 成交
-    POSITION = "position"      # 持仓更新
-    RISK = "risk"              # 风险事件
+
+    MARKET = "market"  # 市场数据
+    SIGNAL = "signal"  # 交易信号
+    ORDER = "order"  # 订单
+    FILL = "fill"  # 成交
+    POSITION = "position"  # 持仓更新
+    RISK = "risk"  # 风险事件
 
 
 @dataclass
 class Event:
     """事件基类"""
+
     type: EventType
     timestamp: datetime
 
 
 class MarketEvent(Event):
     """市场事件"""
+
     symbol: str
     open: float
     high: float
@@ -61,6 +65,7 @@ class MarketEvent(Event):
 
 class SignalEvent(Event):
     """信号事件"""
+
     symbol: str
     signal_type: str  # 'LONG', 'SHORT', 'EXIT'
     strength: float = 1.0
@@ -74,9 +79,10 @@ class SignalEvent(Event):
 
 class OrderEvent(Event):
     """订单事件"""
+
     symbol: str
     order_type: str  # 'MARKET', 'LIMIT'
-    side: str        # 'BUY', 'SELL'
+    side: str  # 'BUY', 'SELL'
     quantity: int
     price: Optional[float] = None  # 限价单价格
     order_id: str = ""
@@ -93,6 +99,7 @@ class OrderEvent(Event):
 
 class FillEvent(Event):
     """成交事件"""
+
     symbol: str
     side: str
     quantity: int
@@ -101,7 +108,17 @@ class FillEvent(Event):
     slippage: float
     order_id: str
 
-    def __init__(self, timestamp, symbol, side, quantity, fill_price, commission, slippage, order_id):
+    def __init__(
+        self,
+        timestamp,
+        symbol,
+        side,
+        quantity,
+        fill_price,
+        commission,
+        slippage,
+        order_id,
+    ):
         super().__init__(EventType.FILL, timestamp)
         self.symbol = symbol
         self.side = side
@@ -183,7 +200,7 @@ class ExecutionHandler:
 
     def __init__(
         self,
-        slippage_model: str = 'fixed',
+        slippage_model: str = "fixed",
         slippage_pct: float = DEFAULT_SLIPPAGE,
         commission_rate: float = DEFAULT_COMMISSION,
     ):
@@ -207,24 +224,24 @@ class ExecutionHandler:
             成交事件
         """
         # 确定基准价格
-        if order.order_type == 'MARKET':
+        if order.order_type == "MARKET":
             # 市价单：使用当前价格
-            base_price = market_data.get('close', 0) if market_data else 0
+            base_price = market_data.get("close", 0) if market_data else 0
         else:
             # 限价单：使用限价
             base_price = order.price or 0
 
         # 计算滑点
-        if self.slippage_model == 'fixed':
+        if self.slippage_model == "fixed":
             slippage = SlippageModel.fixed_slippage(base_price, self.slippage_pct)
-        elif self.slippage_model == 'volume':
-            volume = market_data.get('volume', 0) if market_data else 0
-            avg_volume = market_data.get('avg_volume', volume) if market_data else volume
+        elif self.slippage_model == "volume":
+            volume = market_data.get("volume", 0) if market_data else 0
+            avg_volume = market_data.get("avg_volume", volume) if market_data else volume
             slippage = SlippageModel.volume_based_slippage(
                 base_price, volume, avg_volume, self.slippage_pct
             )
-        elif self.slippage_model == 'impact':
-            daily_volume = market_data.get('volume', 0) if market_data else 0
+        elif self.slippage_model == "impact":
+            daily_volume = market_data.get("volume", 0) if market_data else 0
             slippage = SlippageModel.market_impact_slippage(
                 base_price, order.quantity, daily_volume
             )
@@ -232,7 +249,7 @@ class ExecutionHandler:
             slippage = base_price * self.slippage_pct
 
         # 计算成交价
-        if order.side == 'BUY':
+        if order.side == "BUY":
             # 买入：向上滑动
             fill_price = base_price + slippage
         else:
@@ -268,7 +285,7 @@ class EventDrivenBacktest:
     def __init__(
         self,
         initial_cash: float = 1000000,
-        slippage_model: str = 'fixed',
+        slippage_model: str = "fixed",
         slippage_pct: float = DEFAULT_SLIPPAGE,
         commission_rate: float = DEFAULT_COMMISSION,
     ):
@@ -306,10 +323,10 @@ class EventDrivenBacktest:
 
     def add_strategy(self, strategy: Any):
         """添加策略"""
-        if hasattr(strategy, 'on_market'):
+        if hasattr(strategy, "on_market"):
             self.market_handlers.append(strategy.on_market)
 
-        if hasattr(strategy, 'on_fill'):
+        if hasattr(strategy, "on_fill"):
             self.fill_handlers.append(strategy.on_fill)
 
     def on_market(self, handler: Callable):
@@ -328,12 +345,12 @@ class EventDrivenBacktest:
         for idx, row in self.data.iterrows():
             event = MarketEvent(
                 timestamp=idx,
-                symbol=row.get('symbol', ''),
-                open=row['open'],
-                high=row['high'],
-                low=row['low'],
-                close=row['close'],
-                volume=row['volume'],
+                symbol=row.get("symbol", ""),
+                open=row["open"],
+                high=row["high"],
+                low=row["low"],
+                close=row["close"],
+                volume=row["volume"],
             )
             yield event
 
@@ -360,25 +377,25 @@ class EventDrivenBacktest:
     def _on_signal(self, event: SignalEvent):
         """处理信号事件"""
         # 生成订单
-        if event.signal_type == 'LONG':
+        if event.signal_type == "LONG":
             # 买入
             order = OrderEvent(
                 timestamp=event.timestamp,
                 symbol=event.symbol,
-                order_type='MARKET',
-                side='BUY',
+                order_type="MARKET",
+                side="BUY",
                 quantity=MIN_SHARES,  # 简化：固定数量
             )
             self.events.append(order)
 
-        elif event.signal_type == 'EXIT':
+        elif event.signal_type == "EXIT":
             # 平仓
             if self.positions[event.symbol] > 0:
                 order = OrderEvent(
                     timestamp=event.timestamp,
                     symbol=event.symbol,
-                    order_type='MARKET',
-                    side='SELL',
+                    order_type="MARKET",
+                    side="SELL",
                     quantity=self.positions[event.symbol],
                 )
                 self.events.append(order)
@@ -397,8 +414,8 @@ class EventDrivenBacktest:
             volume = 0
 
         market_data = {
-            'close': price,
-            'volume': volume,
+            "close": price,
+            "volume": volume,
         }
 
         fill = self.execution_handler.execute_order(event, market_data)
@@ -406,12 +423,11 @@ class EventDrivenBacktest:
 
     def _on_fill(self, event: FillEvent):
         """处理成交事件"""
-        if event.side == 'BUY':
+        if event.side == "BUY":
             cost = event.fill_price * event.quantity + event.commission
             if cost > self.cash:
                 logger.warning(
-                    f"资金不足，跳过买入: {event.symbol}, "
-                    f"cost={cost:.2f}, cash={self.cash:.2f}"
+                    f"资金不足，跳过买入: {event.symbol}, " f"cost={cost:.2f}, cash={self.cash:.2f}"
                 )
                 return
             self.positions[event.symbol] += event.quantity
@@ -467,8 +483,8 @@ class EventDrivenBacktest:
         logger.info(f"  总价值:   ¥{total_value:,.0f}")
 
         return {
-            'total_return': total_return,
-            'trades': len(self.trades),
-            'final_cash': self.cash,
-            'total_value': total_value,
+            "total_return": total_return,
+            "trades": len(self.trades),
+            "final_cash": self.cash,
+            "total_value": total_value,
         }

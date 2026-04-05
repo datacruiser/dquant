@@ -4,18 +4,19 @@
 提供因子 IC/IR 分析、因子收益预测能力分析、因子衰减分析等。
 """
 
-from typing import Optional, List, Dict, Tuple
 from dataclasses import dataclass
+from typing import Dict, Optional
+
 import pandas as pd
-import numpy as np
 
 
 @dataclass
 class FactorAnalysisResult:
     """因子分析结果"""
-    ic_mean: float = 0.0        # IC 均值
-    ic_std: float = 0.0         # IC 标准差
-    ir: float = 0.0             # IR (IC 均值 / IC 标准差)
+
+    ic_mean: float = 0.0  # IC 均值
+    ic_std: float = 0.0  # IC 标准差
+    ir: float = 0.0  # IR (IC 均值 / IC 标准差)
     ic_positive_ratio: float = 0.0  # IC 为正的比例
 
     # 分组收益
@@ -44,8 +45,8 @@ class FactorAnalyzer:
 
     def __init__(
         self,
-        n_groups: int = 5,          # 分组数
-        ic_method: str = 'spearman', # IC 计算方法
+        n_groups: int = 5,  # 分组数
+        ic_method: str = "spearman",  # IC 计算方法
     ):
         self.n_groups = n_groups
         self.ic_method = ic_method
@@ -81,9 +82,7 @@ class FactorAnalyzer:
             result.ic_positive_ratio = (ic_series > 0).sum() / len(ic_series)
 
         # 分组收益分析
-        group_returns = self._calculate_group_returns(
-            factor_scores, forward_returns, dates
-        )
+        group_returns = self._calculate_group_returns(factor_scores, forward_returns, dates)
         result.group_returns = group_returns
 
         # 多空收益
@@ -126,10 +125,10 @@ class FactorAnalyzer:
                 continue
 
             # 合并
-            merged = day_factors.set_index('symbol')['score'].to_frame('factor')
+            merged = day_factors.set_index("symbol")["score"].to_frame("factor")
 
             if isinstance(day_returns, pd.Series):
-                merged['return'] = day_returns
+                merged["return"] = day_returns
             else:
                 continue
 
@@ -139,10 +138,10 @@ class FactorAnalyzer:
                 continue
 
             # 计算 IC
-            if self.ic_method == 'spearman':
-                ic = merged['factor'].corr(merged['return'], method='spearman')
+            if self.ic_method == "spearman":
+                ic = merged["factor"].corr(merged["return"], method="spearman")
             else:
-                ic = merged['factor'].corr(merged['return'], method='pearson')
+                ic = merged["factor"].corr(merged["return"], method="pearson")
 
             if pd.notna(ic):
                 ic_values.append(ic)
@@ -158,11 +157,8 @@ class FactorAnalyzer:
             return None
 
         try:
-            day_factors['group'] = pd.qcut(
-                day_factors['score'],
-                self.n_groups,
-                labels=False,
-                duplicates='drop'
+            day_factors["group"] = pd.qcut(
+                day_factors["score"], self.n_groups, labels=False, duplicates="drop"
             )
         except ValueError:
             # 样本不足或全部相同，无法分组
@@ -182,7 +178,7 @@ class FactorAnalyzer:
 
     def _calculate_group_avg_return(self, day_factors, day_returns, group_id):
         """计算单个分组的平均收益"""
-        group_symbols = day_factors[day_factors['group'] == group_id]['symbol']
+        group_symbols = day_factors[day_factors["group"] == group_id]["symbol"]
 
         if len(group_symbols) == 0:
             return None
@@ -217,21 +213,21 @@ class FactorAnalyzer:
 
             # 计算每组平均收益
             group_rets = {}
-            actual_groups = sorted(day_factors['group'].dropna().unique())
+            actual_groups = sorted(day_factors["group"].dropna().unique())
             for group_id in actual_groups:
                 group_ret = self._calculate_group_avg_return(day_factors, day_returns, group_id)
                 if group_ret is not None:
-                    group_rets[f'G{int(group_id)+1}'] = group_ret
+                    group_rets[f"G{int(group_id) + 1}"] = group_ret
 
             if group_rets:
-                group_rets['date'] = date
+                group_rets["date"] = date
                 group_returns_list.append(group_rets)
 
         if not group_returns_list:
             return None
 
         df = pd.DataFrame(group_returns_list)
-        df = df.set_index('date')
+        df = df.set_index("date")
 
         return df
 
@@ -255,14 +251,16 @@ class FactorAnalyzer:
         for name, factor_scores in factors.items():
             result = self.analyze(factor_scores, forward_returns, dates)
 
-            results.append({
-                'factor': name,
-                'ic_mean': result.ic_mean,
-                'ic_std': result.ic_std,
-                'ir': result.ir,
-                'ic_positive_ratio': result.ic_positive_ratio,
-                'top_bottom_spread': result.top_bottom_spread,
-            })
+            results.append(
+                {
+                    "factor": name,
+                    "ic_mean": result.ic_mean,
+                    "ic_std": result.ic_std,
+                    "ir": result.ir,
+                    "ic_positive_ratio": result.ic_positive_ratio,
+                    "top_bottom_spread": result.top_bottom_spread,
+                }
+            )
 
         return pd.DataFrame(results)
 
@@ -288,9 +286,7 @@ class FactorAnalyzer:
 
         for period in range(1, max_periods + 1):
             # 计算 period 天后的收益
-            forward_returns = self._calculate_forward_returns(
-                returns, period
-            )
+            forward_returns = self._calculate_forward_returns(returns, period)
 
             # 计算 IC
             result = self.analyze(factor_scores, forward_returns)
@@ -309,6 +305,7 @@ class FactorAnalyzer:
         forward_return[T] = sum(r[T+1], r[T+2], ..., r[T+period])
         即从 T+1 到 T+period 的累计日收益（近似多期复利）。
         """
+
         def calc_forward(group):
             group = group.sort_index()
             # rolling(period).sum() 在位置 i 给出 sum(r[i-period+1]..r[i])
@@ -316,7 +313,7 @@ class FactorAnalyzer:
             # shift(-period) 将其移到位置 T
             return group.rolling(period).sum().shift(-period)
 
-        result = returns.groupby('symbol')['return'].apply(calc_forward)
+        result = returns.groupby("symbol")["return"].apply(calc_forward)
         # groupby.apply 返回 MultiIndex (symbol, date)，对齐到单层 date 索引
         if isinstance(result.index, pd.MultiIndex):
             result = result.droplevel(0)
@@ -341,9 +338,9 @@ class FactorReport:
         result = self.analyzer.analyze(factor_scores, forward_returns)
 
         report = []
-        report.append("="*60)
+        report.append("=" * 60)
         report.append(f"因子分析报告: {factor_name}")
-        report.append("="*60)
+        report.append("=" * 60)
 
         # IC 统计
         report.append("\nIC 统计:")
@@ -375,6 +372,6 @@ class FactorReport:
                 avg_ret = result.group_returns[col].mean()
                 report.append(f"  {col}: {avg_ret:.2%}")
 
-        report.append("\n" + "="*60)
+        report.append("\n" + "=" * 60)
 
         return "\n".join(report)

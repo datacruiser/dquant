@@ -2,16 +2,16 @@
 Phase 2 Step 4: 通知系统测试
 """
 
-import os
 import json
-from unittest.mock import patch, MagicMock
+import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from dquant.notify import create_notifier
 from dquant.notify.base import Notifier
-from dquant.notify.log_notifier import LogNotifier
 from dquant.notify.dingtalk import DingTalkNotifier
+from dquant.notify.log_notifier import LogNotifier
 
 
 class TestNotifierBase:
@@ -133,5 +133,5 @@ class TestCreateNotifier:
             create_notifier("unknown")
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
