@@ -4,11 +4,11 @@
 支持多因子加权组合、因子正交化、因子筛选等。
 """
 
-from typing import Optional, List, Dict, Any, Union
 from dataclasses import dataclass
-import pandas as pd
+from typing import Dict, List, Optional
+
 import numpy as np
-from abc import ABC, abstractmethod
+import pandas as pd
 
 from dquant.ai.base import BaseFactor
 
@@ -16,6 +16,7 @@ from dquant.ai.base import BaseFactor
 @dataclass
 class FactorWeight:
     """因子权重"""
+
     name: str
     weight: float
     ic: float = 0.0
@@ -86,12 +87,12 @@ class FactorCombiner:
             return df
 
         if self.winsorize:
-            lower = df['score'].quantile(self.winsorize_limit)
-            upper = df['score'].quantile(1 - self.winsorize_limit)
-            df['score'] = df['score'].clip(lower, upper)
+            lower = df["score"].quantile(self.winsorize_limit)
+            upper = df["score"].quantile(1 - self.winsorize_limit)
+            df["score"] = df["score"].clip(lower, upper)
 
         if self.standardize:
-            df['score'] = df.groupby(df.index)['score'].transform(
+            df["score"] = df.groupby(df.index)["score"].transform(
                 lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x
             )
 
@@ -119,13 +120,15 @@ class FactorCombiner:
                     continue
 
                 # 合并
-                merged = factor_day.set_index('symbol')['score'].to_frame('factor')
+                merged = factor_day.set_index("symbol")["score"].to_frame("factor")
                 if isinstance(target_day, pd.Series):
-                    merged['target'] = target_day
+                    merged["target"] = target_day
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged['factor'].corr(merged['target'], method='spearman')
+                        corr = merged["factor"].corr(
+                            merged["target"], method="spearman"
+                        )
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -152,13 +155,15 @@ class FactorCombiner:
                 if len(factor_day) == 0 or len(target_day) == 0:
                     continue
 
-                merged = factor_day.set_index('symbol')['score'].to_frame('factor')
+                merged = factor_day.set_index("symbol")["score"].to_frame("factor")
                 if isinstance(target_day, pd.Series):
-                    merged['target'] = target_day
+                    merged["target"] = target_day
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged['factor'].corr(merged['target'], method='spearman')
+                        corr = merged["factor"].corr(
+                            merged["target"], method="spearman"
+                        )
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -171,28 +176,32 @@ class FactorCombiner:
 
     def combine(
         self,
-        method: str = 'equal',
+        method: str = "equal",
         weights: Optional[Dict[str, float]] = None,
     ) -> pd.DataFrame:
         """组合因子"""
         if not self.factor_values:
             raise ValueError("No factor values. Call fit() first.")
 
-        if method == 'equal' or weights:
+        if method == "equal" or weights:
             return self._combine_equal(weights)
-        elif method == 'ic_weight':
+        elif method == "ic_weight":
             return self._combine_ic_weight()
-        elif method == 'ir_weight':
+        elif method == "ir_weight":
             return self._combine_ir_weight()
-        elif method == 'pca':
+        elif method == "pca":
             return self._combine_pca()
         else:
             raise ValueError(f"Unknown method: {method}")
 
-    def _combine_equal(self, weights: Optional[Dict[str, float]] = None) -> pd.DataFrame:
+    def _combine_equal(
+        self, weights: Optional[Dict[str, float]] = None
+    ) -> pd.DataFrame:
         """等权或自定义权重组合"""
         if weights is None:
-            weights = {name: 1.0 / len(self.factor_values) for name in self.factor_values}
+            weights = {
+                name: 1.0 / len(self.factor_values) for name in self.factor_values
+            }
         else:
             total = sum(weights.values())
             weights = {k: v / total for k, v in weights.items()}
@@ -203,15 +212,15 @@ class FactorCombiner:
             weight = weights.get(name, 0)
             if weight > 0:
                 temp = factor_data.copy()
-                temp['score'] = temp['score'] * weight
+                temp["score"] = temp["score"] * weight
                 combined_scores.append(temp)
 
         if not combined_scores:
             return pd.DataFrame()
 
         result = pd.concat(combined_scores)
-        result = result.groupby([result.index, 'symbol'])['score'].sum().reset_index()
-        result = result.set_index('date')
+        result = result.groupby([result.index, "symbol"])["score"].sum().reset_index()
+        result = result.set_index("date")
 
         return result
 
@@ -253,7 +262,7 @@ class FactorCombiner:
         all_symbols = set()
         for fd in self.factor_values.values():
             all_dates.update(fd.index.unique())
-            all_symbols.update(fd['symbol'].unique())
+            all_symbols.update(fd["symbol"].unique())
 
         dates = sorted(all_dates)
         symbols = sorted(all_symbols)
@@ -268,9 +277,9 @@ class FactorCombiner:
             for j, date in enumerate(dates):
                 for k, symbol in enumerate(symbols):
                     idx = j * len(symbols) + k
-                    row = fd[(fd.index == date) & (fd['symbol'] == symbol)]
+                    row = fd[(fd.index == date) & (fd["symbol"] == symbol)]
                     if len(row) > 0:
-                        X[idx, i] = row['score'].values[0]
+                        X[idx, i] = row["score"].values[0]
 
         # Temporal split: fit PCA on first 80% of data to avoid look-ahead bias
         split_idx = int(n_samples * 0.8)
@@ -278,13 +287,15 @@ class FactorCombiner:
         pca.fit(X[:split_idx])
         combined = pca.transform(X)
 
-        result = pd.DataFrame({
-            'date': np.repeat(dates, len(symbols)),
-            'symbol': symbols * len(dates),
-            'score': combined.flatten(),
-        })
-        result['date'] = pd.to_datetime(result['date'])
-        result = result.set_index('date')
+        result = pd.DataFrame(
+            {
+                "date": np.repeat(dates, len(symbols)),
+                "symbol": symbols * len(dates),
+                "score": combined.flatten(),
+            }
+        )
+        result["date"] = pd.to_datetime(result["date"])
+        result = result.set_index("date")
 
         return result
 
@@ -305,14 +316,14 @@ class FactorCombiner:
                 f2 = self.factor_values[factor_names[j]]
 
                 # 合并
-                merged = f1.set_index('symbol', append=True)['score'].to_frame('f1')
+                merged = f1.set_index("symbol", append=True)["score"].to_frame("f1")
                 merged = merged.join(
-                    f2.set_index('symbol', append=True)['score'].to_frame('f2'),
-                    how='inner'
+                    f2.set_index("symbol", append=True)["score"].to_frame("f2"),
+                    how="inner",
                 )
 
                 if len(merged) > 1:
-                    corr = merged['f1'].corr(merged['f2'])
+                    corr = merged["f1"].corr(merged["f2"])
                     corr_matrix[i, j] = corr
                     corr_matrix[j, i] = corr
 
@@ -322,12 +333,14 @@ class FactorCombiner:
         """获取权重摘要"""
         data = []
         for name, w in self.weights.items():
-            data.append({
-                'factor': name,
-                'weight': w.weight,
-                'ic': round(w.ic, 4),
-                'ir': round(w.ir, 4),
-            })
+            data.append(
+                {
+                    "factor": name,
+                    "weight": w.weight,
+                    "ic": round(w.ic, 4),
+                    "ir": round(w.ir, 4),
+                }
+            )
         return pd.DataFrame(data)
 
 
@@ -356,7 +369,7 @@ class CombinedFactor(BaseFactor):
         self,
         factors: Dict[str, BaseFactor],
         weights: Optional[Dict[str, float]] = None,
-        combine_method: str = 'equal',
+        combine_method: str = "equal",
         name: str = "CombinedFactor",
     ):
         super().__init__(name=name)
@@ -366,7 +379,9 @@ class CombinedFactor(BaseFactor):
 
         self._combiner = None
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "CombinedFactor":
+    def fit(
+        self, data: pd.DataFrame, target: Optional[pd.Series] = None
+    ) -> "CombinedFactor":
         """训练"""
         self._combiner = FactorCombiner()
 
@@ -413,16 +428,20 @@ FACTOR_REGISTRY: Dict[str, type] = {}
 
 def register_factor(name: str):
     """注册因子装饰器"""
+
     def decorator(cls):
         FACTOR_REGISTRY[name] = cls
         return cls
+
     return decorator
 
 
 def get_factor(name: str, **kwargs) -> BaseFactor:
     """获取因子实例"""
     if name not in FACTOR_REGISTRY:
-        raise ValueError(f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}")
+        raise ValueError(
+            f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}"
+        )
     return FACTOR_REGISTRY[name](**kwargs)
 
 

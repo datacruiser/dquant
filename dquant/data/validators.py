@@ -4,9 +4,10 @@
 提供数据质量检查、异常值处理、缺失值处理等功能。
 """
 
-from typing import Optional, List, Dict, Any, Tuple
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
+import pandas as pd
 
 
 class DataValidator:
@@ -74,28 +75,28 @@ class DataValidator:
         count = 0
 
         # 负价格
-        for col in ['open', 'high', 'low', 'close']:
+        for col in ["open", "high", "low", "close"]:
             if col in data.columns:
                 neg_count = (data[col] <= 0).sum()
                 if neg_count > 0:
-                    issues[f'{col}_negative'] = neg_count
+                    issues[f"{col}_negative"] = neg_count
                     count += neg_count
 
         # high < low
-        if 'high' in data.columns and 'low' in data.columns:
-            invalid = (data['high'] < data['low']).sum()
+        if "high" in data.columns and "low" in data.columns:
+            invalid = (data["high"] < data["low"]).sum()
             if invalid > 0:
-                issues['high_lt_low'] = invalid
+                issues["high_lt_low"] = invalid
                 count += invalid
 
         # open/close 不在 [low, high] 范围
-        for col in ['open', 'close']:
+        for col in ["open", "close"]:
             if col in data.columns:
                 out_of_range = (
-                    (data[col] < data['low']) | (data[col] > data['high'])
+                    (data[col] < data["low"]) | (data[col] > data["high"])
                 ).sum()
                 if out_of_range > 0:
-                    issues[f'{col}_out_of_range'] = out_of_range
+                    issues[f"{col}_out_of_range"] = out_of_range
                     count += out_of_range
 
         return count, issues
@@ -105,16 +106,16 @@ class DataValidator:
         data: pd.DataFrame,
     ) -> int:
         """检查成交量有效性"""
-        if 'volume' not in data.columns:
+        if "volume" not in data.columns:
             return 0
 
-        return (data['volume'] < 0).sum()
+        return (data["volume"] < 0).sum()
 
     @staticmethod
     def check_date_continuity(
         data: pd.DataFrame,
-        date_col: str = 'date',
-        freq: str = 'B',
+        date_col: str = "date",
+        freq: str = "B",
     ) -> Tuple[int, List[Any]]:
         """
         检查日期连续性
@@ -137,35 +138,35 @@ class DataValidator:
 
     def _run_check(self, check_name, data, results):
         """执行单个检查"""
-        if check_name == 'columns':
-            required = ['symbol', 'open', 'high', 'low', 'close', 'volume']
+        if check_name == "columns":
+            required = ["symbol", "open", "high", "low", "close", "volume"]
             passed, missing = self.check_required_columns(data, required)
             if not passed:
-                results['issues']['missing_columns'] = missing
-                results['passed'] = False
+                results["issues"]["missing_columns"] = missing
+                results["passed"] = False
 
-        elif check_name == 'missing':
+        elif check_name == "missing":
             missing = self.check_missing_values(data)
             total_missing = sum(missing.values())
             if total_missing > 0:
-                results['issues']['missing_values'] = missing
+                results["issues"]["missing_values"] = missing
 
-        elif check_name == 'duplicates':
-            dups = self.check_duplicates(data, subset=['symbol'])
+        elif check_name == "duplicates":
+            dups = self.check_duplicates(data, subset=["symbol"])
             if dups > 0:
-                results['issues']['duplicates'] = dups
+                results["issues"]["duplicates"] = dups
 
-        elif check_name == 'price':
+        elif check_name == "price":
             count, issues = self.check_price_validity(data)
             if count > 0:
-                results['issues']['price_issues'] = issues
-                results['passed'] = False
+                results["issues"]["price_issues"] = issues
+                results["passed"] = False
 
-        elif check_name == 'volume':
+        elif check_name == "volume":
             invalid = self.check_volume_validity(data)
             if invalid > 0:
-                results['issues']['invalid_volume'] = invalid
-                results['passed'] = False
+                results["issues"]["invalid_volume"] = invalid
+                results["passed"] = False
 
     def validate(
         self,
@@ -178,11 +179,11 @@ class DataValidator:
         Args:
             checks: 检查项目 ['columns', 'missing', 'duplicates', 'price', 'volume', 'dates']
         """
-        checks = checks or ['columns', 'missing', 'duplicates', 'price', 'volume']
+        checks = checks or ["columns", "missing", "duplicates", "price", "volume"]
 
         results = {
-            'passed': True,
-            'issues': {},
+            "passed": True,
+            "issues": {},
         }
 
         # 执行所有检查
@@ -203,7 +204,7 @@ class DataCleaner:
     def remove_outliers(
         data: pd.DataFrame,
         columns: List[str],
-        method: str = 'iqr',
+        method: str = "iqr",
         threshold: float = 3.0,
     ) -> pd.DataFrame:
         """
@@ -220,7 +221,7 @@ class DataCleaner:
             if col not in df.columns:
                 continue
 
-            if method == 'iqr':
+            if method == "iqr":
                 Q1 = df[col].quantile(0.25)
                 Q3 = df[col].quantile(0.75)
                 IQR = Q3 - Q1
@@ -230,7 +231,7 @@ class DataCleaner:
 
                 df = df[(df[col] >= lower) & (df[col] <= upper)]
 
-            elif method == 'zscore':
+            elif method == "zscore":
                 mean = df[col].mean()
                 std = df[col].std()
 
@@ -243,7 +244,7 @@ class DataCleaner:
     @staticmethod
     def fill_missing(
         data: pd.DataFrame,
-        method: str = 'ffill',
+        method: str = "ffill",
         value: Optional[float] = None,
     ) -> pd.DataFrame:
         """
@@ -255,17 +256,17 @@ class DataCleaner:
         """
         df = data.copy()
 
-        if method == 'ffill':
+        if method == "ffill":
             df = df.ffill()
-        elif method == 'bfill':
+        elif method == "bfill":
             df = df.bfill()
-        elif method == 'mean':
+        elif method == "mean":
             df = df.fillna(df.mean())
-        elif method == 'median':
+        elif method == "median":
             df = df.fillna(df.median())
-        elif method == 'zero':
+        elif method == "zero":
             df = df.fillna(0)
-        elif method == 'value' and value is not None:
+        elif method == "value" and value is not None:
             df = df.fillna(value)
 
         return df
@@ -274,7 +275,7 @@ class DataCleaner:
     def remove_duplicates(
         data: pd.DataFrame,
         subset: Optional[List[str]] = None,
-        keep: str = 'last',
+        keep: str = "last",
     ) -> pd.DataFrame:
         """
         移除重复行
@@ -296,28 +297,28 @@ class DataCleaner:
         """
         df = data.copy()
 
-        if 'high' in df.columns and 'low' in df.columns:
+        if "high" in df.columns and "low" in df.columns:
             # 修正 high < low
-            mask = df['high'] < df['low']
-            df.loc[mask, ['high', 'low']] = df.loc[mask, ['low', 'high']].values
+            mask = df["high"] < df["low"]
+            df.loc[mask, ["high", "low"]] = df.loc[mask, ["low", "high"]].values
 
         # 修正 open/close 超出范围
-        for col in ['open', 'close']:
+        for col in ["open", "close"]:
             if col in df.columns:
                 # 超过 high
-                mask = df[col] > df['high']
-                df.loc[mask, col] = df.loc[mask, 'high']
+                mask = df[col] > df["high"]
+                df.loc[mask, col] = df.loc[mask, "high"]
 
                 # 低于 low
-                mask = df[col] < df['low']
-                df.loc[mask, col] = df.loc[mask, 'low']
+                mask = df[col] < df["low"]
+                df.loc[mask, col] = df.loc[mask, "low"]
 
         return df
 
     @staticmethod
     def normalize_volume(
         data: pd.DataFrame,
-        method: str = 'log',
+        method: str = "log",
     ) -> pd.DataFrame:
         """
         成交量标准化
@@ -327,18 +328,18 @@ class DataCleaner:
         """
         df = data.copy()
 
-        if 'volume' not in df.columns:
+        if "volume" not in df.columns:
             return df
 
-        if method == 'log':
-            df['volume'] = np.log1p(df['volume'])
-        elif method == 'rank':
-            df['volume'] = df['volume'].rank(pct=True)
-        elif method == 'zscore':
-            mean = df['volume'].mean()
-            std = df['volume'].std()
+        if method == "log":
+            df["volume"] = np.log1p(df["volume"])
+        elif method == "rank":
+            df["volume"] = df["volume"].rank(pct=True)
+        elif method == "zscore":
+            mean = df["volume"].mean()
+            std = df["volume"].std()
             if std > 0:
-                df['volume'] = (df['volume'] - mean) / std
+                df["volume"] = (df["volume"] - mean) / std
 
         return df
 
@@ -346,7 +347,7 @@ class DataCleaner:
         self,
         data: pd.DataFrame,
         remove_outliers_cols: Optional[List[str]] = None,
-        fill_missing_method: str = 'ffill',
+        fill_missing_method: str = "ffill",
         fix_prices: bool = True,
     ) -> pd.DataFrame:
         """
@@ -383,9 +384,9 @@ class DataQualityReport:
     def generate(self) -> str:
         """生成报告"""
         report = []
-        report.append("="*60)
+        report.append("=" * 60)
         report.append("数据质量报告")
-        report.append("="*60)
+        report.append("=" * 60)
 
         # 基本信息
         report.append(f"\n数据形状: {self.data.shape[0]} 行 × {self.data.shape[1]} 列")
@@ -398,9 +399,9 @@ class DataQualityReport:
 
         report.append(f"\n验证结果: {'✓ 通过' if validation['passed'] else '✗ 失败'}")
 
-        if validation['issues']:
+        if validation["issues"]:
             report.append("\n问题详情:")
-            for issue, detail in validation['issues'].items():
+            for issue, detail in validation["issues"].items():
                 report.append(f"  - {issue}: {detail}")
 
         # 缺失值统计
@@ -411,7 +412,7 @@ class DataQualityReport:
             report.append(f"\n缺失值总数: {total_missing}")
             for col, count in missing.items():
                 if count > 0:
-                    report.append(f"  - {col}: {count} ({count/len(self.data):.1%})")
+                    report.append(f"  - {col}: {count} ({count / len(self.data):.1%})")
         else:
             report.append("\n✓ 无缺失值")
 
@@ -431,6 +432,6 @@ class DataQualityReport:
         else:
             report.append("\n✓ 价格数据正常")
 
-        report.append("\n" + "="*60)
+        report.append("\n" + "=" * 60)
 
         return "\n".join(report)

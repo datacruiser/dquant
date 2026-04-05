@@ -4,12 +4,12 @@
 支持 WebSocket 推送、实时行情订阅等。
 """
 
-from typing import Optional, List, Dict, Callable
-from dataclasses import dataclass
-from abc import ABC, abstractmethod
 import asyncio
 import json
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Callable, Dict, List, Optional
 
 from dquant.constants import DEFAULT_STAMP_DUTY
 from dquant.logger import get_logger
@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 @dataclass
 class RealtimeQuote:
     """实时行情"""
+
     symbol: str
     price: float
     open: float
@@ -31,14 +32,14 @@ class RealtimeQuote:
 
     def to_dict(self) -> Dict:
         return {
-            'symbol': self.symbol,
-            'price': self.price,
-            'open': self.open,
-            'high': self.high,
-            'low': self.low,
-            'volume': self.volume,
-            'turnover': self.turnover,
-            'timestamp': self.timestamp.isoformat(),
+            "symbol": self.symbol,
+            "price": self.price,
+            "open": self.open,
+            "high": self.high,
+            "low": self.low,
+            "volume": self.volume,
+            "turnover": self.turnover,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
@@ -131,7 +132,9 @@ class MockRealtimeSource(RealtimeDataSource):
                 # 随机更新价格
                 if symbol in self.quotes:
                     old_quote = self.quotes[symbol]
-                    new_price = old_quote.price * (1 + random.random() * 0.002 - DEFAULT_STAMP_DUTY)
+                    new_price = old_quote.price * (
+                        1 + random.random() * 0.002 - DEFAULT_STAMP_DUTY
+                    )
 
                     quote = RealtimeQuote(
                         symbol=symbol,
@@ -180,12 +183,12 @@ class RealtimeManager:
         """获取数据源"""
         return self.sources.get(name)
 
-    async def subscribe(self, symbols: List[str], source: str = 'default'):
+    async def subscribe(self, symbols: List[str], source: str = "default"):
         """订阅"""
         if source in self.sources:
             await self.sources[source].subscribe(symbols)
 
-    async def unsubscribe(self, symbols: List[str], source: str = 'default'):
+    async def unsubscribe(self, symbols: List[str], source: str = "default"):
         """取消订阅"""
         if source in self.sources:
             await self.sources[source].unsubscribe(symbols)
@@ -222,10 +225,14 @@ class RealtimeServer:
 
         try:
             # 发送欢迎消息
-            await websocket.send(json.dumps({
-                'type': 'connected',
-                'message': 'Welcome to DQuant Realtime Server',
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "connected",
+                        "message": "Welcome to DQuant Realtime Server",
+                    }
+                )
+            )
 
             # 接收客户端消息
             async for message in websocket:
@@ -233,50 +240,68 @@ class RealtimeServer:
                     data = json.loads(message)
                     await self._handle_message(websocket, data)
                 except Exception as e:
-                    await websocket.send(json.dumps({
-                        'type': 'error',
-                        'message': str(e),
-                    }))
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "message": str(e),
+                            }
+                        )
+                    )
 
         finally:
             self.clients.discard(websocket)
 
     async def _handle_message(self, websocket, data: Dict):
         """处理客户端消息"""
-        msg_type = data.get('type')
+        msg_type = data.get("type")
 
-        if msg_type == 'subscribe':
+        if msg_type == "subscribe":
             # 订阅股票
-            symbols = data.get('symbols', [])
+            symbols = data.get("symbols", [])
             await self.manager.subscribe(symbols)
 
-            await websocket.send(json.dumps({
-                'type': 'subscribed',
-                'symbols': symbols,
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "subscribed",
+                        "symbols": symbols,
+                    }
+                )
+            )
 
-        elif msg_type == 'unsubscribe':
+        elif msg_type == "unsubscribe":
             # 取消订阅
-            symbols = data.get('symbols', [])
+            symbols = data.get("symbols", [])
             await self.manager.unsubscribe(symbols)
 
-            await websocket.send(json.dumps({
-                'type': 'unsubscribed',
-                'symbols': symbols,
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "unsubscribed",
+                        "symbols": symbols,
+                    }
+                )
+            )
 
         else:
-            await websocket.send(json.dumps({
-                'type': 'error',
-                'message': f'Unknown message type: {msg_type}',
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "error",
+                        "message": f"Unknown message type: {msg_type}",
+                    }
+                )
+            )
 
     def broadcast_quote(self, quote: RealtimeQuote):
         """广播行情"""
-        message = json.dumps({
-            'type': 'quote',
-            'data': quote.to_dict(),
-        })
+        message = json.dumps(
+            {
+                "type": "quote",
+                "data": quote.to_dict(),
+            }
+        )
 
         # 向所有客户端发送
         for client in self.clients:
@@ -329,18 +354,26 @@ class RealtimeClient:
         if not self.websocket:
             await self.connect()
 
-        await self.websocket.send(json.dumps({
-            'type': 'subscribe',
-            'symbols': symbols,
-        }))
+        await self.websocket.send(
+            json.dumps(
+                {
+                    "type": "subscribe",
+                    "symbols": symbols,
+                }
+            )
+        )
 
     async def unsubscribe(self, symbols: List[str]):
         """取消订阅"""
         if self.websocket:
-            await self.websocket.send(json.dumps({
-                'type': 'unsubscribe',
-                'symbols': symbols,
-            }))
+            await self.websocket.send(
+                json.dumps(
+                    {
+                        "type": "unsubscribe",
+                        "symbols": symbols,
+                    }
+                )
+            )
 
     def on_quote(self, callback: Callable[[RealtimeQuote], None]):
         """注册行情回调"""
@@ -355,17 +388,17 @@ class RealtimeClient:
             try:
                 data = json.loads(message)
 
-                if data.get('type') == 'quote':
-                    quote_data = data.get('data', {})
+                if data.get("type") == "quote":
+                    quote_data = data.get("data", {})
                     quote = RealtimeQuote(
-                        symbol=quote_data['symbol'],
-                        price=quote_data['price'],
-                        open=quote_data['open'],
-                        high=quote_data['high'],
-                        low=quote_data['low'],
-                        volume=quote_data['volume'],
-                        turnover=quote_data['turnover'],
-                        timestamp=datetime.fromisoformat(quote_data['timestamp']),
+                        symbol=quote_data["symbol"],
+                        price=quote_data["price"],
+                        open=quote_data["open"],
+                        high=quote_data["high"],
+                        low=quote_data["low"],
+                        volume=quote_data["volume"],
+                        turnover=quote_data["turnover"],
+                        timestamp=datetime.fromisoformat(quote_data["timestamp"]),
                     )
 
                     for callback in self.callbacks:
@@ -387,5 +420,5 @@ class RealtimeClient:
 def create_mock_realtime_manager() -> RealtimeManager:
     """创建模拟实时数据管理器"""
     manager = RealtimeManager()
-    manager.register_source('default', MockRealtimeSource())
+    manager.register_source("default", MockRealtimeSource())
     return manager

@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 @dataclass
 class TrackedOrder:
     """被追踪的订单"""
+
     order: Order
     result: OrderResult
     remaining_quantity: float
@@ -57,7 +58,7 @@ class OrderTracker:
 
     def add(self, order: Order, result: OrderResult) -> None:
         """将 PENDING/PARTIAL_FILLED 订单加入追踪"""
-        if result.status not in ('PENDING', 'PARTIAL_FILLED'):
+        if result.status not in ("PENDING", "PARTIAL_FILLED"):
             return
 
         remaining = order.quantity - result.filled_quantity
@@ -89,11 +90,9 @@ class OrderTracker:
             tracked.order = order
 
             # 如果已完成，移除追踪
-            if order.status in ('FILLED', 'CANCELLED', 'REJECTED'):
+            if order.status in ("FILLED", "CANCELLED", "REJECTED"):
                 self._pending.pop(order_id, None)
-                logger.info(
-                    f"[TRACKER] 订单完成: {order_id} status={order.status}"
-                )
+                logger.info(f"[TRACKER] 订单完成: {order_id} status={order.status}")
                 return tracked
 
             # 更新剩余数量 — Order 已有 filled_quantity 字段

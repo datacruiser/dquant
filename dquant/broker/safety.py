@@ -7,12 +7,13 @@
 import re
 from datetime import datetime, time
 from typing import Optional, Tuple
+
 from dquant.broker.base import Order
-from dquant.constants import MIN_SHARES, SH_TRANSFER_FEE
 from dquant.calendar import is_trading_day as _calendar_is_trading_day
+from dquant.constants import MIN_SHARES, SH_TRANSFER_FEE
 from dquant.logger import get_logger
 
-logger = get_logger('dquant.trading')
+logger = get_logger("dquant.trading")
 
 
 class OrderValidator:
@@ -20,9 +21,9 @@ class OrderValidator:
 
     # 股票代码格式
     SYMBOL_PATTERNS = {
-        'SH': r'^6\d{5}$',      # 上海主板: 600000-689999
-        'SZ': r'^(00|30)\d{4}$', # 深圳: 000001-002999, 300001-301999
-        'BJ': r'^(4|8)\d{5}$',   # 北交所: 430001-873999
+        "SH": r"^6\d{5}$",  # 上海主板: 600000-689999
+        "SZ": r"^(00|30)\d{4}$",  # 深圳: 000001-002999, 300001-301999
+        "BJ": r"^(4|8)\d{5}$",  # 北交所: 430001-873999
     }
 
     @staticmethod
@@ -40,7 +41,7 @@ class OrderValidator:
             return False, "股票代码不能为空"
 
         # 分离代码和市场
-        parts = symbol.split('.')
+        parts = symbol.split(".")
         if len(parts) != 2:
             return False, f"股票代码格式错误: {symbol} (应为: CODE.MARKET)"
 
@@ -59,7 +60,7 @@ class OrderValidator:
         return True, ""
 
     @staticmethod
-    def validate_quantity(quantity: int, symbol: str = '') -> Tuple[bool, str]:
+    def validate_quantity(quantity: int, symbol: str = "") -> Tuple[bool, str]:
         """
         验证交易数量
 
@@ -103,7 +104,7 @@ class OrderValidator:
             (是否有效, 错误信息)
         """
         # 市价单不需要价格
-        if order_type == 'MARKET':
+        if order_type == "MARKET":
             return True, ""
 
         # 限价单必须有价格
@@ -137,7 +138,7 @@ class OrderValidator:
             return False, "交易方向不能为空"
 
         side = side.upper()
-        if side not in ['BUY', 'SELL']:
+        if side not in ["BUY", "SELL"]:
             return False, f"交易方向错误: {side} (应为 BUY 或 SELL)"
 
         return True, ""
@@ -186,7 +187,7 @@ class FundChecker:
         available_cash: float,
         commission_rate: float = 0.0003,
         slippage: float = 0.0,
-        symbol: str = '',
+        symbol: str = "",
     ) -> Tuple[bool, str, float]:
         """
         检查买入资金是否充足
@@ -214,7 +215,7 @@ class FundChecker:
 
         # 过户费 (仅上海市场: 代码以 SH 结尾)
         transfer_fee = 0.0
-        if symbol.endswith('.SH'):
+        if symbol.endswith(".SH"):
             transfer_fee = amount * SH_TRANSFER_FEE
 
         # 总需要资金
@@ -224,11 +225,15 @@ class FundChecker:
         total_need_safe = total_need * 1.01
 
         if available_cash < total_need_safe:
-            return False, (
-                f"资金不足: 需要 {total_need_safe:.2f} 元 "
-                f"(含费用 {commission + transfer_fee:.2f} 元 + 1%安全边际), "
-                f"可用 {available_cash:.2f} 元"
-            ), total_need_safe
+            return (
+                False,
+                (
+                    f"资金不足: 需要 {total_need_safe:.2f} 元 "
+                    f"(含费用 {commission + transfer_fee:.2f} 元 + 1%安全边际), "
+                    f"可用 {available_cash:.2f} 元"
+                ),
+                total_need_safe,
+            )
 
         return True, "", total_need
 
@@ -253,13 +258,10 @@ class FundChecker:
             return False, f"没有持仓: {symbol}"
 
         pos = positions[symbol]
-        available = pos.get('available', pos.get('quantity', 0))
+        available = pos.get("available", pos.get("quantity", 0))
 
         if quantity > available:
-            return False, (
-                f"可用持仓不足: 需要 {quantity} 股, "
-                f"可用 {available} 股"
-            )
+            return False, (f"可用持仓不足: 需要 {quantity} 股, " f"可用 {available} 股")
 
         return True, ""
 
@@ -310,15 +312,26 @@ class TradingTimeChecker:
         current_time = dt.time()
 
         # 上午盘: 9:30 - 11:30
-        if TradingTimeChecker.MORNING_OPEN <= current_time <= TradingTimeChecker.MORNING_CLOSE:
+        if (
+            TradingTimeChecker.MORNING_OPEN
+            <= current_time
+            <= TradingTimeChecker.MORNING_CLOSE
+        ):
             return True, "上午交易时间 (9:30-11:30)"
 
         # 下午盘: 13:00 - 15:00
-        if TradingTimeChecker.AFTERNOON_OPEN <= current_time <= TradingTimeChecker.AFTERNOON_CLOSE:
+        if (
+            TradingTimeChecker.AFTERNOON_OPEN
+            <= current_time
+            <= TradingTimeChecker.AFTERNOON_CLOSE
+        ):
             return True, "下午交易时间 (13:00-15:00)"
 
         # 非交易时间
-        return False, f"非交易时间: {current_time.strftime('%H:%M')} (交易时间: 9:30-11:30, 13:00-15:00)"
+        return (
+            False,
+            f"非交易时间: {current_time.strftime('%H:%M')} (交易时间: 9:30-11:30, 13:00-15:00)",
+        )
 
     @staticmethod
     def check_can_trade(dt: Optional[datetime] = None) -> Tuple[bool, str]:
@@ -402,7 +415,7 @@ class TradingSafety:
             logger.info(f"✓ 交易时间检查通过: {msg}")
 
         # 3. 资金/持仓检查
-        if order.side.upper() == 'BUY':
+        if order.side.upper() == "BUY":
             if self.enable_fund_check:
                 check_price = order.price or estimated_price
                 if check_price is None:
@@ -417,7 +430,7 @@ class TradingSafety:
                     return False, msg
                 logger.info("✓ 资金检查通过")
 
-        elif order.side.upper() == 'SELL':
+        elif order.side.upper() == "SELL":
             if self.enable_position_check:
                 if positions is None:
                     return False, "卖出订单需提供 positions 用于持仓检查"
@@ -458,10 +471,10 @@ def log_trade(
         f"状态: {result.status}"
     )
 
-    if result.status == 'FILLED':
+    if result.status == "FILLED":
         log_msg += f", 成交价: {result.filled_price}, 成交量: {result.filled_quantity}"
         logger.info(log_msg)
-    elif result.status == 'REJECTED':
+    elif result.status == "REJECTED":
         logger.warning(log_msg)
     else:
         logger.info(log_msg)

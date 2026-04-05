@@ -8,105 +8,81 @@ DQuant AI Module
 from dquant.ai.base import BaseFactor
 
 # 内置因子库
-from dquant.ai.builtin_factors import (
-    # 动量类
-    MomentumFactor,
-    ReversalFactor,
+from dquant.ai.builtin_factors import (  # 动量类; 波动率类; 技术指标; 成交量; 价格形态; 均线; 基本面; 情绪; 注册表
+    FACTOR_REGISTRY,
     AccMomentumFactor,
-
-    # 波动率类
-    VolatilityFactor,
+    AmihudIlliquidityFactor,
     ATRFactor,
-    SkewnessFactor,
-    KurtosisFactor,
-    MaxDrawdownFactor,
-
-    # 技术指标
-    RSIFactor,
-    MACDFactor,
+    BiasFactor,
     BollingerPositionFactor,
-    TrendStrengthFactor,
-    KDJFactor,
     CCIFactor,
-    WilliamsRFactor,
-
-    # 成交量
-    VolumeRatioFactor,
-    TurnoverRateFactor,
-    OBVFactor,
-    VWAPFactor,
-
-    # 价格形态
-    PricePositionFactor,
     GapFactor,
     IntradayReturnFactor,
-    OvernightReturnFactor,
-
-    # 均线
-    MASlopeFactor,
+    KDJFactor,
+    KurtosisFactor,
+    MACDFactor,
     MACrossFactor,
-    BiasFactor,
-
-    # 基本面
-    PERatioFactor,
-    PBRatioFactor,
-    ROEFactor,
-    RevenueGrowthFactor,
-    ProfitGrowthFactor,
     MarketCapFactor,
-
-    # 情绪
+    MASlopeFactor,
+    MaxDrawdownFactor,
+    MomentumFactor,
     MoneyFlowFactor,
-    AmihudIlliquidityFactor,
-
-    # 注册表
-    FACTOR_REGISTRY,
+    OBVFactor,
+    OvernightReturnFactor,
+    PBRatioFactor,
+    PERatioFactor,
+    PricePositionFactor,
+    ProfitGrowthFactor,
+    RevenueGrowthFactor,
+    ReversalFactor,
+    ROEFactor,
+    RSIFactor,
+    SkewnessFactor,
+    TrendStrengthFactor,
+    TurnoverRateFactor,
+    VolatilityFactor,
+    VolumeRatioFactor,
+    VWAPFactor,
+    WilliamsRFactor,
     get_factor,
     list_factors,
 )
 
 # 因子组合
-from dquant.ai.factor_combiner import (
-    FactorCombiner,
-    CombinedFactor,
-)
+from dquant.ai.factor_combiner import CombinedFactor, FactorCombiner
 
 # ML 因子
-from dquant.ai.ml_factors import XGBoostFactor, LGBMFactor
+from dquant.ai.ml_factors import LGBMFactor, XGBoostFactor
 
 # Qlib 适配器
 from dquant.ai.qlib_adapter import (
-    QlibModelAdapter,
-    QlibFactorConverter,
     QlibDataHandler,
+    QlibFactorConverter,
+    QlibModelAdapter,
 )
 
 # RL Agent
 from dquant.ai.rl_agents import (
-    TradingEnvironment,
     BaseRLAgent,
     DQNAgent,
     PPOAgent,
     RLStrategy,
+    TradingEnvironment,
 )
-
 
 __all__ = [
     # 基础
     "BaseFactor",
-
     # 动量类因子
     "MomentumFactor",
     "ReversalFactor",
     "AccMomentumFactor",
-
     # 波动率类因子
     "VolatilityFactor",
     "ATRFactor",
     "SkewnessFactor",
     "KurtosisFactor",
     "MaxDrawdownFactor",
-
     # 技术指标因子
     "RSIFactor",
     "MACDFactor",
@@ -115,24 +91,20 @@ __all__ = [
     "KDJFactor",
     "CCIFactor",
     "WilliamsRFactor",
-
     # 成交量因子
     "VolumeRatioFactor",
     "TurnoverRateFactor",
     "OBVFactor",
     "VWAPFactor",
-
     # 价格形态因子
     "PricePositionFactor",
     "GapFactor",
     "IntradayReturnFactor",
     "OvernightReturnFactor",
-
     # 均线因子
     "MASlopeFactor",
     "MACrossFactor",
     "BiasFactor",
-
     # 基本面因子
     "PERatioFactor",
     "PBRatioFactor",
@@ -140,29 +112,23 @@ __all__ = [
     "RevenueGrowthFactor",
     "ProfitGrowthFactor",
     "MarketCapFactor",
-
     # 情绪因子
     "MoneyFlowFactor",
     "AmihudIlliquidityFactor",
-
     # 注册表
     "FACTOR_REGISTRY",
     "get_factor",
     "list_factors",
-
     # 因子组合
     "FactorCombiner",
     "CombinedFactor",
-
     # ML 因子
     "XGBoostFactor",
     "LGBMFactor",
-
     # Qlib
     "QlibModelAdapter",
     "QlibFactorConverter",
     "QlibDataHandler",
-
     # RL
     "TradingEnvironment",
     "BaseRLAgent",

@@ -4,12 +4,13 @@
 提供 numba JIT 加速、并行计算等功能。
 """
 
-from typing import Optional, List, Callable, Any
-import pandas as pd
-import numpy as np
-from functools import wraps
-import time
 import threading
+import time
+from functools import wraps
+from typing import Any, Callable, List, Optional
+
+import numpy as np
+import pandas as pd
 
 from dquant.logger import get_logger
 
@@ -18,19 +19,24 @@ logger = get_logger(__name__)
 # 尝试导入 numba
 try:
     from numba import jit, prange
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
+
     # 如果 numba 不可用，提供空装饰器
     def jit(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
+
     prange = range
 
 # 尝试导入多进程
 try:
     from multiprocessing import Pool, cpu_count
+
     MULTIPROCESSING_AVAILABLE = True
 except ImportError:
     MULTIPROCESSING_AVAILABLE = False
@@ -38,6 +44,7 @@ except ImportError:
 
 def timing(func):
     """计时装饰器"""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         start = time.time()
@@ -45,6 +52,7 @@ def timing(func):
         elapsed = time.time() - start
         logger.debug(f"[{func.__name__}] 耗时: {elapsed:.4f}s")
         return result
+
     return wrapper
 
 
@@ -61,10 +69,10 @@ class NumbaAccelerator:
         """并行滚动均值"""
         n = len(arr)
         result = np.empty(n)
-        result[:window-1] = np.nan
+        result[: window - 1] = np.nan
 
-        for i in prange(window-1, n):
-            result[i] = np.mean(arr[i-window+1:i+1])
+        for i in prange(window - 1, n):
+            result[i] = np.mean(arr[i - window + 1 : i + 1])
 
         return result
 
@@ -74,10 +82,10 @@ class NumbaAccelerator:
         """并行滚动标准差"""
         n = len(arr)
         result = np.empty(n)
-        result[:window-1] = np.nan
+        result[: window - 1] = np.nan
 
-        for i in prange(window-1, n):
-            result[i] = np.std(arr[i-window+1:i+1])
+        for i in prange(window - 1, n):
+            result[i] = np.std(arr[i - window + 1 : i + 1])
 
         return result
 
@@ -89,7 +97,7 @@ class NumbaAccelerator:
         result[0] = arr[0]
 
         for i in range(1, len(arr)):
-            result[i] = result[i-1] + arr[i]
+            result[i] = result[i - 1] + arr[i]
 
         return result
 
@@ -102,8 +110,8 @@ class NumbaAccelerator:
         result[0] = np.nan
 
         for i in prange(1, n):
-            if arr[i-1] != 0:
-                result[i] = (arr[i] - arr[i-1]) / arr[i-1]
+            if arr[i - 1] != 0:
+                result[i] = (arr[i] - arr[i - 1]) / arr[i - 1]
             else:
                 result[i] = np.nan
 
@@ -117,7 +125,7 @@ class NumbaAccelerator:
         corr = np.eye(n_cols)
 
         for i in prange(n_cols):
-            for j in range(i+1, n_cols):
+            for j in range(i + 1, n_cols):
                 c = np.corrcoef(data[:, i], data[:, j])[0, 1]
                 corr[i, j] = c
                 corr[j, i] = c
@@ -212,8 +220,7 @@ class ParallelProcessor:
             # 按行数分割
             chunk_size = max(1, len(df) // self.n_workers)
             chunks = [
-                df.iloc[i:i+chunk_size]
-                for i in range(0, len(df), chunk_size)
+                df.iloc[i : i + chunk_size] for i in range(0, len(df), chunk_size)
             ]
             results = self.map(func, chunks)
             return pd.concat(results)
@@ -251,7 +258,7 @@ class VectorizedOperations:
         result = np.array([func(w) for w in windows])
 
         # 填充前面的 NaN
-        result = np.concatenate([np.full(window-1, np.nan), result])
+        result = np.concatenate([np.full(window - 1, np.nan), result])
 
         return result
 
@@ -265,10 +272,10 @@ class VectorizedOperations:
         扩展应用函数（向量化）
         """
         result = np.empty(len(arr))
-        result[:min_periods-1] = np.nan
+        result[: min_periods - 1] = np.nan
 
-        for i in range(min_periods-1, len(arr)):
-            result[i] = func(arr[:i+1])
+        for i in range(min_periods - 1, len(arr)):
+            result[i] = func(arr[: i + 1])
 
         return result
 
@@ -335,6 +342,7 @@ class CacheManager:
 
     def memoize(self, func: Callable) -> Callable:
         """记忆化装饰器"""
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             # 生成缓存键（避免对不可哈希参数使用 repr）
@@ -384,31 +392,32 @@ class PerformanceMonitor:
         """记录性能数据"""
         if name not in self.stats:
             self.stats[name] = {
-                'calls': 0,
-                'total_time': 0.0,
-                'avg_time': 0.0,
-                'max_time': 0.0,
-                'min_time': float('inf'),
+                "calls": 0,
+                "total_time": 0.0,
+                "avg_time": 0.0,
+                "max_time": 0.0,
+                "min_time": float("inf"),
             }
 
-        self.stats[name]['calls'] += 1
-        self.stats[name]['total_time'] += elapsed
-        self.stats[name]['avg_time'] = (
-            self.stats[name]['total_time'] / self.stats[name]['calls']
+        self.stats[name]["calls"] += 1
+        self.stats[name]["total_time"] += elapsed
+        self.stats[name]["avg_time"] = (
+            self.stats[name]["total_time"] / self.stats[name]["calls"]
         )
-        self.stats[name]['max_time'] = max(self.stats[name]['max_time'], elapsed)
-        self.stats[name]['min_time'] = min(self.stats[name]['min_time'], elapsed)
+        self.stats[name]["max_time"] = max(self.stats[name]["max_time"], elapsed)
+        self.stats[name]["min_time"] = min(self.stats[name]["min_time"], elapsed)
 
         if memory is not None:
-            if 'max_memory' not in self.stats[name]:
-                self.stats[name]['max_memory'] = memory
+            if "max_memory" not in self.stats[name]:
+                self.stats[name]["max_memory"] = memory
             else:
-                self.stats[name]['max_memory'] = max(
-                    self.stats[name]['max_memory'], memory
+                self.stats[name]["max_memory"] = max(
+                    self.stats[name]["max_memory"], memory
                 )
 
     def monitor(self, func: Callable) -> Callable:
         """监控装饰器"""
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             start = time.time()
@@ -416,6 +425,7 @@ class PerformanceMonitor:
 
             try:
                 import tracemalloc
+
                 tracemalloc.start()
                 tracemalloc_started = True
             except Exception as e:
@@ -448,9 +458,9 @@ class PerformanceMonitor:
     def get_report(self) -> str:
         """生成性能报告"""
         report = []
-        report.append("="*60)
+        report.append("=" * 60)
         report.append("性能报告")
-        report.append("="*60)
+        report.append("=" * 60)
 
         for name, stats in self.stats.items():
             report.append(f"\n{name}:")
@@ -460,10 +470,10 @@ class PerformanceMonitor:
             report.append(f"  最小时间: {stats['min_time']:.4f}s")
             report.append(f"  总时间:   {stats['total_time']:.4f}s")
 
-            if 'max_memory' in stats:
+            if "max_memory" in stats:
                 report.append(f"  峰值内存: {stats['max_memory']:.2f} MB")
 
-        report.append("\n" + "="*60)
+        report.append("\n" + "=" * 60)
 
         return "\n".join(report)
 

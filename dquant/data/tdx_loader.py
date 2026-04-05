@@ -4,13 +4,13 @@
 直接读取通达信本地数据文件，无需网络请求。
 """
 
-from typing import Optional, List
-from pathlib import Path
-import pandas as pd
 import struct
+from pathlib import Path
+from typing import List, Optional
+
+import pandas as pd
 
 from dquant.data.base import DataSource
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 
 class TDXLoader(DataSource):
@@ -34,19 +34,19 @@ class TDXLoader(DataSource):
     # vipdoc/sh/minline/ - 上海分钟线
 
     MARKET_MAP = {
-        'sh': 'sh',
-        'sz': 'sz',
-        'bj': 'bj',
+        "sh": "sh",
+        "sz": "sz",
+        "bj": "bj",
     }
 
     def __init__(
         self,
         tdx_path: str,
-        market: str = 'sz',
+        market: str = "sz",
         symbols: Optional[List[str]] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
-        freq: str = 'day',  # day, lc5(5分钟), lc1(1分钟)
+        freq: str = "day",  # day, lc5(5分钟), lc1(1分钟)
         include_factors: bool = True,
     ):
         super().__init__(symbols=symbols, start=start, end=end)
@@ -58,9 +58,9 @@ class TDXLoader(DataSource):
     def _get_data_dir_and_ext(self):
         """获取数据目录和文件扩展名"""
         freq_map = {
-            'day': ('lday', '.day'),
-            'lc5': ('minline', '.lc5'),
-            'lc1': ('minline', '.lc1'),
+            "day": ("lday", ".day"),
+            "lc5": ("minline", ".lc5"),
+            "lc1": ("minline", ".lc1"),
         }
 
         if self.freq not in freq_map:
@@ -72,13 +72,13 @@ class TDXLoader(DataSource):
     def _get_symbol_list(self, data_dir, file_ext):
         """获取股票列表"""
         if self.symbols is None:
-            files = list(data_dir.glob(f'*{file_ext}'))
+            files = list(data_dir.glob(f"*{file_ext}"))
             return [f.stem for f in files]
         return self.symbols
 
     def _load_single_symbol(self, data_dir, symbol, file_ext):
         """加载单个股票数据"""
-        file_path = data_dir / f'{symbol}{file_ext}'
+        file_path = data_dir / f"{symbol}{file_ext}"
         if file_path.exists():
             return self._read_tdx_file(file_path, symbol)
         return None
@@ -130,7 +130,7 @@ class TDXLoader(DataSource):
     def _read_tdx_file(self, file_path: Path, symbol: str) -> Optional[pd.DataFrame]:
         """读取通达信数据文件"""
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 data = f.read()
 
             # 通达信日线文件格式: 每条记录32字节
@@ -142,11 +142,11 @@ class TDXLoader(DataSource):
             records = []
             for i in range(num_records):
                 offset = i * record_size
-                record = data[offset:offset + record_size]
+                record = data[offset : offset + record_size]
 
                 # 解析 (通达信价格需要除以100)
-                date_int, open_p, high_p, low_p, close_p, amount, volume, _ = struct.unpack(
-                    'IIIIIIII', record
+                date_int, open_p, high_p, low_p, close_p, amount, volume, _ = (
+                    struct.unpack("IIIIIIII", record)
                 )
 
                 # 日期转换
@@ -159,43 +159,45 @@ class TDXLoader(DataSource):
                 except Exception:
                     continue
 
-                records.append({
-                    'date': date,
-                    'open': open_p / 100.0,
-                    'high': high_p / 100.0,
-                    'low': low_p / 100.0,
-                    'close': close_p / 100.0,
-                    'amount': amount / 10000.0,  # 万元
-                    'volume': volume,
-                })
+                records.append(
+                    {
+                        "date": date,
+                        "open": open_p / 100.0,
+                        "high": high_p / 100.0,
+                        "low": low_p / 100.0,
+                        "close": close_p / 100.0,
+                        "amount": amount / 10000.0,  # 万元
+                        "volume": volume,
+                    }
+                )
 
             df = pd.DataFrame(records)
-            df['symbol'] = symbol + ('.SH' if self.market == 'sh' else '.SZ')
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["symbol"] = symbol + (".SH" if self.market == "sh" else ".SZ")
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
             return df
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
-            group['momentum_5'] = group['close'].pct_change(5)
-            group['momentum_10'] = group['close'].pct_change(10)
-            group['momentum_20'] = group['close'].pct_change(20)
+            group["momentum_5"] = group["close"].pct_change(5)
+            group["momentum_10"] = group["close"].pct_change(10)
+            group["momentum_20"] = group["close"].pct_change(20)
 
-            returns = group['close'].pct_change()
-            group['volatility_20'] = returns.rolling(20).std()
+            returns = group["close"].pct_change()
+            group["volatility_20"] = returns.rolling(20).std()
 
-            group['ma_5'] = group['close'].rolling(5).mean()
-            group['ma_10'] = group['close'].rolling(10).mean()
-            group['ma_20'] = group['close'].rolling(20).mean()
+            group["ma_5"] = group["close"].rolling(5).mean()
+            group["ma_10"] = group["close"].rolling(10).mean()
+            group["ma_20"] = group["close"].rolling(20).mean()
 
             results.append(group)
 
@@ -212,7 +214,7 @@ class TDXBlockLoader:
 
     def get_blocks(self) -> dict:
         """获取所有板块及其成分股"""
-        block_file = self.tdx_path / 'T0002' / 'hq_cache' / 'block.dat'
+        block_file = self.tdx_path / "T0002" / "hq_cache" / "block.dat"
 
         if not block_file.exists():
             return {}
@@ -221,16 +223,16 @@ class TDXBlockLoader:
         blocks = {}
 
         # 备用方案：读取板块目录
-        block_dir = self.tdx_path / 'T0002' / 'block'
+        block_dir = self.tdx_path / "T0002" / "block"
         if block_dir.exists():
-            for blk_file in block_dir.glob('*.blk'):
-                with open(blk_file, 'r', encoding='gbk') as f:
+            for blk_file in block_dir.glob("*.blk"):
+                with open(blk_file, "r", encoding="gbk") as f:
                     content = f.read()
                     # 解析成分股
                     stocks = []
-                    for line in content.split('\n'):
+                    for line in content.split("\n"):
                         line = line.strip()
-                        if line and not line.startswith('['):
+                        if line and not line.startswith("["):
                             stocks.append(line)
 
                     blocks[blk_file.stem] = stocks

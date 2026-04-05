@@ -4,7 +4,8 @@
 基于资金流向的交易策略
 """
 
-from typing import List, Optional
+from typing import List
+
 import pandas as pd
 
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
@@ -56,7 +57,7 @@ class MoneyFlowStrategy(BaseStrategy):
         signals = []
 
         # 检查必要列
-        required_cols = ['medium_net_inflow']
+        required_cols = ["medium_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
@@ -69,36 +70,35 @@ class MoneyFlowStrategy(BaseStrategy):
             # 1. 中单净流入 >= 阈值
             if self.min_medium_flow > 0:
                 candidates = candidates[
-                    candidates['medium_net_inflow'] >= self.min_medium_flow
+                    candidates["medium_net_inflow"] >= self.min_medium_flow
                 ]
 
             # 2. 主力也流入
-            if self.require_main_flow and 'main_net_inflow' in candidates.columns:
-                candidates = candidates[
-                    candidates['main_net_inflow'] > 0
-                ]
+            if self.require_main_flow and "main_net_inflow" in candidates.columns:
+                candidates = candidates[candidates["main_net_inflow"] > 0]
 
             # 3. 避免散户大量流入
-            if self.avoid_retail_inflow and 'small_net_inflow' in candidates.columns:
+            if self.avoid_retail_inflow and "small_net_inflow" in candidates.columns:
                 candidates = candidates[
-                    candidates['small_net_inflow'] < candidates['small_net_inflow'].quantile(0.8)
+                    candidates["small_net_inflow"]
+                    < candidates["small_net_inflow"].quantile(0.8)
                 ]
 
             # 按中单净流入排序
             if len(candidates) > 0:
-                top_stocks = candidates.nlargest(self.top_k, 'medium_net_inflow')
+                top_stocks = candidates.nlargest(self.top_k, "medium_net_inflow")
 
                 for _, row in top_stocks.iterrows():
                     signal = Signal(
-                        symbol=row['symbol'],
+                        symbol=row["symbol"],
                         signal_type=SignalType.BUY,
                         strength=1.0 / self.top_k,  # 等权
                         timestamp=date,
                         metadata={
-                            'medium_flow': row['medium_net_inflow'],
-                            'main_flow': row.get('main_net_inflow', 0),
-                            'small_flow': row.get('small_net_inflow', 0),
-                        }
+                            "medium_flow": row["medium_net_inflow"],
+                            "main_flow": row.get("main_net_inflow", 0),
+                            "small_flow": row.get("small_net_inflow", 0),
+                        },
                     )
                     signals.append(signal)
 
@@ -145,7 +145,7 @@ class SmartFlowStrategy(BaseStrategy):
         signals = []
 
         # 检查必要列
-        required_cols = ['main_net_inflow', 'medium_net_inflow', 'small_net_inflow']
+        required_cols = ["main_net_inflow", "medium_net_inflow", "small_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
@@ -154,9 +154,9 @@ class SmartFlowStrategy(BaseStrategy):
         for date, group in data.groupby(data.index):
             # 综合得分
             score = (
-                self.main_weight * group['main_net_inflow']
-                + self.medium_weight * group['medium_net_inflow']
-                - self.retail_weight * group['small_net_inflow']  # 散户反向
+                self.main_weight * group["main_net_inflow"]
+                + self.medium_weight * group["medium_net_inflow"]
+                - self.retail_weight * group["small_net_inflow"]  # 散户反向
             )
 
             # 使用 reset_index 安全选取 TopK（避免重复日期索引导致 loc 返回多行）
@@ -167,13 +167,13 @@ class SmartFlowStrategy(BaseStrategy):
 
             for pos_idx, row in top_stocks.iterrows():
                 signal = Signal(
-                    symbol=row['symbol'],
+                    symbol=row["symbol"],
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,
                     timestamp=date,
                     metadata={
-                        'composite_score': score_reset.iloc[pos_idx],
-                    }
+                        "composite_score": score_reset.iloc[pos_idx],
+                    },
                 )
                 signals.append(signal)
 
@@ -212,65 +212,66 @@ class FlowDivergenceStrategy(BaseStrategy):
         signals = []
 
         # 检查必要列
-        required_cols = ['close', 'main_net_inflow']
+        required_cols = ["close", "main_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
 
         # 按股票分组计算价格变化（跨日期，避免按日 groupby 后 shift 跨股票污染）
         data_with_change = data.copy()
-        data_with_change['price_change'] = data.groupby('symbol')['close'].transform(
+        data_with_change["price_change"] = data.groupby("symbol")["close"].transform(
             lambda x: x / x.shift(self.window) - 1
         )
 
         # 按日期分组
         for date, group in data_with_change.groupby(data_with_change.index):
             # 底背离: 价格下跌但主力流入 → 买入
-            bottom_divergence = (
-                (group['price_change'] < -0.05) &  # 价格下跌 > 5%
-                (group['main_net_inflow'] > 0)  # 主力流入
-            )
+            bottom_divergence = (group["price_change"] < -0.05) & (  # 价格下跌 > 5%
+                group["main_net_inflow"] > 0
+            )  # 主力流入
 
             candidates = group[bottom_divergence]
             if len(candidates) > 0:
                 top_stocks = candidates.nlargest(
-                    min(self.top_k, len(candidates)),
-                    'main_net_inflow'
+                    min(self.top_k, len(candidates)), "main_net_inflow"
                 )
                 for _, row in top_stocks.iterrows():
-                    signals.append(Signal(
-                        symbol=row['symbol'],
-                        signal_type=SignalType.BUY,
-                        strength=1.0 / self.top_k,
-                        timestamp=date,
-                        metadata={
-                            'divergence_type': 'bottom',
-                            'price_change': row['price_change'],
-                        }
-                    ))
+                    signals.append(
+                        Signal(
+                            symbol=row["symbol"],
+                            signal_type=SignalType.BUY,
+                            strength=1.0 / self.top_k,
+                            timestamp=date,
+                            metadata={
+                                "divergence_type": "bottom",
+                                "price_change": row["price_change"],
+                            },
+                        )
+                    )
 
             # 顶背离: 价格上涨但主力流出 → 卖出
-            top_divergence = (
-                (group['price_change'] > 0.05) &  # 价格上涨 > 5%
-                (group['main_net_inflow'] < 0)  # 主力流出
-            )
+            top_divergence = (group["price_change"] > 0.05) & (  # 价格上涨 > 5%
+                group["main_net_inflow"] < 0
+            )  # 主力流出
 
             sell_candidates = group[top_divergence]
             if len(sell_candidates) > 0:
                 sell_stocks = sell_candidates.nsmallest(
                     min(self.top_k, len(sell_candidates)),
-                    'main_net_inflow'  # 流出最多优先
+                    "main_net_inflow",  # 流出最多优先
                 )
                 for _, row in sell_stocks.iterrows():
-                    signals.append(Signal(
-                        symbol=row['symbol'],
-                        signal_type=SignalType.SELL,
-                        strength=1.0 / self.top_k,
-                        timestamp=date,
-                        metadata={
-                            'divergence_type': 'top',
-                            'price_change': row['price_change'],
-                        }
-                    ))
+                    signals.append(
+                        Signal(
+                            symbol=row["symbol"],
+                            signal_type=SignalType.SELL,
+                            strength=1.0 / self.top_k,
+                            timestamp=date,
+                            metadata={
+                                "divergence_type": "top",
+                                "price_change": row["price_change"],
+                            },
+                        )
+                    )
 
         return signals

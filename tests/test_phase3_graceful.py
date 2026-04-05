@@ -2,9 +2,10 @@
 Phase 3 Step 3: 优雅关机 + _poll_pending_orders 测试
 """
 
-import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from dquant.broker.base import Order, OrderResult
 from dquant.broker.order_tracker import OrderTracker, TrackedOrder
@@ -19,17 +20,27 @@ class TestOrderTrackerCancelAll:
         broker.cancel_order.return_value = True
 
         # 添加两个 pending 订单
-        order1 = Order(symbol='A', side='BUY', quantity=100, order_id='id1')
+        order1 = Order(symbol="A", side="BUY", quantity=100, order_id="id1")
         result1 = OrderResult(
-            order_id='id1', symbol='A', side='BUY',
-            filled_quantity=0, filled_price=0, commission=0,
-            timestamp=datetime.now(), status='PENDING',
+            order_id="id1",
+            symbol="A",
+            side="BUY",
+            filled_quantity=0,
+            filled_price=0,
+            commission=0,
+            timestamp=datetime.now(),
+            status="PENDING",
         )
-        order2 = Order(symbol='B', side='BUY', quantity=200, order_id='id2')
+        order2 = Order(symbol="B", side="BUY", quantity=200, order_id="id2")
         result2 = OrderResult(
-            order_id='id2', symbol='B', side='BUY',
-            filled_quantity=0, filled_price=0, commission=0,
-            timestamp=datetime.now(), status='PENDING',
+            order_id="id2",
+            symbol="B",
+            side="BUY",
+            filled_quantity=0,
+            filled_price=0,
+            commission=0,
+            timestamp=datetime.now(),
+            status="PENDING",
         )
 
         tracker.add(order1, result1)
@@ -39,8 +50,8 @@ class TestOrderTrackerCancelAll:
         cancelled = tracker.cancel_all(broker)
 
         assert len(cancelled) == 2
-        assert 'id1' in cancelled
-        assert 'id2' in cancelled
+        assert "id1" in cancelled
+        assert "id2" in cancelled
         assert not tracker.has_pending()
         assert broker.cancel_order.call_count == 2
 
@@ -50,11 +61,16 @@ class TestOrderTrackerCancelAll:
         broker = MagicMock()
         broker.cancel_order.return_value = False
 
-        order = Order(symbol='A', side='BUY', quantity=100, order_id='id1')
+        order = Order(symbol="A", side="BUY", quantity=100, order_id="id1")
         result = OrderResult(
-            order_id='id1', symbol='A', side='BUY',
-            filled_quantity=0, filled_price=0, commission=0,
-            timestamp=datetime.now(), status='PENDING',
+            order_id="id1",
+            symbol="A",
+            side="BUY",
+            filled_quantity=0,
+            filled_price=0,
+            commission=0,
+            timestamp=datetime.now(),
+            status="PENDING",
         )
         tracker.add(order, result)
 
@@ -68,11 +84,16 @@ class TestOrderTrackerCancelAll:
         broker = MagicMock()
         broker.cancel_order.side_effect = ConnectionError("连接断开")
 
-        order = Order(symbol='A', side='BUY', quantity=100, order_id='id1')
+        order = Order(symbol="A", side="BUY", quantity=100, order_id="id1")
         result = OrderResult(
-            order_id='id1', symbol='A', side='BUY',
-            filled_quantity=0, filled_price=0, commission=0,
-            timestamp=datetime.now(), status='PENDING',
+            order_id="id1",
+            symbol="A",
+            side="BUY",
+            filled_quantity=0,
+            filled_price=0,
+            commission=0,
+            timestamp=datetime.now(),
+            status="PENDING",
         )
         tracker.add(order, result)
 
@@ -93,21 +114,25 @@ class TestPollPendingOrders:
 
     def test_poll_pending_orders_timeout(self):
         """_poll_pending_orders 处理超时订单"""
-        from dquant.core import Engine
         from dquant.broker.simulator import Simulator
+        from dquant.core import Engine
 
         # 创建 tracker，设一个已经超时的订单
         tracker = OrderTracker(timeout_seconds=0)  # 立即超时
         broker = Simulator()
         journal = MagicMock()
 
-        order = Order(symbol='A', side='BUY', quantity=100, order_id='test_id')
-        order.status = 'PENDING'
+        order = Order(symbol="A", side="BUY", quantity=100, order_id="test_id")
+        order.status = "PENDING"
         result = OrderResult(
-            order_id='test_id', symbol='A', side='BUY',
-            filled_quantity=0, filled_price=0, commission=0,
+            order_id="test_id",
+            symbol="A",
+            side="BUY",
+            filled_quantity=0,
+            filled_price=0,
+            commission=0,
             timestamp=datetime.now() - timedelta(seconds=10),
-            status='PENDING',
+            status="PENDING",
         )
         tracker.add(order, result)
 
@@ -123,8 +148,8 @@ class TestPollPendingOrders:
 
     def test_poll_pending_orders_no_pending(self):
         """无 pending 订单时不报错"""
-        from dquant.core import Engine
         from dquant.broker.simulator import Simulator
+        from dquant.core import Engine
 
         tracker = OrderTracker(timeout_seconds=30)
         broker = Simulator()
@@ -138,5 +163,5 @@ class TestPollPendingOrders:
         engine._poll_pending_orders(tracker, journal, "test_strategy")
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

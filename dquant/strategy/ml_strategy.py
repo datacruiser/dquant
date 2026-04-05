@@ -3,10 +3,11 @@ ML 因子策略
 """
 
 from typing import List
+
 import pandas as pd
 
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
 from dquant.ai.base import BaseFactor
+from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
 
 class MLFactorStrategy(BaseStrategy):
@@ -58,15 +59,15 @@ class MLFactorStrategy(BaseStrategy):
             self._last_rebalance = date
 
             # 排序选取 TopK
-            top_stocks = group.nlargest(self.top_k, 'score')
+            top_stocks = group.nlargest(self.top_k, "score")
 
             for _, row in top_stocks.iterrows():
                 signal = Signal(
-                    symbol=row['symbol'],
+                    symbol=row["symbol"],
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,  # 等权
                     timestamp=date,
-                    metadata={'score': row['score']}
+                    metadata={"score": row["score"]},
                 )
                 signals.append(signal)
 
@@ -100,7 +101,7 @@ class TopKStrategy(BaseStrategy):
 
     def __init__(
         self,
-        factor_name: str = 'momentum',  # 因子列名
+        factor_name: str = "momentum",  # 因子列名
         top_k: int = 10,
         ascending: bool = False,  # False=选大的
         name: str = "TopKStrategy",
@@ -125,7 +126,7 @@ class TopKStrategy(BaseStrategy):
 
             for _, row in top_stocks.iterrows():
                 signal = Signal(
-                    symbol=row['symbol'],
+                    symbol=row["symbol"],
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,
                     timestamp=date,

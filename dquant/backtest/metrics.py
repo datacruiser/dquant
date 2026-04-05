@@ -3,9 +3,9 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 from dquant.constants import TRADING_DAYS_PER_YEAR
 
@@ -15,6 +15,7 @@ class Metrics:
     """
     回测绩效指标
     """
+
     total_return: float = 0.0  # 总收益率
     annual_return: float = 0.0  # 年化收益率
     sharpe: float = 0.0  # 夏普比率
@@ -45,7 +46,11 @@ class Metrics:
 
         # 年化收益率
         trading_days = len(returns)
-        annual_return = (1 + total_return) ** (TRADING_DAYS_PER_YEAR / trading_days) - 1 if trading_days > 0 else 0
+        annual_return = (
+            (1 + total_return) ** (TRADING_DAYS_PER_YEAR / trading_days) - 1
+            if trading_days > 0
+            else 0
+        )
 
         # 年化波动率
         volatility = returns.std() * np.sqrt(TRADING_DAYS_PER_YEAR)
@@ -54,7 +59,11 @@ class Metrics:
         rf_daily = rf / TRADING_DAYS_PER_YEAR
         excess_returns = returns - rf_daily
         excess_std = excess_returns.std()
-        sharpe = excess_returns.mean() / excess_std * np.sqrt(TRADING_DAYS_PER_YEAR) if excess_std > 0 else 0
+        sharpe = (
+            excess_returns.mean() / excess_std * np.sqrt(TRADING_DAYS_PER_YEAR)
+            if excess_std > 0
+            else 0
+        )
 
         # 最大回撤
         cummax = nav_series.cummax()
@@ -87,10 +96,10 @@ class Metrics:
 
     def to_dict(self) -> dict:
         return {
-            'total_return': self.total_return,
-            'annual_return': self.annual_return,
-            'sharpe': self.sharpe,
-            'max_drawdown': self.max_drawdown,
-            'volatility': self.volatility,
-            'calmar': self.calmar,
+            "total_return": self.total_return,
+            "annual_return": self.annual_return,
+            "sharpe": self.sharpe,
+            "max_drawdown": self.max_drawdown,
+            "volatility": self.volatility,
+            "calmar": self.calmar,
         }

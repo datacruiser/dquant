@@ -1,31 +1,34 @@
 """
 简化回测测试
 """
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def create_test_data(days=100):
     """创建测试数据"""
-    dates = pd.date_range('2023-01-01', periods=days, freq='D')
-    symbols = ['000001.SZ', '600000.SH']
+    dates = pd.date_range("2023-01-01", periods=days, freq="D")
+    symbols = ["000001.SZ", "600000.SH"]
     data_list = []
-    
+
     for symbol in symbols:
         for i, date in enumerate(dates):
             base_price = 10 + i * 0.05
-            data_list.append({
-                'date': date,
-                'symbol': symbol,
-                'open': base_price,
-                'high': base_price * 1.02,
-                'low': base_price * 0.98,
-                'close': base_price * 1.01,
-                'volume': 1000000,
-            })
-    
+            data_list.append(
+                {
+                    "date": date,
+                    "symbol": symbol,
+                    "open": base_price,
+                    "high": base_price * 1.02,
+                    "low": base_price * 0.98,
+                    "close": base_price * 1.01,
+                    "volume": 1000000,
+                }
+            )
+
     data = pd.DataFrame(data_list)
-    data = data.set_index('date')
+    data = data.set_index("date")
     return data
 
 
@@ -33,25 +36,27 @@ def test_simple_backtest():
     """简单回测测试"""
     print("【回测测试】")
     print("-" * 60)
-    
+
     from dquant import BacktestEngine
     from dquant.strategy.base import BaseStrategy, Signal, SignalType
-    
+
     # 创建策略
     class BuyHoldStrategy(BaseStrategy):
         def generate_signals(self, data):
             signals = []
-            for symbol in data['symbol'].unique():
-                signals.append(Signal(
-                    symbol=symbol,
-                    signal_type=SignalType.BUY,
-                    strength=1.0,
-                ))
+            for symbol in data["symbol"].unique():
+                signals.append(
+                    Signal(
+                        symbol=symbol,
+                        signal_type=SignalType.BUY,
+                        strength=1.0,
+                    )
+                )
             return signals
-    
+
     data = create_test_data()
     strategy = BuyHoldStrategy()
-    
+
     try:
         engine = BacktestEngine(data, strategy, initial_cash=1000000)
         result = engine.run()
@@ -64,11 +69,13 @@ def test_simple_backtest():
     except Exception as e:
         print(f"  ✗ 回测失败: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
+
     success = test_simple_backtest()
     sys.exit(0 if success else 1)

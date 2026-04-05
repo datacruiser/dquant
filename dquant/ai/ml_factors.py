@@ -2,12 +2,12 @@
 ML 因子
 """
 
-from typing import Optional, List
-import pandas as pd
+from typing import List, Optional
+
 import numpy as np
+import pandas as pd
 
 from dquant.ai.base import BaseFactor
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 # ML 模型默认参数
 DEFAULT_N_ESTIMATORS = 100
@@ -35,7 +35,7 @@ class XGBoostFactor(BaseFactor):
     def __init__(
         self,
         features: List[str],
-        target: str = 'return_5d',
+        target: str = "return_5d",
         model_params: Optional[dict] = None,
         name: str = "XGBoostFactor",
     ):
@@ -43,13 +43,15 @@ class XGBoostFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': DEFAULT_N_ESTIMATORS,
-            'max_depth': 5,
-            'learning_rate': 0.1,
-            'random_state': 42,
+            "n_estimators": DEFAULT_N_ESTIMATORS,
+            "max_depth": 5,
+            "learning_rate": 0.1,
+            "random_state": 42,
         }
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "XGBoostFactor":
+    def fit(
+        self, data: pd.DataFrame, target: Optional[pd.Series] = None
+    ) -> "XGBoostFactor":
         """训练模型"""
         try:
             import xgboost as xgb
@@ -96,16 +98,20 @@ class XGBoostFactor(BaseFactor):
 
         # 构建结果 (vectorized)
         valid_mask = ~np.isnan(scores)
-        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get('date')
-        df = pd.DataFrame({
-            'date': dates,
-            'symbol': data['symbol'].values,
-            'score': scores,
-        })
+        dates = (
+            data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
+        )
+        df = pd.DataFrame(
+            {
+                "date": dates,
+                "symbol": data["symbol"].values,
+                "score": scores,
+            }
+        )
         df = df[valid_mask].copy()
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
 
     def get_feature_importance(self) -> Optional[pd.Series]:
@@ -113,8 +119,7 @@ class XGBoostFactor(BaseFactor):
         if self._model is None:
             return None
         return pd.Series(
-            self._model.feature_importances_,
-            index=self.features
+            self._model.feature_importances_, index=self.features
         ).sort_values(ascending=False)
 
 
@@ -128,7 +133,7 @@ class LGBMFactor(BaseFactor):
     def __init__(
         self,
         features: List[str],
-        target: str = 'return_5d',
+        target: str = "return_5d",
         model_params: Optional[dict] = None,
         name: str = "LGBMFactor",
     ):
@@ -136,14 +141,16 @@ class LGBMFactor(BaseFactor):
         self.features = features
         self.target = target
         self.model_params = model_params or {
-            'n_estimators': DEFAULT_N_ESTIMATORS,
-            'max_depth': 5,
-            'learning_rate': 0.1,
-            'random_state': 42,
-            'verbose': -1,
+            "n_estimators": DEFAULT_N_ESTIMATORS,
+            "max_depth": 5,
+            "learning_rate": 0.1,
+            "random_state": 42,
+            "verbose": -1,
         }
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "LGBMFactor":
+    def fit(
+        self, data: pd.DataFrame, target: Optional[pd.Series] = None
+    ) -> "LGBMFactor":
         """训练模型"""
         try:
             import lightgbm as lgb
@@ -183,16 +190,20 @@ class LGBMFactor(BaseFactor):
 
         # 构建结果 (vectorized)
         valid_mask = ~np.isnan(scores)
-        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get('date')
-        df = pd.DataFrame({
-            'date': dates,
-            'symbol': data['symbol'].values,
-            'score': scores,
-        })
+        dates = (
+            data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
+        )
+        df = pd.DataFrame(
+            {
+                "date": dates,
+                "symbol": data["symbol"].values,
+                "score": scores,
+            }
+        )
         df = df[valid_mask].copy()
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
 
     def get_feature_importance(self) -> Optional[pd.Series]:
@@ -200,6 +211,5 @@ class LGBMFactor(BaseFactor):
         if self._model is None:
             return None
         return pd.Series(
-            self._model.feature_importances_,
-            index=self.features
+            self._model.feature_importances_, index=self.features
         ).sort_values(ascending=False)

@@ -2,16 +2,16 @@
 回测引擎
 """
 
-from typing import Optional, Dict, List
-from datetime import datetime
+from typing import Dict, List, Optional
+
 import pandas as pd
 
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
-from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.metrics import Metrics
+from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.result import BacktestResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_INITIAL_CASH
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_INITIAL_CASH, DEFAULT_SLIPPAGE
 from dquant.logger import get_logger
+from dquant.strategy.base import BaseStrategy, Signal
 
 logger = get_logger(__name__)
 
@@ -79,14 +79,12 @@ class BacktestEngine:
             if daily_data is None:
                 continue
 
-            prices = dict(zip(daily_data['symbol'], daily_data['close']))
+            prices = dict(zip(daily_data["symbol"], daily_data["close"]))
             buy_trade_prices = {
-                symbol: price * (1 + self.slippage)
-                for symbol, price in prices.items()
+                symbol: price * (1 + self.slippage) for symbol, price in prices.items()
             }
             sell_trade_prices = {
-                symbol: price * (1 - self.slippage)
-                for symbol, price in prices.items()
+                symbol: price * (1 - self.slippage) for symbol, price in prices.items()
             }
 
             # 更新持仓价格 (在执行交易前记录 NAV)
@@ -109,13 +107,15 @@ class BacktestEngine:
                 )
 
                 for s in buy_sigs:
-                    self.trades.append({
-                        'date': date,
-                        'symbol': s.symbol,
-                        'action': 'BUY',
-                        'price': prices.get(s.symbol, 0),
-                        'score': s.metadata.get('score', 0) if s.metadata else 0,
-                    })
+                    self.trades.append(
+                        {
+                            "date": date,
+                            "symbol": s.symbol,
+                            "action": "BUY",
+                            "price": prices.get(s.symbol, 0),
+                            "score": s.metadata.get("score", 0) if s.metadata else 0,
+                        }
+                    )
 
             # 执行卖出
             for s in sell_sigs:
@@ -127,13 +127,15 @@ class BacktestEngine:
                         sell_trade_prices.get(s.symbol, pos.current_price),
                         self.commission,
                     )
-                    self.trades.append({
-                        'date': date,
-                        'symbol': s.symbol,
-                        'action': 'SELL',
-                        'price': prices.get(s.symbol, 0),
-                        'score': s.metadata.get('score', 0) if s.metadata else 0,
-                    })
+                    self.trades.append(
+                        {
+                            "date": date,
+                            "symbol": s.symbol,
+                            "action": "SELL",
+                            "price": prices.get(s.symbol, 0),
+                            "score": s.metadata.get("score", 0) if s.metadata else 0,
+                        }
+                    )
 
         return self._create_result()
 
@@ -185,7 +187,7 @@ class BacktestEngine:
         nav_df = self.portfolio.to_dataframe()
 
         # 计算绩效
-        metrics = Metrics.from_nav(nav_df['nav'])
+        metrics = Metrics.from_nav(nav_df["nav"])
         metrics.total_trades = len(self.trades)
 
         # 计算基准净值
@@ -207,17 +209,17 @@ class BacktestEngine:
             return None
 
         # 从数据中筛选 benchmark 股票
-        if 'symbol' not in self.data.columns:
+        if "symbol" not in self.data.columns:
             return None
 
-        bench_data = self.data[self.data['symbol'] == self.benchmark]
+        bench_data = self.data[self.data["symbol"] == self.benchmark]
         if bench_data.empty:
             return None
 
-        if 'close' not in bench_data.columns:
+        if "close" not in bench_data.columns:
             return None
 
-        close = bench_data['close']
+        close = bench_data["close"]
         bench_nav = close / close.iloc[0]
         bench_nav.index = bench_data.index
         return bench_nav

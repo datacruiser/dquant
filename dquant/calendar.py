@@ -14,8 +14,9 @@ Usage:
     days = get_trading_days('2025-01-01', '2025-01-31')
 """
 
-from typing import List, Union, Optional
 from datetime import datetime, timedelta
+from typing import List, Union
+
 import pandas as pd
 
 from dquant.logger import get_logger
@@ -25,22 +26,23 @@ logger = get_logger(__name__)
 # 尝试导入 exchange_calendars
 try:
     import exchange_calendars as ec
+
     EXCHANGE_CALENDARS_AVAILABLE = True
 except ImportError:
     EXCHANGE_CALENDARS_AVAILABLE = False
 
 # 市场到交易所代码的映射
 _MARKET_EXCHANGE_MAP = {
-    'cn': 'XSHG',    # 上海证券交易所（覆盖 A 股）
-    'xshg': 'XSHG',  # 上交所
-    'xshe': 'XSHE',  # 深交所
+    "cn": "XSHG",  # 上海证券交易所（覆盖 A 股）
+    "xshg": "XSHG",  # 上交所
+    "xshe": "XSHE",  # 深交所
 }
 
 # 日历实例缓存
 _CALENDAR_CACHE: dict = {}
 
 
-def _get_calendar(market: str = 'cn'):
+def _get_calendar(market: str = "cn"):
     """
     获取交易日历实例（懒加载、缓存）
 
@@ -56,7 +58,7 @@ def _get_calendar(market: str = 'cn'):
     exchange = _MARKET_EXCHANGE_MAP.get(market.lower())
     if exchange is None:
         logger.warning(f"Unknown market: {market}, falling back to XSHG")
-        exchange = 'XSHG'
+        exchange = "XSHG"
 
     if exchange not in _CALENDAR_CACHE:
         try:
@@ -79,7 +81,7 @@ def _normalize_date(date: Union[str, datetime, pd.Timestamp]) -> pd.Timestamp:
 
 def is_trading_day(
     date: Union[str, datetime, pd.Timestamp],
-    market: str = 'cn',
+    market: str = "cn",
 ) -> bool:
     """
     判断是否为交易日
@@ -107,7 +109,7 @@ def is_trading_day(
 def get_trading_days(
     start: Union[str, datetime, pd.Timestamp],
     end: Union[str, datetime, pd.Timestamp],
-    market: str = 'cn',
+    market: str = "cn",
 ) -> List[datetime]:
     """
     获取交易日列表
@@ -132,13 +134,13 @@ def get_trading_days(
             pass
 
     # 退化为工作日
-    return pd.date_range(start_ts, end_ts, freq='B').tolist()
+    return pd.date_range(start_ts, end_ts, freq="B").tolist()
 
 
 def get_previous_trading_day(
     date: Union[str, datetime, pd.Timestamp],
     n: int = 1,
-    market: str = 'cn',
+    market: str = "cn",
 ) -> datetime:
     """
     获取前 n 个交易日
@@ -179,7 +181,7 @@ def get_previous_trading_day(
 def get_next_trading_day(
     date: Union[str, datetime, pd.Timestamp],
     n: int = 1,
-    market: str = 'cn',
+    market: str = "cn",
 ) -> datetime:
     """
     获取后 n 个交易日

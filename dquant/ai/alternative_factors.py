@@ -5,14 +5,15 @@
 """
 
 from typing import Optional
+
 import pandas as pd
 
 from dquant.ai.base import BaseFactor
 
-
 # ============================================================
 # 情感因子
 # ============================================================
+
 
 class SentimentFactor(BaseFactor):
     """
@@ -44,7 +45,7 @@ class SentimentFactor(BaseFactor):
         # 按日期分组计算市场情感
         for date, group in data.groupby(data.index):
             # 上涨股票比例
-            up_stocks = (group['close'] > group['open']).sum()
+            up_stocks = (group["close"] > group["open"]).sum()
             total_stocks = len(group)
             up_ratio = up_stocks / total_stocks if total_stocks > 0 else 0.5
 
@@ -53,17 +54,19 @@ class SentimentFactor(BaseFactor):
             # 情感分数
             sentiment = (up_ratio - 0.5) * 2  # 归一化到 [-1, 1]
 
-            for symbol in group['symbol'].unique():
-                results.append({
-                    'date': date,
-                    'symbol': symbol,
-                    'score': sentiment,
-                })
+            for symbol in group["symbol"].unique():
+                results.append(
+                    {
+                        "date": date,
+                        "symbol": symbol,
+                        "score": sentiment,
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -92,18 +95,20 @@ class NewsSentimentFactor(BaseFactor):
         """
         results = []
 
-        if 'news_sentiment' in data.columns:
+        if "news_sentiment" in data.columns:
             for idx, row in data.iterrows():
-                results.append({
-                    'date': idx,
-                    'symbol': row['symbol'],
-                    'score': row['news_sentiment'],
-                })
+                results.append(
+                    {
+                        "date": idx,
+                        "symbol": row["symbol"],
+                        "score": row["news_sentiment"],
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -132,25 +137,27 @@ class SocialMediaFactor(BaseFactor):
         """
         results = []
 
-        if 'social_mention_count' in data.columns:
-            for symbol, group in data.groupby('symbol'):
+        if "social_mention_count" in data.columns:
+            for symbol, group in data.groupby("symbol"):
                 group = group.sort_index()
 
                 # 讨论热度变化
-                mention_change = group['social_mention_count'].pct_change()
+                mention_change = group["social_mention_count"].pct_change()
 
                 for date, value in mention_change.items():
                     if pd.notna(value):
-                        results.append({
-                            'date': date,
-                            'symbol': symbol,
-                            'score': value,
-                        })
+                        results.append(
+                            {
+                                "date": date,
+                                "symbol": symbol,
+                                "score": value,
+                            }
+                        )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -158,6 +165,7 @@ class SocialMediaFactor(BaseFactor):
 # ============================================================
 # 资金流向因子
 # ============================================================
+
 
 class NorthboundFlowFactor(BaseFactor):
     """
@@ -182,25 +190,27 @@ class NorthboundFlowFactor(BaseFactor):
         """
         results = []
 
-        if 'northbound_flow' in data.columns:
-            for symbol, group in data.groupby('symbol'):
+        if "northbound_flow" in data.columns:
+            for symbol, group in data.groupby("symbol"):
                 group = group.sort_index()
 
                 # 累计流入
-                flow = group['northbound_flow'].rolling(self.window).sum()
+                flow = group["northbound_flow"].rolling(self.window).sum()
 
                 for date, value in flow.items():
                     if pd.notna(value):
-                        results.append({
-                            'date': date,
-                            'symbol': symbol,
-                            'score': value,
-                        })
+                        results.append(
+                            {
+                                "date": date,
+                                "symbol": symbol,
+                                "score": value,
+                            }
+                        )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -228,25 +238,27 @@ class MarginTradingFactor(BaseFactor):
         """
         results = []
 
-        if 'margin_balance' in data.columns:
-            for symbol, group in data.groupby('symbol'):
+        if "margin_balance" in data.columns:
+            for symbol, group in data.groupby("symbol"):
                 group = group.sort_index()
 
                 # 融资余额变化率
-                margin_change = group['margin_balance'].pct_change(self.window)
+                margin_change = group["margin_balance"].pct_change(self.window)
 
                 for date, value in margin_change.items():
                     if pd.notna(value):
-                        results.append({
-                            'date': date,
-                            'symbol': symbol,
-                            'score': value,
-                        })
+                        results.append(
+                            {
+                                "date": date,
+                                "symbol": symbol,
+                                "score": value,
+                            }
+                        )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -274,26 +286,28 @@ class InstitutionalFlowFactor(BaseFactor):
         """
         results = []
 
-        if 'institutional_buy' in data.columns and 'institutional_sell' in data.columns:
-            for symbol, group in data.groupby('symbol'):
+        if "institutional_buy" in data.columns and "institutional_sell" in data.columns:
+            for symbol, group in data.groupby("symbol"):
                 group = group.sort_index()
 
                 # 净买入
-                net_buy = group['institutional_buy'] - group['institutional_sell']
+                net_buy = group["institutional_buy"] - group["institutional_sell"]
                 net_buy_ma = net_buy.rolling(self.window).mean()
 
                 for date, value in net_buy_ma.items():
                     if pd.notna(value):
-                        results.append({
-                            'date': date,
-                            'symbol': symbol,
-                            'score': value,
-                        })
+                        results.append(
+                            {
+                                "date": date,
+                                "symbol": symbol,
+                                "score": value,
+                            }
+                        )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -301,6 +315,7 @@ class InstitutionalFlowFactor(BaseFactor):
 # ============================================================
 # 另类数据因子
 # ============================================================
+
 
 class ShortInterestFactor(BaseFactor):
     """
@@ -324,18 +339,20 @@ class ShortInterestFactor(BaseFactor):
         """
         results = []
 
-        if 'short_ratio' in data.columns:
+        if "short_ratio" in data.columns:
             for idx, row in data.iterrows():
-                results.append({
-                    'date': idx,
-                    'symbol': row['symbol'],
-                    'score': -row['short_ratio'],  # 卖空比例高 = 负面
-                })
+                results.append(
+                    {
+                        "date": idx,
+                        "symbol": row["symbol"],
+                        "score": -row["short_ratio"],  # 卖空比例高 = 负面
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -363,25 +380,27 @@ class AnalystRatingFactor(BaseFactor):
         """
         results = []
 
-        if 'analyst_rating' in data.columns:
-            for symbol, group in data.groupby('symbol'):
+        if "analyst_rating" in data.columns:
+            for symbol, group in data.groupby("symbol"):
                 group = group.sort_index()
 
                 # 评级变化
-                rating_change = group['analyst_rating'].diff()
+                rating_change = group["analyst_rating"].diff()
 
                 for date, value in rating_change.items():
                     if pd.notna(value):
-                        results.append({
-                            'date': date,
-                            'symbol': symbol,
-                            'score': value,
-                        })
+                        results.append(
+                            {
+                                "date": date,
+                                "symbol": symbol,
+                                "score": value,
+                            }
+                        )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -408,20 +427,22 @@ class OptionsFlowFactor(BaseFactor):
         """
         results = []
 
-        if 'put_call_ratio' in data.columns:
+        if "put_call_ratio" in data.columns:
             for idx, row in data.iterrows():
                 # Put/Call 比率低 = 看多
-                score = 1 - row['put_call_ratio']
-                results.append({
-                    'date': idx,
-                    'symbol': row['symbol'],
-                    'score': score,
-                })
+                score = 1 - row["put_call_ratio"]
+                results.append(
+                    {
+                        "date": idx,
+                        "symbol": row["symbol"],
+                        "score": score,
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -431,13 +452,13 @@ class OptionsFlowFactor(BaseFactor):
 # ============================================================
 
 ALTERNATIVE_FACTORS = {
-    'sentiment': SentimentFactor,
-    'news_sentiment': NewsSentimentFactor,
-    'social_media': SocialMediaFactor,
-    'northbound_flow': NorthboundFlowFactor,
-    'margin_trading': MarginTradingFactor,
-    'institutional_flow': InstitutionalFlowFactor,
-    'short_interest': ShortInterestFactor,
-    'analyst_rating': AnalystRatingFactor,
-    'options_flow': OptionsFlowFactor,
+    "sentiment": SentimentFactor,
+    "news_sentiment": NewsSentimentFactor,
+    "social_media": SocialMediaFactor,
+    "northbound_flow": NorthboundFlowFactor,
+    "margin_trading": MarginTradingFactor,
+    "institutional_flow": InstitutionalFlowFactor,
+    "short_interest": ShortInterestFactor,
+    "analyst_rating": AnalystRatingFactor,
+    "options_flow": OptionsFlowFactor,
 }

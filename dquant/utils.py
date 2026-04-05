@@ -4,34 +4,27 @@ DQuant 工具函数
 常用的辅助函数。
 """
 
-from typing import List, Union, Tuple
 from datetime import datetime
-import pandas as pd
-import numpy as np
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_SLIPPAGE,
-    DEFAULT_STAMP_DUTY,
-    DEFAULT_INITIAL_CASH,
-    DEFAULT_WINDOW,
-    TRADING_DAYS_PER_YEAR,
-)
-from dquant.calendar import (
-    is_trading_day as _calendar_is_trading_day,
-    get_trading_days as _calendar_get_trading_days,
-    get_previous_trading_day as _calendar_prev,
-    get_next_trading_day as _calendar_next,
-)
+from typing import List, Tuple, Union
 
+import numpy as np
+import pandas as pd
+
+from dquant.calendar import get_next_trading_day as _calendar_next
+from dquant.calendar import get_previous_trading_day as _calendar_prev
+from dquant.calendar import get_trading_days as _calendar_get_trading_days
+from dquant.calendar import is_trading_day as _calendar_is_trading_day
+from dquant.constants import TRADING_DAYS_PER_YEAR
 
 # ============================================================
 # 日期工具
 # ============================================================
 
+
 def get_trading_days(
     start: Union[str, datetime],
     end: Union[str, datetime],
-    market: str = 'cn',
+    market: str = "cn",
 ) -> List[datetime]:
     """
     获取交易日列表
@@ -47,7 +40,7 @@ def get_trading_days(
     return _calendar_get_trading_days(start, end, market=market)
 
 
-def is_trading_day(date: Union[str, datetime], market: str = 'cn') -> bool:
+def is_trading_day(date: Union[str, datetime], market: str = "cn") -> bool:
     """判断是否为交易日"""
     return _calendar_is_trading_day(date, market=market)
 
@@ -66,9 +59,10 @@ def get_next_trading_day(date: Union[str, datetime], n: int = 1) -> datetime:
 # 绩效分析工具
 # ============================================================
 
+
 def calculate_returns(
     nav: pd.Series,
-    freq: str = 'D',
+    freq: str = "D",
 ) -> pd.Series:
     """
     计算收益率序列
@@ -80,12 +74,12 @@ def calculate_returns(
     Returns:
         收益率序列
     """
-    if freq == 'D':
+    if freq == "D":
         return nav.pct_change()
-    elif freq == 'W':
-        return nav.resample('W').last().pct_change()
-    elif freq == 'M':
-        return nav.resample('M').last().pct_change()
+    elif freq == "W":
+        return nav.resample("W").last().pct_change()
+    elif freq == "M":
+        return nav.resample("M").last().pct_change()
     else:
         return nav.pct_change()
 
@@ -211,7 +205,7 @@ def sortino_ratio(
     downside_std = downside.std() * np.sqrt(periods_per_year)
 
     if downside_std == 0:
-        return float('inf')
+        return float("inf")
 
     return (ann_ret - risk_free_rate) / downside_std
 
@@ -237,7 +231,7 @@ def calmar_ratio(
     max_dd, _, _ = max_drawdown(nav)
 
     if max_dd == 0:
-        return float('inf')
+        return float("inf")
 
     return ann_ret / abs(max_dd)
 
@@ -245,6 +239,7 @@ def calmar_ratio(
 # ============================================================
 # 数据处理工具
 # ============================================================
+
 
 def winsorize(
     data: pd.Series,
@@ -286,19 +281,20 @@ def normalize(data: pd.Series) -> pd.Series:
 # 其他工具
 # ============================================================
 
+
 def format_money(amount: float) -> str:
     """格式化金额"""
     if abs(amount) >= 1e8:
-        return f"¥{amount/1e8:.2f}亿"
+        return f"¥{amount / 1e8:.2f}亿"
     elif abs(amount) >= 1e4:
-        return f"¥{amount/1e4:.2f}万"
+        return f"¥{amount / 1e4:.2f}万"
     else:
         return f"¥{amount:.2f}"
 
 
 def format_percent(value: float) -> str:
     """格式化百分比"""
-    return f"{value*100:.2f}%"
+    return f"{value * 100:.2f}%"
 
 
 def format_sharpe(sharpe: float) -> str:

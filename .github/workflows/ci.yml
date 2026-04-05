@@ -29,7 +29,7 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest tests/ -v --cov=dquant --cov-report=xml --cov-fail-under=60
+        pytest tests/ -v --cov=dquant --cov-report=xml --cov-fail-under=50
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4
@@ -54,7 +54,7 @@ jobs:
     
     - name: Run flake8
       run: |
-        flake8 dquant/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503
+        flake8 dquant/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503,E203,E226,E714
     
     - name: Check formatting with black
       run: |

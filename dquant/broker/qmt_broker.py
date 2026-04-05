@@ -4,17 +4,21 @@ miniQMT 券商接口 (迅投 QMT)
 注意: 需要开通 QMT 交易权限
 """
 
-import sys
-import subprocess
 import json
 import os
 import re
-from typing import Dict, Optional
+import subprocess
+import sys
 from datetime import datetime
+from typing import Dict
 
-from dquant.constants import DEFAULT_INITIAL_CASH, DEFAULT_COMMISSION, DEFAULT_STAMP_DUTY
 from dquant.broker.base import BaseBroker, Order, OrderResult
-from dquant.broker.safety import TradingSafety, log_trade, log_error
+from dquant.broker.safety import TradingSafety, log_error
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_INITIAL_CASH,
+    DEFAULT_STAMP_DUTY,
+)
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,12 +48,7 @@ class QMTBroker(BaseBroker):
         result = broker.place_order(order)
     """
 
-    def __init__(
-        self,
-        qmt_path: str = '',
-        account: str = '',
-        **kwargs
-    ):
+    def __init__(self, qmt_path: str = "", account: str = "", **kwargs):
         super().__init__(name="QMT")
         self.qmt_path = qmt_path
         self.account = account
@@ -58,10 +57,10 @@ class QMTBroker(BaseBroker):
 
         # 交易安全控制
         self.safety = TradingSafety(
-            enable_time_check=kwargs.get('enable_time_check', True),
-            enable_fund_check=kwargs.get('enable_fund_check', True),
-            enable_order_validation=kwargs.get('enable_order_validation', True),
-            enable_position_check=kwargs.get('enable_position_check', True),
+            enable_time_check=kwargs.get("enable_time_check", True),
+            enable_fund_check=kwargs.get("enable_fund_check", True),
+            enable_order_validation=kwargs.get("enable_order_validation", True),
+            enable_position_check=kwargs.get("enable_position_check", True),
         )
 
     def connect(self, **kwargs) -> bool:
@@ -86,11 +85,11 @@ class QMTBroker(BaseBroker):
     def _call_qmt(self, func_name: str, params: dict) -> dict:
         """调用 QMT 函数（通过环境变量和 stdin 安全传参）"""
         if not self._connected:
-            return {'error': 'not connected'}
+            return {"error": "not connected"}
 
         # 安全检查：func_name 只允许合法 Python 标识符
-        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', func_name):
-            return {'error': f'invalid function name: {func_name}'}
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", func_name):
+            return {"error": f"invalid function name: {func_name}"}
 
         # 通过环境变量传递路径和函数名，通过 stdin 传递参数，避免命令注入
         script = """
@@ -121,11 +120,11 @@ else:
 
         try:
             env = os.environ.copy()
-            env['DQ_QMT_PATH'] = self.qmt_path
-            env['DQ_QMT_FUNC'] = func_name
+            env["DQ_QMT_PATH"] = self.qmt_path
+            env["DQ_QMT_FUNC"] = func_name
 
             proc_result = subprocess.run(
-                [sys.executable, '-c', script],
+                [sys.executable, "-c", script],
                 input=json.dumps(params),
                 capture_output=True,
                 text=True,
@@ -135,10 +134,10 @@ else:
             if proc_result.returncode == 0:
                 return json.loads(proc_result.stdout)
             else:
-                return {'error': proc_result.stderr}
+                return {"error": proc_result.stderr}
 
         except Exception as e:
-            return {'error': str(e)}
+            return {"error": str(e)}
 
     def get_account(self) -> dict:
         """获取账户信息"""
@@ -148,14 +147,14 @@ else:
         try:
             from xtquant import xttrade
 
-            account_info = xttrade.get_stock_account(self.account)
+            _ = xttrade.get_stock_account(self.account)
             asset = xttrade.get_asset(self.account)
 
             return {
-                'cash': asset.cash,
-                'total_value': asset.total_asset,
-                'market_value': asset.market_value,
-                'available': asset.cash,
+                "cash": asset.cash,
+                "total_value": asset.total_asset,
+                "market_value": asset.market_value,
+                "available": asset.cash,
             }
         except ImportError:
             logger.error("[QMT] xtquant not installed")
@@ -177,11 +176,13 @@ else:
 
             for pos in positions:
                 result[pos.stock_code] = {
-                    'symbol': pos.stock_code,
-                    'quantity': pos.volume,
-                    'available': pos.can_use_volume,
-                    'avg_cost': pos.open_price,
-                    'current_price': pos.market_value / pos.volume if pos.volume > 0 else 0,
+                    "symbol": pos.stock_code,
+                    "quantity": pos.volume,
+                    "available": pos.can_use_volume,
+                    "avg_cost": pos.open_price,
+                    "current_price": (
+                        pos.market_value / pos.volume if pos.volume > 0 else 0
+                    ),
                 }
 
             return result
@@ -203,14 +204,14 @@ else:
         if not self._connected:
             log_error("PLACE_ORDER", Exception("未连接到QMT"), {"symbol": order.symbol})
             return OrderResult(
-                order_id='',
+                order_id="",
                 symbol=order.symbol,
                 side=order.side,
                 filled_quantity=0,
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='REJECTED',
+                status="REJECTED",
             )
 
         try:
@@ -220,33 +221,37 @@ else:
 
             # 市价单需要 estimated_price 做资金检查
             estimated_price = None
-            if order.order_type == 'MARKET' and order.price is None:
+            if order.order_type == "MARKET" and order.price is None:
                 md = self.get_market_data(order.symbol)
-                if md and 'price' in md:
-                    estimated_price = md['price']
+                if md and "price" in md:
+                    estimated_price = md["price"]
 
             valid, msg = self.safety.check_order(
                 order,
-                available_cash=account_info.get('cash', 0),
+                available_cash=account_info.get("cash", 0),
                 positions=positions,
                 estimated_price=estimated_price,
             )
 
             if not valid:
-                log_error("PLACE_ORDER", Exception(msg), {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                })
+                log_error(
+                    "PLACE_ORDER",
+                    Exception(msg),
+                    {
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "quantity": order.quantity,
+                    },
+                )
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
 
             # 3. 调用QMT下单
@@ -254,10 +259,10 @@ else:
 
             # 下单
             # order_type: 23=市价, 24=限价
-            order_type = 23 if order.order_type == 'MARKET' else 24
+            order_type = 23 if order.order_type == "MARKET" else 24
 
             # price_type: 1=限价, 2=市价（最优五档即时成交剩余撤销）, 5=市价（最优五档即时成交剩余转限价）
-            price_type = 2 if order.order_type == 'MARKET' else 1
+            price_type = 2 if order.order_type == "MARKET" else 1
 
             api_result = xttrade.order_stock(
                 account=self.account,
@@ -270,7 +275,7 @@ else:
 
             if api_result > 0:
                 order.order_id = str(api_result)
-                order.status = 'PENDING'
+                order.status = "PENDING"
 
                 order_result = OrderResult(
                     order_id=order.order_id,
@@ -280,32 +285,32 @@ else:
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='PENDING',
+                    status="PENDING",
                 )
                 return order_result
             else:
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
 
         except Exception as e:
             logger.error(f"[QMT] Place order error: {e}")
             return OrderResult(
-                order_id='',
+                order_id="",
                 symbol=order.symbol,
                 side=order.side,
                 filled_quantity=0,
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='REJECTED',
+                status="REJECTED",
             )
 
     def cancel_order(self, order_id: str) -> bool:
@@ -333,8 +338,8 @@ else:
             orders = xttrade.get_stock_orders(self.account)
             for o in orders:
                 if str(o.order_id) == order_id:
-                    side = 'BUY' if getattr(o, 'order_side', 0) == 23 else 'SELL'
-                    filled_qty = getattr(o, 'traded_volume', 0)
+                    side = "BUY" if getattr(o, "order_side", 0) == 23 else "SELL"
+                    filled_qty = getattr(o, "traded_volume", 0)
                     return Order(
                         symbol=o.stock_code,
                         side=side,
@@ -342,9 +347,11 @@ else:
                         price=o.price,
                         order_id=str(o.order_id),
                         filled_quantity=filled_qty,
-                        status=('FILLED' if filled_qty >= o.order_volume
-                            else 'PARTIAL_FILLED' if filled_qty > 0
-                            else 'PENDING'),
+                        status=(
+                            "FILLED"
+                            if filled_qty >= o.order_volume
+                            else "PARTIAL_FILLED" if filled_qty > 0 else "PENDING"
+                        ),
                     )
             return None
         except Exception as e:
@@ -360,12 +367,12 @@ else:
             if symbol in quote:
                 q = quote[symbol]
                 return {
-                    'symbol': symbol,
-                    'price': q['lastPrice'],
-                    'bid': q['bidPrice'][0] if q['bidPrice'] else 0,
-                    'ask': q['askPrice'][0] if q['askPrice'] else 0,
-                    'volume': q['volume'],
-                    'timestamp': datetime.now(),
+                    "symbol": symbol,
+                    "price": q["lastPrice"],
+                    "bid": q["bidPrice"][0] if q["bidPrice"] else 0,
+                    "ask": q["askPrice"][0] if q["askPrice"] else 0,
+                    "volume": q["volume"],
+                    "timestamp": datetime.now(),
                 }
             return {}
         except Exception as e:
@@ -397,99 +404,104 @@ class QMTSimulator(QMTBroker):
 
     def get_account(self) -> dict:
         total_value = self.cash + sum(
-            p['quantity'] * p.get('price', 0)
-            for p in self.positions.values()
+            p["quantity"] * p.get("price", 0) for p in self.positions.values()
         )
         return {
-            'cash': self.cash,
-            'total_value': total_value,
-            'market_value': total_value - self.cash,
-            'available': self.cash,
+            "cash": self.cash,
+            "total_value": total_value,
+            "market_value": total_value - self.cash,
+            "available": self.cash,
         }
 
     def place_order(self, order: Order) -> OrderResult:
         """模拟下单（不需要 xtquant）"""
         if not self._connected:
             return OrderResult(
-                order_id='',
+                order_id="",
                 symbol=order.symbol,
                 side=order.side,
                 filled_quantity=0,
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='REJECTED',
+                status="REJECTED",
             )
 
         # 模拟成交价格
         fill_price = order.price or 10.0  # 市价单使用默认价格
 
-        if order.side.upper() == 'BUY':
+        if order.side.upper() == "BUY":
             cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
             if cost > self.cash:
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
             self.cash -= cost
             if order.symbol in self.positions:
                 pos = self.positions[order.symbol]
-                total_qty = pos['quantity'] + order.quantity
-                pos['avg_cost'] = (pos['avg_cost'] * pos['quantity'] + fill_price * order.quantity) / total_qty
-                pos['quantity'] = total_qty
-                pos['price'] = fill_price
+                total_qty = pos["quantity"] + order.quantity
+                pos["avg_cost"] = (
+                    pos["avg_cost"] * pos["quantity"] + fill_price * order.quantity
+                ) / total_qty
+                pos["quantity"] = total_qty
+                pos["price"] = fill_price
             else:
                 self.positions[order.symbol] = {
-                    'quantity': order.quantity,
-                    'avg_cost': fill_price,
-                    'price': fill_price,
+                    "quantity": order.quantity,
+                    "avg_cost": fill_price,
+                    "price": fill_price,
                 }
 
-        elif order.side.upper() == 'SELL':
+        elif order.side.upper() == "SELL":
             if order.symbol not in self.positions:
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
             pos = self.positions[order.symbol]
-            if order.quantity > pos['quantity']:
+            if order.quantity > pos["quantity"]:
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
             revenue = fill_price * order.quantity
             self.cash += revenue * (1 - DEFAULT_COMMISSION - DEFAULT_STAMP_DUTY)
-            pos['quantity'] -= order.quantity
-            pos['price'] = fill_price
-            if pos['quantity'] <= 0:
+            pos["quantity"] -= order.quantity
+            pos["price"] = fill_price
+            if pos["quantity"] <= 0:
                 del self.positions[order.symbol]
 
         order_id = f"SIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{id(order)}"
         order.order_id = order_id
-        order.status = 'FILLED'
+        order.status = "FILLED"
         order.filled_quantity = order.quantity
         self.orders[order_id] = order
 
         # 卖出佣金包含印花税
-        commission_rate = (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY) if order.side.upper() == 'SELL' else DEFAULT_COMMISSION
+        commission_rate = (
+            (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+            if order.side.upper() == "SELL"
+            else DEFAULT_COMMISSION
+        )
         commission = fill_price * order.quantity * commission_rate
 
         return OrderResult(
@@ -500,5 +512,5 @@ class QMTSimulator(QMTBroker):
             filled_price=fill_price,
             commission=commission,
             timestamp=datetime.now(),
-            status='FILLED',
+            status="FILLED",
         )

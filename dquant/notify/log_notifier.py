@@ -4,8 +4,8 @@
 将通知写入 Python logger，作为默认回退通道。
 """
 
-from dquant.notify.base import Notifier
 from dquant.logger import get_logger
+from dquant.notify.base import Notifier
 
 
 class LogNotifier(Notifier):

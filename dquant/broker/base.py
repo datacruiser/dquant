@@ -3,28 +3,30 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Dict, Optional
 
 
 @dataclass
 class Order:
     """订单"""
+
     symbol: str
     side: str  # 'BUY' or 'SELL'
     quantity: int  # 股票数量必须为整数（A股为100的整数倍）
     price: Optional[float] = None  # None = 市价单
-    order_type: str = 'MARKET'  # 'MARKET' or 'LIMIT'
+    order_type: str = "MARKET"  # 'MARKET' or 'LIMIT'
     timestamp: Optional[datetime] = None
     order_id: Optional[str] = None
-    status: str = 'PENDING'  # PENDING, FILLED, CANCELLED, REJECTED
+    status: str = "PENDING"  # PENDING, FILLED, CANCELLED, REJECTED
     filled_quantity: int = 0  # 已成交数量
 
 
 @dataclass
 class OrderResult:
     """订单结果"""
+
     order_id: str
     symbol: str
     side: str

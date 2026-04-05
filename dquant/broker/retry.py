@@ -9,10 +9,10 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
-from dquant.constants import ORDER_MAX_RETRIES, ORDER_RETRY_DELAY, ORDER_RETRY_BACKOFF
+from dquant.constants import ORDER_MAX_RETRIES, ORDER_RETRY_BACKOFF, ORDER_RETRY_DELAY
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -77,10 +77,12 @@ class RetryableBroker(BaseBroker):
                     )
                     # 尝试查询已有订单状态
                     try:
-                        existing_order = self._broker.get_order_status(existing_order_id)
+                        existing_order = self._broker.get_order_status(
+                            existing_order_id
+                        )
                         if existing_order is not None:
                             return OrderResult(
-                                order_id=existing_order.order_id or '',
+                                order_id=existing_order.order_id or "",
                                 symbol=existing_order.symbol,
                                 side=existing_order.side,
                                 filled_quantity=existing_order.filled_quantity,
@@ -96,18 +98,18 @@ class RetryableBroker(BaseBroker):
                 result = self._broker.place_order(order)
 
                 # 下单成功，记录幂等性映射
-                if result.status in ('FILLED', 'PENDING', 'PARTIAL_FILLED'):
+                if result.status in ("FILLED", "PENDING", "PARTIAL_FILLED"):
                     with self._idempotency_lock:
                         self._idempotency_map[idempotency_key] = result.order_id
 
                 # REJECTED 不重试（验证错误、资金不足等）
-                if result.status == 'REJECTED':
+                if result.status == "REJECTED":
                     return result
 
                 return result
 
             except _RETRYABLE_ERRORS as e:
-                delay = self._retry_delay * (self._backoff ** attempt)
+                delay = self._retry_delay * (self._backoff**attempt)
                 logger.warning(
                     f"[RETRY] place_order 瞬态错误 "
                     f"(attempt {attempt + 1}/{self._max_retries}): "
@@ -127,14 +129,14 @@ class RetryableBroker(BaseBroker):
             f"{order.symbol} {order.side}"
         )
         return OrderResult(
-            order_id='',
+            order_id="",
             symbol=order.symbol,
             side=order.side,
             filled_quantity=0,
             filled_price=0,
             commission=0,
             timestamp=datetime.now(),
-            status='REJECTED',
+            status="REJECTED",
         )
 
     # --- 委托方法 ---

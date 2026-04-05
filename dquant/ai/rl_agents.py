@@ -2,18 +2,21 @@
 强化学习交易代理
 """
 
-from typing import Optional, List, Dict, Any, Tuple
-from dataclasses import dataclass
-import numpy as np
-import pandas as pd
 from abc import ABC, abstractmethod
 from collections import deque
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES, DEFAULT_WINDOW
+from dataclasses import dataclass
+from typing import List, Tuple
+
+import numpy as np
+import pandas as pd
+
+from dquant.constants import DEFAULT_COMMISSION, DEFAULT_INITIAL_CASH, MIN_SHARES
 
 
 @dataclass
 class TradingState:
     """交易状态"""
+
     prices: np.ndarray  # 价格序列
     positions: np.ndarray  # 持仓
     cash: float
@@ -21,12 +24,14 @@ class TradingState:
 
     def to_observation(self) -> np.ndarray:
         """转换为观察向量"""
-        return np.concatenate([
-            self.prices.flatten(),
-            self.positions,
-            [self.cash],
-            [self.timestamp],
-        ])
+        return np.concatenate(
+            [
+                self.prices.flatten(),
+                self.positions,
+                [self.cash],
+                [self.timestamp],
+            ]
+        )
 
 
 class TradingEnvironment:
@@ -84,7 +89,7 @@ class TradingEnvironment:
         """预处理数据"""
         # 按日期和股票排序
         self.dates = sorted(self.data.index.unique())
-        self.symbols = self.data['symbol'].unique()[:self.n_stocks]
+        self.symbols = self.data["symbol"].unique()[: self.n_stocks]
 
         # 构建价格矩阵
         self.price_matrix = np.zeros((len(self.dates), self.n_stocks))
@@ -92,8 +97,8 @@ class TradingEnvironment:
         for i, date in enumerate(self.dates):
             day_data = self.data[self.data.index == date]
             for j, symbol in enumerate(self.symbols):
-                if symbol in day_data['symbol'].values:
-                    price = day_data[day_data['symbol'] == symbol]['close'].values[0]
+                if symbol in day_data["symbol"].values:
+                    price = day_data[day_data["symbol"] == symbol]["close"].values[0]
                     self.price_matrix[i, j] = price
 
     def reset(self) -> np.ndarray:
@@ -109,7 +114,7 @@ class TradingEnvironment:
     def _get_state(self) -> np.ndarray:
         """获取当前状态"""
         prices = self.price_matrix[
-            self.current_step - self.lookback:self.current_step
+            self.current_step - self.lookback : self.current_step
         ]
 
         state = TradingState(
@@ -176,10 +181,10 @@ class TradingEnvironment:
         done = self.current_step >= len(self.dates) - 1
 
         info = {
-            'total_value': total_value,
-            'cash': self.cash,
-            'position_value': np.sum(self.position_values),
-            'step': self.current_step,
+            "total_value": total_value,
+            "cash": self.cash,
+            "position_value": np.sum(self.position_values),
+            "step": self.current_step,
         }
 
         return self._get_state(), reward, done, info
@@ -187,10 +192,12 @@ class TradingEnvironment:
     def render(self):
         """渲染环境"""
         total_value = self.cash + np.sum(self.position_values)
-        print(f"Step {self.current_step}: "
-              f"Total={total_value:,.0f}, "
-              f"Cash={self.cash:,.0f}, "
-              f"Positions={np.sum(self.position_values):,.0f}")
+        print(
+            f"Step {self.current_step}: "
+            f"Total={total_value:,.0f}, "
+            f"Cash={self.cash:,.0f}, "
+            f"Positions={np.sum(self.position_values):,.0f}"
+        )
 
 
 class BaseRLAgent(ABC):
@@ -297,8 +304,7 @@ class DQNAgent(BaseRLAgent):
         self._target_model.load_state_dict(self._model.state_dict())
 
         self.optimizer = torch.optim.Adam(
-            self._model.parameters(),
-            lr=self.learning_rate
+            self._model.parameters(), lr=self.learning_rate
         )
 
     def select_action(self, state: np.ndarray, training: bool = True) -> np.ndarray:
@@ -445,16 +451,14 @@ class RLStrategy:
 
     def generate_signals(self, data: pd.DataFrame) -> list:
         """生成信号"""
-        from dquant.strategy.base import Signal, SignalType
-
         signals = []
 
         # 按日期遍历
         dates = sorted(data.index.unique())
 
-        for i, date in enumerate(dates[self.lookback:], start=self.lookback):
+        for i, date in enumerate(dates[self.lookback :], start=self.lookback):
             # 构建状态
-            window_data = data.loc[dates[i-self.lookback:i]]
+            _ = data.loc[dates[i - self.lookback : i]]  # noqa: F841
 
             # 调用 agent
             # ... 实现状态构建和动作选择 ...

@@ -5,14 +5,18 @@ XTP 券商接口 (中泰证券极速交易接口)
 """
 
 import os
-import threading
 import queue
-from typing import Dict, Optional
+import threading
 from datetime import datetime
+from typing import Dict
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
-from dquant.broker.safety import TradingSafety, log_trade, log_error
+from dquant.broker.safety import TradingSafety, log_error
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_INITIAL_CASH,
+    DEFAULT_STAMP_DUTY,
+)
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -50,14 +54,14 @@ class XTPBroker(BaseBroker):
 
     def __init__(
         self,
-        server: str = '120.27.164.138',  # XTP 服务器地址
+        server: str = "120.27.164.138",  # XTP 服务器地址
         port: int = 6001,
-        account: str = '',
-        password: str = '',
-        password_env: str = '',  # 环境变量名，优先使用
+        account: str = "",
+        password: str = "",
+        password_env: str = "",  # 环境变量名，优先使用
         client_id: int = 1,
         timeout: int = 30,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name="XTP")
         self.server = server
@@ -76,10 +80,10 @@ class XTPBroker(BaseBroker):
 
         # 交易安全控制
         self.safety = TradingSafety(
-            enable_time_check=kwargs.get('enable_time_check', True),
-            enable_fund_check=kwargs.get('enable_fund_check', True),
-            enable_order_validation=kwargs.get('enable_order_validation', True),
-            enable_position_check=kwargs.get('enable_position_check', True),
+            enable_time_check=kwargs.get("enable_time_check", True),
+            enable_fund_check=kwargs.get("enable_fund_check", True),
+            enable_order_validation=kwargs.get("enable_order_validation", True),
+            enable_position_check=kwargs.get("enable_position_check", True),
         )
 
     def connect(self, **kwargs) -> bool:
@@ -87,7 +91,7 @@ class XTPBroker(BaseBroker):
         try:
             # 尝试导入 XTP API
             try:
-                from xtp import XTPAPI, XTPProtocol
+                from xtp import XTPAPI
             except ImportError:
                 logger.error("[XTP] XTP API not installed")
                 logger.error("[XTP] 请联系中泰证券获取 XTP Python SDK")
@@ -139,7 +143,7 @@ class XTPBroker(BaseBroker):
                     # 更新订单状态（线程安全）
                     with self._lock:
                         if order_id in self._orders:
-                            self._orders[order_id]['status'] = status
+                            self._orders[order_id]["status"] = status
 
             except Exception as e:
                 logger.error(f"[XTP] Order callback error: {e}")
@@ -160,7 +164,7 @@ class XTPBroker(BaseBroker):
                     # 记录成交（线程安全）
                     with self._lock:
                         if order_id in self._orders:
-                            self._orders[order_id]['filled'] = quantity
+                            self._orders[order_id]["filled"] = quantity
 
             except Exception as e:
                 logger.error(f"[XTP] Trade callback error: {e}")
@@ -168,17 +172,15 @@ class XTPBroker(BaseBroker):
         def on_quote_event(quote):
             """行情推送回调"""
             try:
-                symbol = quote.stock_code
-                price = quote.last_price
-                # 可以在这里更新实时价格
-                # self._prices[symbol] = price
+                _ = quote.stock_code
+                _ = quote.last_price
             except Exception as e:
                 logger.error(f"[XTP] Quote callback error: {e}")
 
         # 注册回调 (实际 API 调用可能不同)
         try:
             # XTP API 回调注册
-            if hasattr(self._api, 'register_callback'):
+            if hasattr(self._api, "register_callback"):
                 self._api.register_callback(
                     on_order=on_order_event,
                     on_trade=on_trade_event,
@@ -213,10 +215,10 @@ class XTPBroker(BaseBroker):
             # 查询资金
             asset = self._api.query_asset()
             return {
-                'cash': asset.total_asset - asset.market_value,
-                'total_value': asset.total_asset,
-                'market_value': asset.market_value,
-                'available': asset.buying_power,
+                "cash": asset.total_asset - asset.market_value,
+                "total_value": asset.total_asset,
+                "market_value": asset.market_value,
+                "available": asset.buying_power,
             }
         except Exception as e:
             logger.error(f"[XTP] Query account error: {e}")
@@ -233,12 +235,12 @@ class XTPBroker(BaseBroker):
 
             for pos in positions:
                 result[pos.ticker] = {
-                    'symbol': pos.ticker,
-                    'quantity': pos.total_qty,
-                    'available': pos.sellable_qty,
-                    'avg_cost': pos.avg_price,
-                    'current_price': pos.market_price,
-                    'profit': pos.unrealized_pnl,
+                    "symbol": pos.ticker,
+                    "quantity": pos.total_qty,
+                    "available": pos.sellable_qty,
+                    "avg_cost": pos.avg_price,
+                    "current_price": pos.market_price,
+                    "profit": pos.unrealized_pnl,
                 }
 
             return result
@@ -250,14 +252,14 @@ class XTPBroker(BaseBroker):
         """下单"""
         if not self._connected:
             return OrderResult(
-                order_id='',
+                order_id="",
                 symbol=order.symbol,
                 side=order.side,
                 filled_quantity=0,
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='REJECTED',
+                status="REJECTED",
             )
 
         try:
@@ -266,52 +268,56 @@ class XTPBroker(BaseBroker):
             positions = self.get_positions()
             estimated_price = None
 
-            if order.order_type == 'MARKET' and order.price is None:
+            if order.order_type == "MARKET" and order.price is None:
                 md = self.get_market_data(order.symbol)
-                if md and 'price' in md:
-                    estimated_price = md['price']
+                if md and "price" in md:
+                    estimated_price = md["price"]
 
             valid, msg = self.safety.check_order(
                 order,
-                available_cash=account_info.get('cash', 0),
+                available_cash=account_info.get("cash", 0),
                 positions=positions,
                 estimated_price=estimated_price,
             )
 
             if not valid:
-                log_error("PLACE_ORDER", Exception(msg), {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                })
+                log_error(
+                    "PLACE_ORDER",
+                    Exception(msg),
+                    {
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "quantity": order.quantity,
+                    },
+                )
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
 
             # 转换订单类型
             # XTP: 23=市价单, 24=限价单
-            price_type = 23 if order.order_type == 'MARKET' else 24
+            price_type = 23 if order.order_type == "MARKET" else 24
 
             # 转换买卖方向: 'BUY'/'SELL' -> 1/2
-            side_map = {'BUY': 1, 'SELL': 2}
+            side_map = {"BUY": 1, "SELL": 2}
             xtp_side = side_map.get(order.side.upper(), 0)
             if xtp_side == 0:
                 return OrderResult(
-                    order_id='',
+                    order_id="",
                     symbol=order.symbol,
                     side=order.side,
                     filled_quantity=0,
                     filled_price=0,
                     commission=0,
                     timestamp=datetime.now(),
-                    status='REJECTED',
+                    status="REJECTED",
                 )
 
             # 下单
@@ -324,7 +330,7 @@ class XTPBroker(BaseBroker):
             )
 
             order.order_id = str(api_result.order_id)
-            order.status = 'PENDING'
+            order.status = "PENDING"
 
             return OrderResult(
                 order_id=order.order_id,
@@ -334,20 +340,20 @@ class XTPBroker(BaseBroker):
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='PENDING',
+                status="PENDING",
             )
 
         except Exception as e:
             logger.error(f"[XTP] Place order error: {e}")
             return OrderResult(
-                order_id='',
+                order_id="",
                 symbol=order.symbol,
                 side=order.side,
                 filled_quantity=0,
                 filled_price=0,
                 commission=0,
                 timestamp=datetime.now(),
-                status='REJECTED',
+                status="REJECTED",
             )
 
     def cancel_order(self, order_id: str) -> bool:
@@ -371,10 +377,10 @@ class XTPBroker(BaseBroker):
             orders = self._api.query_orders()
             for o in orders:
                 if str(o.order_id) == order_id:
-                    filled_qty = getattr(o, 'traded_volume', 0)
+                    filled_qty = getattr(o, "traded_volume", 0)
                     return Order(
                         symbol=o.ticker,
-                        side='BUY' if o.side == 1 else 'SELL',
+                        side="BUY" if o.side == 1 else "SELL",
                         quantity=o.quantity,
                         price=o.price,
                         order_id=str(o.order_id),
@@ -394,12 +400,12 @@ class XTPBroker(BaseBroker):
         try:
             quote = self._api.query_quote(symbol)
             return {
-                'symbol': symbol,
-                'price': quote.last_price,
-                'bid': quote.bid_price,
-                'ask': quote.ask_price,
-                'volume': quote.volume,
-                'timestamp': datetime.now(),
+                "symbol": symbol,
+                "price": quote.last_price,
+                "bid": quote.bid_price,
+                "ask": quote.ask_price,
+                "volume": quote.volume,
+                "timestamp": datetime.now(),
             }
         except Exception as e:
             logger.error(f"[XTP] Query market data error: {e}")
@@ -408,13 +414,13 @@ class XTPBroker(BaseBroker):
     def _map_order_status(self, xtp_status: int) -> str:
         """映射订单状态"""
         status_map = {
-            0: 'PENDING',
-            1: 'PARTIAL_FILLED',
-            2: 'FILLED',
-            3: 'CANCELLED',
-            4: 'REJECTED',
+            0: "PENDING",
+            1: "PARTIAL_FILLED",
+            2: "FILLED",
+            3: "CANCELLED",
+            4: "REJECTED",
         }
-        return status_map.get(xtp_status, 'UNKNOWN')
+        return status_map.get(xtp_status, "UNKNOWN")
 
 
 class XTPSimulator(XTPBroker):
@@ -444,14 +450,13 @@ class XTPSimulator(XTPBroker):
 
     def get_account(self) -> dict:
         total_value = self.cash + sum(
-            p['quantity'] * p.get('price', 0)
-            for p in self.positions.values()
+            p["quantity"] * p.get("price", 0) for p in self.positions.values()
         )
         return {
-            'cash': self.cash,
-            'total_value': total_value,
-            'market_value': total_value - self.cash,
-            'available': self.cash,
+            "cash": self.cash,
+            "total_value": total_value,
+            "market_value": total_value - self.cash,
+            "available": self.cash,
         }
 
     def get_positions(self) -> Dict[str, dict]:
@@ -461,77 +466,107 @@ class XTPSimulator(XTPBroker):
         """模拟下单"""
         if not self._connected:
             return OrderResult(
-                order_id='', symbol=order.symbol, side=order.side,
-                filled_quantity=0, filled_price=0, commission=0,
-                timestamp=datetime.now(), status='REJECTED',
+                order_id="",
+                symbol=order.symbol,
+                side=order.side,
+                filled_quantity=0,
+                filled_price=0,
+                commission=0,
+                timestamp=datetime.now(),
+                status="REJECTED",
             )
 
         fill_price = order.price or 10.0
 
-        if order.side.upper() == 'BUY':
+        if order.side.upper() == "BUY":
             cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
             if cost > self.cash:
                 return OrderResult(
-                    order_id='', symbol=order.symbol, side=order.side,
-                    filled_quantity=0, filled_price=0, commission=0,
-                    timestamp=datetime.now(), status='REJECTED',
+                    order_id="",
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status="REJECTED",
                 )
             self.cash -= cost
             if order.symbol in self.positions:
                 pos = self.positions[order.symbol]
-                total_qty = pos['quantity'] + order.quantity
-                pos['avg_cost'] = (pos['avg_cost'] * pos['quantity'] + fill_price * order.quantity) / total_qty
-                pos['quantity'] = total_qty
-                pos['price'] = fill_price
+                total_qty = pos["quantity"] + order.quantity
+                pos["avg_cost"] = (
+                    pos["avg_cost"] * pos["quantity"] + fill_price * order.quantity
+                ) / total_qty
+                pos["quantity"] = total_qty
+                pos["price"] = fill_price
             else:
                 self.positions[order.symbol] = {
-                    'quantity': order.quantity,
-                    'avg_cost': fill_price,
-                    'price': fill_price,
+                    "quantity": order.quantity,
+                    "avg_cost": fill_price,
+                    "price": fill_price,
                 }
 
-        elif order.side.upper() == 'SELL':
+        elif order.side.upper() == "SELL":
             if order.symbol not in self.positions:
                 return OrderResult(
-                    order_id='', symbol=order.symbol, side=order.side,
-                    filled_quantity=0, filled_price=0, commission=0,
-                    timestamp=datetime.now(), status='REJECTED',
+                    order_id="",
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status="REJECTED",
                 )
             pos = self.positions[order.symbol]
-            if order.quantity > pos['quantity']:
+            if order.quantity > pos["quantity"]:
                 return OrderResult(
-                    order_id='', symbol=order.symbol, side=order.side,
-                    filled_quantity=0, filled_price=0, commission=0,
-                    timestamp=datetime.now(), status='REJECTED',
+                    order_id="",
+                    symbol=order.symbol,
+                    side=order.side,
+                    filled_quantity=0,
+                    filled_price=0,
+                    commission=0,
+                    timestamp=datetime.now(),
+                    status="REJECTED",
                 )
             revenue = fill_price * order.quantity
             total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
             self.cash += revenue - total_cost
-            pos['quantity'] -= order.quantity
-            pos['price'] = fill_price
-            if pos['quantity'] <= 0:
+            pos["quantity"] -= order.quantity
+            pos["price"] = fill_price
+            if pos["quantity"] <= 0:
                 del self.positions[order.symbol]
 
         order_id = f"XTPSIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{id(order)}"
         order.order_id = order_id
-        order.status = 'FILLED'
+        order.status = "FILLED"
         order.filled_quantity = order.quantity
         self.orders[order_id] = order
 
         # 卖出佣金包含印花税
-        commission_rate = (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY) if order.side.upper() == 'SELL' else DEFAULT_COMMISSION
+        commission_rate = (
+            (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
+            if order.side.upper() == "SELL"
+            else DEFAULT_COMMISSION
+        )
         commission = fill_price * order.quantity * commission_rate
 
         return OrderResult(
-            order_id=order_id, symbol=order.symbol, side=order.side,
-            filled_quantity=order.quantity, filled_price=fill_price,
+            order_id=order_id,
+            symbol=order.symbol,
+            side=order.side,
+            filled_quantity=order.quantity,
+            filled_price=fill_price,
             commission=commission,
-            timestamp=datetime.now(), status='FILLED',
+            timestamp=datetime.now(),
+            status="FILLED",
         )
 
     def cancel_order(self, order_id: str) -> bool:
         if order_id in self.orders:
-            self.orders[order_id].status = 'CANCELLED'
+            self.orders[order_id].status = "CANCELLED"
             return True
         return False
 

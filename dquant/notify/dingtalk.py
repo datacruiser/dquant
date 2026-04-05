@@ -4,20 +4,19 @@
 通过钉钉机器人 Webhook 发送通知，使用标准库 urllib（无外部依赖）。
 """
 
-import json
-import hmac
-import hashlib
 import base64
+import hashlib
+import hmac
+import json
 import os
 import time
-import urllib.request
 import urllib.error
 import urllib.parse
-from typing import Optional
+import urllib.request
 
+from dquant.logger import get_logger
 from dquant.notify.base import Notifier
 from dquant.notify.log_notifier import LogNotifier
-from dquant.logger import get_logger
 
 logger = get_logger(__name__)
 

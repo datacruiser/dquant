@@ -4,12 +4,12 @@ Yahoo Finance 数据加载器
 支持全球股票、指数、ETF、外汇、加密货币等。
 """
 
-from typing import Optional, List, Union
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import List, Optional, Union
+
 import pandas as pd
 
 from dquant.data.base import DataSource
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_SLIPPAGE, DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, DEFAULT_WINDOW
 
 
 class YahooLoader(DataSource):
@@ -40,31 +40,26 @@ class YahooLoader(DataSource):
     # 常用标的
     POPULAR_SYMBOLS = {
         # 美股指数
-        'sp500': '^GSPC',
-        'nasdaq': '^IXIC',
-        'dow': '^DJI',
-        'russell': '^RUT',
-
+        "sp500": "^GSPC",
+        "nasdaq": "^IXIC",
+        "dow": "^DJI",
+        "russell": "^RUT",
         # 港股指数
-        'hsi': '^HSI',
-        'hscei': '^HSCE',
-
+        "hsi": "^HSI",
+        "hscei": "^HSCE",
         # A股指数
-        'sse': '000001.SS',
-        'csi300': '000300.SS',
-
+        "sse": "000001.SS",
+        "csi300": "000300.SS",
         # 大宗商品
-        'gold': 'GC=F',
-        'silver': 'SI=F',
-        'oil': 'CL=F',
-        'natural_gas': 'NG=F',
-
+        "gold": "GC=F",
+        "silver": "SI=F",
+        "oil": "CL=F",
+        "natural_gas": "NG=F",
         # 加密货币
-        'btc': 'BTC-USD',
-        'eth': 'ETH-USD',
-
+        "btc": "BTC-USD",
+        "eth": "ETH-USD",
         # 美股龙头
-        'mag7': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA'],
+        "mag7": ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA"],
     }
 
     def __init__(
@@ -72,7 +67,7 @@ class YahooLoader(DataSource):
         symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
-        interval: str = '1d',  # 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+        interval: str = "1d",  # 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
         include_factors: bool = True,
         auto_adjust: bool = True,  # 自动复权
     ):
@@ -138,8 +133,8 @@ class YahooLoader(DataSource):
 
             # 下载历史数据
             df = ticker.history(
-                start=self.start or '2020-01-01',
-                end=self.end or datetime.now().strftime('%Y-%m-%d'),
+                start=self.start or "2020-01-01",
+                end=self.end or datetime.now().strftime("%Y-%m-%d"),
                 interval=self.interval,
                 auto_adjust=self.auto_adjust,
             )
@@ -148,60 +143,62 @@ class YahooLoader(DataSource):
                 return None
 
             # 标准化列名
-            df = df.rename(columns={
-                'Open': 'open',
-                'High': 'high',
-                'Low': 'low',
-                'Close': 'close',
-                'Volume': 'volume',
-                'Dividends': 'dividend',
-                'Stock Splits': 'stock_splits',
-            })
+            df = df.rename(
+                columns={
+                    "Open": "open",
+                    "High": "high",
+                    "Low": "low",
+                    "Close": "close",
+                    "Volume": "volume",
+                    "Dividends": "dividend",
+                    "Stock Splits": "stock_splits",
+                }
+            )
 
-            df['symbol'] = symbol
-            df.index.name = 'date'
+            df["symbol"] = symbol
+            df.index.name = "date"
 
             return df
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
             # 动量
-            group['momentum_5'] = group['close'].pct_change(5)
-            group['momentum_10'] = group['close'].pct_change(10)
-            group['momentum_20'] = group['close'].pct_change(20)
+            group["momentum_5"] = group["close"].pct_change(5)
+            group["momentum_10"] = group["close"].pct_change(10)
+            group["momentum_20"] = group["close"].pct_change(20)
 
             # 波动率
-            returns = group['close'].pct_change()
-            group['volatility_10'] = returns.rolling(10).std()
-            group['volatility_20'] = returns.rolling(20).std()
-            group['volatility_60'] = returns.rolling(60).std()
+            returns = group["close"].pct_change()
+            group["volatility_10"] = returns.rolling(10).std()
+            group["volatility_20"] = returns.rolling(20).std()
+            group["volatility_60"] = returns.rolling(60).std()
 
             # 均线
             for window in [5, 10, 20, 50, 200]:
-                group[f'ma_{window}'] = group['close'].rolling(window).mean()
+                group[f"ma_{window}"] = group["close"].rolling(window).mean()
 
             # RSI
-            group['rsi_14'] = self._calculate_rsi(group['close'], 14)
+            group["rsi_14"] = self._calculate_rsi(group["close"], 14)
 
             # MACD
-            macd, signal, hist = self._calculate_macd(group['close'])
-            group['macd'] = macd
-            group['macd_signal'] = signal
-            group['macd_hist'] = hist
+            macd, signal, hist = self._calculate_macd(group["close"])
+            group["macd"] = macd
+            group["macd_signal"] = signal
+            group["macd_hist"] = hist
 
             # 布林带
-            upper, middle, lower = self._calculate_bollinger(group['close'])
-            group['bollinger_upper'] = upper
-            group['bollinger_middle'] = middle
-            group['bollinger_lower'] = lower
+            upper, middle, lower = self._calculate_bollinger(group["close"])
+            group["bollinger_upper"] = upper
+            group["bollinger_middle"] = middle
+            group["bollinger_lower"] = lower
 
             results.append(group)
 
@@ -217,7 +214,9 @@ class YahooLoader(DataSource):
         return 100 - (100 / (1 + rs))
 
     @staticmethod
-    def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
+    def _calculate_macd(
+        series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+    ):
         """计算 MACD"""
         ema_fast = series.ewm(span=fast, adjust=False).mean()
         ema_slow = series.ewm(span=slow, adjust=False).mean()
@@ -246,19 +245,20 @@ class YahooRealTime:
         """获取实时行情"""
         try:
             import yfinance as yf
+
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
             return {
-                'symbol': symbol,
-                'name': info.get('shortName', ''),
-                'price': info.get('currentPrice', info.get('regularMarketPrice', 0)),
-                'change': info.get('regularMarketChange', 0),
-                'change_pct': info.get('regularMarketChangePercent', 0),
-                'volume': info.get('regularMarketVolume', 0),
-                'market_cap': info.get('marketCap', 0),
-                'pe': info.get('trailingPE', 0),
-                'pb': info.get('priceToBook', 0),
+                "symbol": symbol,
+                "name": info.get("shortName", ""),
+                "price": info.get("currentPrice", info.get("regularMarketPrice", 0)),
+                "change": info.get("regularMarketChange", 0),
+                "change_pct": info.get("regularMarketChangePercent", 0),
+                "volume": info.get("regularMarketVolume", 0),
+                "market_cap": info.get("marketCap", 0),
+                "pe": info.get("trailingPE", 0),
+                "pb": info.get("priceToBook", 0),
             }
         except Exception:
             return {}
@@ -274,12 +274,13 @@ class YahooRealTime:
         return pd.DataFrame(results)
 
     @staticmethod
-    def get_fx_rate(from_currency: str, to_currency: str = 'USD') -> float:
+    def get_fx_rate(from_currency: str, to_currency: str = "USD") -> float:
         """获取汇率"""
         try:
             import yfinance as yf
+
             pair = f"{from_currency}{to_currency}=X"
             ticker = yf.Ticker(pair)
-            return ticker.history(period='1d')['Close'].iloc[-1]
+            return ticker.history(period="1d")["Close"].iloc[-1]
         except Exception:
             return 0

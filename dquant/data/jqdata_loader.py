@@ -5,13 +5,13 @@
 需要注册账号: https://www.joinquant.com/
 """
 
-from typing import Optional, List, Union
 from datetime import datetime
-import pandas as pd
-import numpy as np
+from typing import List, Optional, Union
 
-from dquant.data.base import DataSource
+import pandas as pd
+
 from dquant.constants import normalize_symbol
+from dquant.data.base import DataSource
 
 
 class JQDataLoader(DataSource):
@@ -31,21 +31,21 @@ class JQDataLoader(DataSource):
 
     # 指数代码映射
     INDEX_MAP = {
-        'hs300': '000300.XSHG',
-        'zz500': '000905.XSHG',
-        'zz1000': '000852.XSHG',
-        'sz50': '000016.XSHG',
+        "hs300": "000300.XSHG",
+        "zz500": "000905.XSHG",
+        "zz1000": "000852.XSHG",
+        "sz50": "000016.XSHG",
     }
 
     def __init__(
         self,
-        symbols: Union[str, List[str]] = 'hs300',
+        symbols: Union[str, List[str]] = "hs300",
         start: Optional[str] = None,
         end: Optional[str] = None,
         account: Optional[str] = None,
         password: Optional[str] = None,
-        freq: str = 'daily',  # daily, minute
-        fq: str = 'pre',  # pre=前复权, post=后复权, None=不复权
+        freq: str = "daily",  # daily, minute
+        fq: str = "pre",  # pre=前复权, post=后复权, None=不复权
         include_factors: bool = True,
     ):
         super().__init__(symbols=symbols, start=start, end=end)
@@ -69,8 +69,9 @@ class JQDataLoader(DataSource):
 
         # 登录
         import os
-        account = self.account or os.environ.get('JQDATA_ACCOUNT')
-        password = self.password or os.environ.get('JQDATA_PASSWORD')
+
+        account = self.account or os.environ.get("JQDATA_ACCOUNT")
+        password = self.password or os.environ.get("JQDATA_PASSWORD")
 
         if not account or not password:
             raise ValueError(
@@ -99,7 +100,7 @@ class JQDataLoader(DataSource):
                     all_data.append(df)
 
                 if (i + 1) % 50 == 0:
-                    print(f"  [JQData] 已加载 {i+1}/{len(symbol_list)} 只股票")
+                    print(f"  [JQData] 已加载 {i + 1}/{len(symbol_list)} 只股票")
 
             except Exception as e:
                 failed.append((symbol, str(e)))
@@ -129,7 +130,7 @@ class JQDataLoader(DataSource):
             index_code = self.INDEX_MAP[self.symbols]
             return self._get_index_constituents(index_code)
 
-        if self.symbols == 'all':
+        if self.symbols == "all":
             return self._get_all_stocks()
 
         return [self._normalize_symbol(self.symbols)]
@@ -138,19 +139,19 @@ class JQDataLoader(DataSource):
         """标准化股票代码 → 聚宽格式 (.XSHG/.XSHE)"""
         # 先转为标准 CODE.MARKET 格式，再转聚宽格式
         std = normalize_symbol(symbol)
-        return std.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
+        return std.replace(".SH", ".XSHG").replace(".SZ", ".XSHE")
 
     def _get_index_constituents(self, index_code: str) -> List[str]:
         """获取指数成分股"""
         try:
             df = self._jq.get_index_stocks(index_code, date=self.end)
-            return df['code'].tolist()
+            return df["code"].tolist()
         except Exception:
             return self._get_all_stocks()[:50]
 
     def _get_all_stocks(self) -> List[str]:
         """获取全部 A 股"""
-        df = self._jq.get_all_securities(types=['stock'])
+        df = self._jq.get_all_securities(types=["stock"])
         return df.index.tolist()
 
     def _get_stock_data(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -159,8 +160,8 @@ class JQDataLoader(DataSource):
             # 日线数据
             df = self._jq.get_price(
                 symbol,
-                start_date=self.start or '2020-01-01',
-                end_date=self.end or datetime.now().strftime('%Y-%m-%d'),
+                start_date=self.start or "2020-01-01",
+                end_date=self.end or datetime.now().strftime("%Y-%m-%d"),
                 frequency=self.freq,
                 fq=self.fq,
             )
@@ -170,40 +171,42 @@ class JQDataLoader(DataSource):
 
             # 标准化
             df = df.reset_index()
-            df = df.rename(columns={
-                'time': 'date',
-                'money': 'amount',
-            })
+            df = df.rename(
+                columns={
+                    "time": "date",
+                    "money": "amount",
+                }
+            )
 
-            df['date'] = pd.to_datetime(df['date'])
-            df['symbol'] = symbol.replace('.XSHG', '.SH').replace('.XSHE', '.SZ')
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df["symbol"] = symbol.replace(".XSHG", ".SH").replace(".XSHE", ".SZ")
+            df = df.set_index("date")
 
             return df
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
             # 动量
-            group['momentum_5'] = group['close'].pct_change(5)
-            group['momentum_10'] = group['close'].pct_change(10)
-            group['momentum_20'] = group['close'].pct_change(20)
+            group["momentum_5"] = group["close"].pct_change(5)
+            group["momentum_10"] = group["close"].pct_change(10)
+            group["momentum_20"] = group["close"].pct_change(20)
 
             # 波动率
-            returns = group['close'].pct_change()
-            group['volatility_20'] = returns.rolling(20).std()
+            returns = group["close"].pct_change()
+            group["volatility_20"] = returns.rolling(20).std()
 
             # 均线
-            group['ma_5'] = group['close'].rolling(5).mean()
-            group['ma_10'] = group['close'].rolling(10).mean()
-            group['ma_20'] = group['close'].rolling(20).mean()
+            group["ma_5"] = group["close"].rolling(5).mean()
+            group["ma_10"] = group["close"].rolling(10).mean()
+            group["ma_20"] = group["close"].rolling(20).mean()
 
             results.append(group)
 
@@ -237,10 +240,12 @@ class JQDataFactor:
 
     def _init(self):
         if self._jq is None:
-            import jqdatasdk as jq
             import os
-            account = self.account or os.environ.get('JQDATA_ACCOUNT')
-            password = self.password or os.environ.get('JQDATA_PASSWORD')
+
+            import jqdatasdk as jq
+
+            account = self.account or os.environ.get("JQDATA_ACCOUNT")
+            password = self.password or os.environ.get("JQDATA_PASSWORD")
             jq.auth(account, password)
             self._jq = jq
 
@@ -250,8 +255,9 @@ class JQDataFactor:
         # 聚宽支持的财务因子
         # indicator: roe, inc_revenue_year_on_year, inc_net_profit_year_on_year, etc.
         df = self._jq.financial.run_query(
-            self._jq.financial_indicator
-            .filter(self._jq.financial_indicator.code == symbol)
+            self._jq.financial_indicator.filter(
+                self._jq.financial_indicator.code == symbol
+            )
         )
         return df[indicator] if indicator in df.columns else pd.Series()
 
@@ -260,8 +266,8 @@ class JQDataFactor:
         self._init()
         df = self._jq.get_factor_values(
             [symbol],
-            ['pe_ratio', 'pb_ratio', 'ps_ratio', 'market_cap'],
-            start_date='2020-01-01',
-            end_date=datetime.now().strftime('%Y-%m-%d'),
+            ["pe_ratio", "pb_ratio", "ps_ratio", "market_cap"],
+            start_date="2020-01-01",
+            end_date=datetime.now().strftime("%Y-%m-%d"),
         )
         return df

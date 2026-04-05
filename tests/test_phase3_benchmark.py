@@ -2,9 +2,9 @@
 Phase 3 Step 7: Benchmark 对比测试
 """
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 from dquant.backtest.engine import BacktestEngine
 from dquant.backtest.result import BacktestResult
@@ -18,12 +18,14 @@ class SimpleBuyAll(BaseStrategy):
         signals = []
         for date, group in data.groupby(data.index):
             for _, row in group.iterrows():
-                signals.append(Signal(
-                    symbol=row['symbol'],
-                    signal_type=SignalType.BUY,
-                    strength=1.0 / len(group),
-                    timestamp=date,
-                ))
+                signals.append(
+                    Signal(
+                        symbol=row["symbol"],
+                        signal_type=SignalType.BUY,
+                        strength=1.0 / len(group),
+                        timestamp=date,
+                    )
+                )
         return signals
 
 
@@ -32,20 +34,22 @@ class TestBenchmarkNav:
     def _make_data(self, n_days=20, n_stocks=3):
         """构造测试数据"""
         np.random.seed(42)
-        dates = pd.date_range('2024-01-01', periods=n_days, freq='D')
+        dates = pd.date_range("2024-01-01", periods=n_days, freq="D")
         rows = []
-        symbols = [f'{i:06d}.SZ' for i in range(1, n_stocks + 1)]
+        symbols = [f"{i:06d}.SZ" for i in range(1, n_stocks + 1)]
 
         for date in dates:
             for symbol in symbols:
-                rows.append({
-                    'symbol': symbol,
-                    'open': 10.0 + np.random.randn() * 0.5,
-                    'high': 10.5 + np.random.randn() * 0.5,
-                    'low': 9.5 + np.random.randn() * 0.5,
-                    'close': 10.0 + np.random.randn() * 0.5,
-                    'volume': 1000000 + np.random.randint(-100000, 100000),
-                })
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "open": 10.0 + np.random.randn() * 0.5,
+                        "high": 10.5 + np.random.randn() * 0.5,
+                        "low": 9.5 + np.random.randn() * 0.5,
+                        "close": 10.0 + np.random.randn() * 0.5,
+                        "volume": 1000000 + np.random.randint(-100000, 100000),
+                    }
+                )
 
         df = pd.DataFrame(rows, index=dates.repeat(n_stocks))
         return df, symbols
@@ -82,7 +86,7 @@ class TestBenchmarkNav:
         engine = BacktestEngine(
             data=df,
             strategy=strategy,
-            benchmark='999999.SZ',
+            benchmark="999999.SZ",
         )
         result = engine.run()
         assert result.benchmark_nav is None
@@ -113,5 +117,5 @@ class TestBenchmarkNav:
             assert (result.benchmark_nav > 0).all()
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

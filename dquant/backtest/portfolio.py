@@ -2,11 +2,13 @@
 组合管理
 """
 
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Dict, List, Optional
+
 import pandas as pd
-from dquant.constants import DEFAULT_STAMP_DUTY, DEFAULT_INITIAL_CASH, MIN_SHARES
+
+from dquant.constants import DEFAULT_INITIAL_CASH, DEFAULT_STAMP_DUTY, MIN_SHARES
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,6 +17,7 @@ logger = get_logger(__name__)
 @dataclass
 class Position:
     """持仓"""
+
     symbol: str
     shares: float
     avg_cost: float
@@ -43,6 +46,7 @@ class Portfolio:
 
     管理持仓、现金、净值等。
     """
+
     initial_cash: float = DEFAULT_INITIAL_CASH
     cash: float = field(default=0.0)
     positions: Dict[str, Position] = field(default_factory=dict)
@@ -88,7 +92,9 @@ class Portfolio:
 
         if cost > self.cash:
             # 调整为可买入的最大整手数量
-            max_shares = int(self.cash / (price * (1 + commission)) // MIN_SHARES) * MIN_SHARES
+            max_shares = (
+                int(self.cash / (price * (1 + commission)) // MIN_SHARES) * MIN_SHARES
+            )
             if max_shares <= 0:
                 return
             shares = max_shares
@@ -109,7 +115,14 @@ class Portfolio:
                 current_price=price,
             )
 
-    def sell(self, symbol: str, shares: float, price: float, commission: float = 0, stamp_duty: float = DEFAULT_STAMP_DUTY):
+    def sell(
+        self,
+        symbol: str,
+        shares: float,
+        price: float,
+        commission: float = 0,
+        stamp_duty: float = DEFAULT_STAMP_DUTY,
+    ):
         """卖出（含印花税，整手约束）"""
         if symbol not in self.positions:
             return
@@ -163,7 +176,12 @@ class Portfolio:
             if symbol not in target_weights:
                 # 清仓
                 pos = self.positions[symbol]
-                self.sell(symbol, pos.shares, prices.get(symbol, pos.current_price), commission)
+                self.sell(
+                    symbol,
+                    pos.shares,
+                    prices.get(symbol, pos.current_price),
+                    commission,
+                )
 
         # 卖出后重新计算总资产（现金已变化）
         total = self.total_value
@@ -193,10 +211,12 @@ class Portfolio:
 
     def to_dataframe(self) -> pd.DataFrame:
         """转换为 DataFrame"""
-        return pd.DataFrame({
-            'timestamp': self.timestamp_history,
-            'nav': self.nav_history,
-        }).set_index('timestamp')
+        return pd.DataFrame(
+            {
+                "timestamp": self.timestamp_history,
+                "nav": self.nav_history,
+            }
+        ).set_index("timestamp")
 
     def apply_corporate_action(self, action: "CorporateAction"):
         """
@@ -220,11 +240,12 @@ class CorporateAction:
     回测模式使用前复权数据，不需要实际处理。
     实盘模式需要数据源支持。
     """
+
     symbol: str
     action_type: str  # 'dividend', 'split', 'bonus_shares'
     ex_date: str
-    amount: float = 0.0       # 每股分红金额 (dividend) 或拆股比例 (split)
-    ratio: float = 1.0        # 送股比例 (bonus_shares: 0.1 = 每10股送1股)
+    amount: float = 0.0  # 每股分红金额 (dividend) 或拆股比例 (split)
+    ratio: float = 1.0  # 送股比例 (bonus_shares: 0.1 = 每10股送1股)
     metadata: Optional[Dict] = None
 
     def __post_init__(self):

@@ -4,14 +4,16 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
 
 
 class SignalType(Enum):
     """信号类型"""
+
     BUY = 1
     SELL = -1
     HOLD = 0
@@ -24,6 +26,7 @@ class Signal:
 
     统一的信号格式，用于回测和实盘。
     """
+
     symbol: str
     signal_type: SignalType
     strength: float = 1.0  # 信号强度 0-1
@@ -45,12 +48,12 @@ class Signal:
 
     def to_dict(self) -> dict:
         return {
-            'symbol': self.symbol,
-            'signal_type': self.signal_type.value,
-            'strength': self.strength,
-            'price': self.price,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'metadata': self.metadata,
+            "symbol": self.symbol,
+            "signal_type": self.signal_type.value,
+            "strength": self.strength,
+            "price": self.price,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "metadata": self.metadata,
         }
 
 
@@ -101,7 +104,9 @@ class BaseStrategy(ABC):
         """
         return None
 
-    def get_positions(self, data: pd.DataFrame, signals: List[Signal]) -> Dict[str, float]:
+    def get_positions(
+        self, data: pd.DataFrame, signals: List[Signal]
+    ) -> Dict[str, float]:
         """
         根据信号计算目标持仓权重
 
@@ -121,6 +126,6 @@ class BaseStrategy(ABC):
         # 归一化权重
         total = sum(positions.values())
         if total > 0:
-            positions = {k: v/total for k, v in positions.items()}
+            positions = {k: v / total for k, v in positions.items()}
 
         return positions

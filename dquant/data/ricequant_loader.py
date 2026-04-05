@@ -5,12 +5,13 @@
 需要注册账号: https://www.ricequant.com/
 """
 
-from typing import Optional, List, Union
 from datetime import datetime
+from typing import List, Optional, Union
+
 import pandas as pd
 
-from dquant.data.base import DataSource
 from dquant.constants import normalize_symbol
+from dquant.data.base import DataSource
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -29,15 +30,15 @@ class RiceQuantLoader(DataSource):
     """
 
     INDEX_MAP = {
-        'hs300': '000300.XSHG',
-        'zz500': '000905.XSHG',
-        'zz1000': '000852.XSHG',
-        'sz50': '000016.XSHG',
+        "hs300": "000300.XSHG",
+        "zz500": "000905.XSHG",
+        "zz1000": "000852.XSHG",
+        "sz50": "000016.XSHG",
     }
 
     def __init__(
         self,
-        symbols: Union[str, List[str]] = 'hs300',
+        symbols: Union[str, List[str]] = "hs300",
         start: Optional[str] = None,
         end: Optional[str] = None,
         token: Optional[str] = None,
@@ -56,7 +57,8 @@ class RiceQuantLoader(DataSource):
 
         # 初始化
         import os
-        token = self.token or os.environ.get('RICEQUANT_TOKEN')
+
+        token = self.token or os.environ.get("RICEQUANT_TOKEN")
         if token:
             rq.init(token)
 
@@ -70,25 +72,29 @@ class RiceQuantLoader(DataSource):
         try:
             df = rq.get_price(
                 symbol_list,
-                start_date=self.start or '2020-01-01',
-                end_date=self.end or datetime.now().strftime('%Y-%m-%d'),
-                frequency='1d',
-                fields=['open', 'high', 'low', 'close', 'volume', 'total_turnover'],
+                start_date=self.start or "2020-01-01",
+                end_date=self.end or datetime.now().strftime("%Y-%m-%d"),
+                frequency="1d",
+                fields=["open", "high", "low", "close", "volume", "total_turnover"],
             )
 
             if df is not None and len(df) > 0:
                 # 重置索引
                 df = df.reset_index()
-                df = df.rename(columns={
-                    'order_book_id': 'symbol',
-                    'date': 'date',
-                    'total_turnover': 'amount',
-                })
+                df = df.rename(
+                    columns={
+                        "order_book_id": "symbol",
+                        "date": "date",
+                        "total_turnover": "amount",
+                    }
+                )
 
                 # 标准化股票代码
-                df['symbol'] = df['symbol'].str.replace('.XSHG', '.SH').str.replace('.XSHE', '.SZ')
-                df['date'] = pd.to_datetime(df['date'])
-                df = df.set_index('date')
+                df["symbol"] = (
+                    df["symbol"].str.replace(".XSHG", ".SH").str.replace(".XSHE", ".SZ")
+                )
+                df["date"] = pd.to_datetime(df["date"])
+                df = df.set_index("date")
 
                 all_data.append(df)
 
@@ -117,38 +123,38 @@ class RiceQuantLoader(DataSource):
             index_code = self.INDEX_MAP[self.symbols]
             try:
                 df = rq.index_components(index_code)
-                return df.index.tolist() if hasattr(df, 'index') else []
+                return df.index.tolist() if hasattr(df, "index") else []
             except Exception as e:
                 logger.warning(f"Failed to get index components for {index_code}: {e}")
 
-        if self.symbols == 'all':
-            df = rq.all_instruments(type='CS')
-            return df['order_book_id'].tolist()
+        if self.symbols == "all":
+            df = rq.all_instruments(type="CS")
+            return df["order_book_id"].tolist()
 
         return [self._normalize_symbol(self.symbols)]
 
     def _normalize_symbol(self, symbol: str) -> str:
         """标准化股票代码 → RiceQuant 格式 (.XSHG/.XSHE)"""
         std = normalize_symbol(symbol)
-        return std.replace('.SH', '.XSHG').replace('.SZ', '.XSHE')
+        return std.replace(".SH", ".XSHG").replace(".SZ", ".XSHE")
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby('symbol'):
+        for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
-            group['momentum_5'] = group['close'].pct_change(5)
-            group['momentum_10'] = group['close'].pct_change(10)
-            group['momentum_20'] = group['close'].pct_change(20)
+            group["momentum_5"] = group["close"].pct_change(5)
+            group["momentum_10"] = group["close"].pct_change(10)
+            group["momentum_20"] = group["close"].pct_change(20)
 
-            returns = group['close'].pct_change()
-            group['volatility_20'] = returns.rolling(20).std()
+            returns = group["close"].pct_change()
+            group["volatility_20"] = returns.rolling(20).std()
 
-            group['ma_5'] = group['close'].rolling(5).mean()
-            group['ma_10'] = group['close'].rolling(10).mean()
-            group['ma_20'] = group['close'].rolling(20).mean()
+            group["ma_5"] = group["close"].rolling(5).mean()
+            group["ma_10"] = group["close"].rolling(10).mean()
+            group["ma_20"] = group["close"].rolling(20).mean()
 
             results.append(group)
 

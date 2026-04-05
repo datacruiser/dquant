@@ -4,9 +4,10 @@
 基于资金流数据的交易因子
 """
 
-import pandas as pd
-import numpy as np
 from typing import Optional
+
+import pandas as pd
+
 from dquant.ai.base import BaseFactor
 
 
@@ -53,31 +54,33 @@ class MediumFlowFactor(BaseFactor):
         """
         results = []
 
-        if 'medium_net_inflow' not in data.columns:
+        if "medium_net_inflow" not in data.columns:
             raise ValueError("数据缺少 'medium_net_inflow' 列")
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
 
             # 中单净流入 N 日均值
-            flow_ma = group['medium_net_inflow'].rolling(self.window).mean()
+            flow_ma = group["medium_net_inflow"].rolling(self.window).mean()
 
             # 标准化
-            flow_std = group['medium_net_inflow'].rolling(self.window * 2).std()
+            flow_std = group["medium_net_inflow"].rolling(self.window * 2).std()
             score = flow_ma / (flow_std + 1e-8)
 
             for date, value in score.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": value,
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -110,31 +113,33 @@ class MainForceFactor(BaseFactor):
         """计算主力资金因子"""
         results = []
 
-        if 'main_net_inflow' not in data.columns:
+        if "main_net_inflow" not in data.columns:
             raise ValueError("数据缺少 'main_net_inflow' 列")
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
 
             # 主力净流入 N 日均值
-            flow_ma = group['main_net_inflow'].rolling(self.window).mean()
+            flow_ma = group["main_net_inflow"].rolling(self.window).mean()
 
             # 标准化
-            flow_std = group['main_net_inflow'].rolling(self.window * 2).std()
+            flow_std = group["main_net_inflow"].rolling(self.window * 2).std()
             score = flow_ma / (flow_std + 1e-8)
 
             for date, value in score.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": value,
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -169,17 +174,17 @@ class RetailFlowFactor(BaseFactor):
         """计算散户资金流因子"""
         results = []
 
-        if 'small_net_inflow' not in data.columns:
+        if "small_net_inflow" not in data.columns:
             raise ValueError("数据缺少 'small_net_inflow' 列")
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
 
             # 小单净流入 N 日均值
-            flow_ma = group['small_net_inflow'].rolling(self.window).mean()
+            flow_ma = group["small_net_inflow"].rolling(self.window).mean()
 
             # 标准化
-            flow_std = group['small_net_inflow'].rolling(self.window * 2).std()
+            flow_std = group["small_net_inflow"].rolling(self.window * 2).std()
             score = flow_ma / (flow_std + 1e-8)
 
             # 反向（散户流入记为负分）
@@ -188,16 +193,18 @@ class RetailFlowFactor(BaseFactor):
 
             for date, value in score.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": value,
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -248,23 +255,23 @@ class SmartFlowFactor(BaseFactor):
         """计算聪明钱因子"""
         results = []
 
-        required_cols = ['main_net_inflow', 'medium_net_inflow', 'small_net_inflow']
+        required_cols = ["main_net_inflow", "medium_net_inflow", "small_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
 
             # 各类资金 N 日均值
-            main_ma = group['main_net_inflow'].rolling(self.window).mean()
-            medium_ma = group['medium_net_inflow'].rolling(self.window).mean()
-            retail_ma = group['small_net_inflow'].rolling(self.window).mean()
+            main_ma = group["main_net_inflow"].rolling(self.window).mean()
+            medium_ma = group["medium_net_inflow"].rolling(self.window).mean()
+            retail_ma = group["small_net_inflow"].rolling(self.window).mean()
 
             # 标准化
-            main_std = group['main_net_inflow'].rolling(self.window * 2).std()
-            medium_std = group['medium_net_inflow'].rolling(self.window * 2).std()
-            retail_std = group['small_net_inflow'].rolling(self.window * 2).std()
+            main_std = group["main_net_inflow"].rolling(self.window * 2).std()
+            medium_std = group["medium_net_inflow"].rolling(self.window * 2).std()
+            retail_std = group["small_net_inflow"].rolling(self.window * 2).std()
 
             main_score = main_ma / (main_std + 1e-8)
             medium_score = medium_ma / (medium_std + 1e-8)
@@ -279,16 +286,18 @@ class SmartFlowFactor(BaseFactor):
 
             for date, value in score.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": value,
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df
 
@@ -320,19 +329,19 @@ class FlowDivergenceFactor(BaseFactor):
         """计算资金流背离因子"""
         results = []
 
-        required_cols = ['close', 'main_net_inflow']
+        required_cols = ["close", "main_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
 
             # 价格变化率
-            price_ret = group['close'].pct_change(self.window)
+            price_ret = group["close"].pct_change(self.window)
 
             # 主力资金累计净流入
-            flow_cumsum = group['main_net_inflow'].rolling(self.window).sum()
+            flow_cumsum = group["main_net_inflow"].rolling(self.window).sum()
 
             # 标准化
             price_std = price_ret.rolling(self.window * 2).std()
@@ -348,15 +357,17 @@ class FlowDivergenceFactor(BaseFactor):
 
             for date, value in score.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': value,
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": value,
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
 
         return df

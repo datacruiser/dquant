@@ -2,8 +2,9 @@
 AI 因子基类
 """
 
-from typing import Optional, Any
 from abc import ABC, abstractmethod
+from typing import Any, Optional
+
 import pandas as pd
 
 
@@ -20,7 +21,9 @@ class BaseFactor(ABC):
         self._is_fitted = False
 
     @abstractmethod
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "BaseFactor":
+    def fit(
+        self, data: pd.DataFrame, target: Optional[pd.Series] = None
+    ) -> "BaseFactor":
         """
         训练因子模型
 
@@ -61,7 +64,9 @@ class RuleFactor(BaseFactor):
     def __init__(self, name: str = "RuleFactor"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "RuleFactor":
+    def fit(
+        self, data: pd.DataFrame, target: Optional[pd.Series] = None
+    ) -> "RuleFactor":
         """规则因子不需要训练"""
         self._is_fitted = True
         return self
@@ -83,22 +88,24 @@ class MomentumFactor(RuleFactor):
         """计算动量"""
         results = []
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
-            momentum = group['close'].pct_change(self.window)
+            momentum = group["close"].pct_change(self.window)
 
             valid = momentum.dropna()
             for date, value in valid.items():
-                results.append({
-                    'date': date,
-                    'symbol': symbol,
-                    'score': value,
-                })
+                results.append(
+                    {
+                        "date": date,
+                        "symbol": symbol,
+                        "score": value,
+                    }
+                )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
 
 
@@ -113,21 +120,23 @@ class VolatilityFactor(RuleFactor):
         """计算波动率 (取负，低波动率得分高)"""
         results = []
 
-        for symbol, group in data.groupby('symbol'):
+        for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
-            returns = group['close'].pct_change()
+            returns = group["close"].pct_change()
             volatility = returns.rolling(self.window).std()
 
             for date, value in volatility.items():
                 if pd.notna(value):
-                    results.append({
-                        'date': date,
-                        'symbol': symbol,
-                        'score': -value,  # 负值，低波动率得分高
-                    })
+                    results.append(
+                        {
+                            "date": date,
+                            "symbol": symbol,
+                            "score": -value,  # 负值，低波动率得分高
+                        }
+                    )
 
         df = pd.DataFrame(results)
         if len(df) > 0:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.set_index('date')
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date")
         return df
