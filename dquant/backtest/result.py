@@ -105,11 +105,7 @@ class BacktestResult:
             elif kind == "trades":
                 # 交易分布
                 if len(self.trades) > 0:
-                    trade_pnl = (
-                        self.trades["pnl"]
-                        if "pnl" in self.trades.columns
-                        else pd.Series()
-                    )
+                    trade_pnl = self.trades["pnl"] if "pnl" in self.trades.columns else pd.Series()
                     if len(trade_pnl) > 0:
                         ax.hist(trade_pnl, bins=30, alpha=0.7, edgecolor="black")
                         ax.axvline(

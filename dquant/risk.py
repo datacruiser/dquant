@@ -357,9 +357,7 @@ class RiskManager:
 
             # 信息比率
             if metrics.tracking_error > 0:
-                metrics.information_ratio = (
-                    excess_returns.mean() * 252 / metrics.tracking_error
-                )
+                metrics.information_ratio = excess_returns.mean() * 252 / metrics.tracking_error
 
         return metrics
 

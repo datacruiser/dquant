@@ -49,9 +49,7 @@ class XGBoostFactor(BaseFactor):
             "random_state": 42,
         }
 
-    def fit(
-        self, data: pd.DataFrame, target: Optional[pd.Series] = None
-    ) -> "XGBoostFactor":
+    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "XGBoostFactor":
         """训练模型"""
         try:
             import xgboost as xgb
@@ -98,9 +96,7 @@ class XGBoostFactor(BaseFactor):
 
         # 构建结果 (vectorized)
         valid_mask = ~np.isnan(scores)
-        dates = (
-            data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
-        )
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
         df = pd.DataFrame(
             {
                 "date": dates,
@@ -118,9 +114,9 @@ class XGBoostFactor(BaseFactor):
         """获取特征重要性"""
         if self._model is None:
             return None
-        return pd.Series(
-            self._model.feature_importances_, index=self.features
-        ).sort_values(ascending=False)
+        return pd.Series(self._model.feature_importances_, index=self.features).sort_values(
+            ascending=False
+        )
 
 
 class LGBMFactor(BaseFactor):
@@ -148,9 +144,7 @@ class LGBMFactor(BaseFactor):
             "verbose": -1,
         }
 
-    def fit(
-        self, data: pd.DataFrame, target: Optional[pd.Series] = None
-    ) -> "LGBMFactor":
+    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "LGBMFactor":
         """训练模型"""
         try:
             import lightgbm as lgb
@@ -190,9 +184,7 @@ class LGBMFactor(BaseFactor):
 
         # 构建结果 (vectorized)
         valid_mask = ~np.isnan(scores)
-        dates = (
-            data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
-        )
+        dates = data.index if isinstance(data.index, pd.DatetimeIndex) else data.get("date")
         df = pd.DataFrame(
             {
                 "date": dates,
@@ -210,6 +202,6 @@ class LGBMFactor(BaseFactor):
         """获取特征重要性"""
         if self._model is None:
             return None
-        return pd.Series(
-            self._model.feature_importances_, index=self.features
-        ).sort_values(ascending=False)
+        return pd.Series(self._model.feature_importances_, index=self.features).sort_values(
+            ascending=False
+        )

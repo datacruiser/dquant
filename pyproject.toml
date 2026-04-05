@@ -41,3 +41,10 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["dquant*"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["dquant"]
+
+[tool.black]
+line-length = 100

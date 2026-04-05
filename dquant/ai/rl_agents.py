@@ -113,9 +113,7 @@ class TradingEnvironment:
 
     def _get_state(self) -> np.ndarray:
         """获取当前状态"""
-        prices = self.price_matrix[
-            self.current_step - self.lookback : self.current_step
-        ]
+        prices = self.price_matrix[self.current_step - self.lookback : self.current_step]
 
         state = TradingState(
             prices=prices,
@@ -303,9 +301,7 @@ class DQNAgent(BaseRLAgent):
         self._target_model = QNetwork(state_dim, action_dim, self.hidden_size)
         self._target_model.load_state_dict(self._model.state_dict())
 
-        self.optimizer = torch.optim.Adam(
-            self._model.parameters(), lr=self.learning_rate
-        )
+        self.optimizer = torch.optim.Adam(self._model.parameters(), lr=self.learning_rate)
 
     def select_action(self, state: np.ndarray, training: bool = True) -> np.ndarray:
         """选择动作"""

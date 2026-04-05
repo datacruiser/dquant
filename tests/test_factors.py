@@ -185,9 +185,7 @@ def test_all_factors():
             f"✓ 所有因子测试通过 ({len(factors)} 个, {len(KNOWN_MISSING_DATA_FACTORS)} 个需真实数据跳过)"
         )
 
-    assert (
-        len(unexpected_failures) == 0
-    ), f"Unexpected failed factors: {unexpected_failures}"
+    assert len(unexpected_failures) == 0, f"Unexpected failed factors: {unexpected_failures}"
 
 
 if __name__ == "__main__":

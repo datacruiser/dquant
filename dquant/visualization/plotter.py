@@ -328,14 +328,10 @@ class BacktestPlotter:
         self.plot_drawdown(save_path=f"{save_dir}/drawdown.png" if save_dir else None)
 
         print("[Plotter] 绘制月度收益...")
-        self.plot_monthly_returns(
-            save_path=f"{save_dir}/monthly.png" if save_dir else None
-        )
+        self.plot_monthly_returns(save_path=f"{save_dir}/monthly.png" if save_dir else None)
 
         print("[Plotter] 绘制年度收益...")
-        self.plot_yearly_returns(
-            save_path=f"{save_dir}/yearly.png" if save_dir else None
-        )
+        self.plot_yearly_returns(save_path=f"{save_dir}/yearly.png" if save_dir else None)
 
 
 def plot_backtest(result: BacktestResult, kind: str = "nav", **kwargs):

@@ -104,9 +104,7 @@ class BaseStrategy(ABC):
         """
         return None
 
-    def get_positions(
-        self, data: pd.DataFrame, signals: List[Signal]
-    ) -> Dict[str, float]:
+    def get_positions(self, data: pd.DataFrame, signals: List[Signal]) -> Dict[str, float]:
         """
         根据信号计算目标持仓权重
 

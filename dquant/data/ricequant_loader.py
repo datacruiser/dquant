@@ -90,9 +90,7 @@ class RiceQuantLoader(DataSource):
                 )
 
                 # 标准化股票代码
-                df["symbol"] = (
-                    df["symbol"].str.replace(".XSHG", ".SH").str.replace(".XSHE", ".SZ")
-                )
+                df["symbol"] = df["symbol"].str.replace(".XSHG", ".SH").str.replace(".XSHE", ".SZ")
                 df["date"] = pd.to_datetime(df["date"])
                 df = df.set_index("date")
 

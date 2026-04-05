@@ -236,9 +236,7 @@ class ExecutionHandler:
             slippage = SlippageModel.fixed_slippage(base_price, self.slippage_pct)
         elif self.slippage_model == "volume":
             volume = market_data.get("volume", 0) if market_data else 0
-            avg_volume = (
-                market_data.get("avg_volume", volume) if market_data else volume
-            )
+            avg_volume = market_data.get("avg_volume", volume) if market_data else volume
             slippage = SlippageModel.volume_based_slippage(
                 base_price, volume, avg_volume, self.slippage_pct
             )
@@ -429,8 +427,7 @@ class EventDrivenBacktest:
             cost = event.fill_price * event.quantity + event.commission
             if cost > self.cash:
                 logger.warning(
-                    f"资金不足，跳过买入: {event.symbol}, "
-                    f"cost={cost:.2f}, cash={self.cash:.2f}"
+                    f"资金不足，跳过买入: {event.symbol}, " f"cost={cost:.2f}, cash={self.cash:.2f}"
                 )
                 return
             self.positions[event.symbol] += event.quantity
@@ -446,9 +443,7 @@ class EventDrivenBacktest:
             self.positions[event.symbol] -= event.quantity
             # A 股卖出需扣印花税
             stamp_duty = event.fill_price * event.quantity * DEFAULT_STAMP_DUTY
-            self.cash += (
-                event.fill_price * event.quantity - event.commission - stamp_duty
-            )
+            self.cash += event.fill_price * event.quantity - event.commission - stamp_duty
 
         # 记录交易
         self.trades.append(event)

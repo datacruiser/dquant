@@ -115,9 +115,7 @@ class AroonFactor(BaseFactor):
                 group["high"]
                 .rolling(self.window)
                 .apply(
-                    lambda x: (self.window - (self.window - 1 - np.argmax(x)))
-                    / self.window
-                    * 100,
+                    lambda x: (self.window - (self.window - 1 - np.argmax(x))) / self.window * 100,
                     raw=False,
                 )
             )
@@ -127,9 +125,7 @@ class AroonFactor(BaseFactor):
                 group["low"]
                 .rolling(self.window)
                 .apply(
-                    lambda x: (self.window - (self.window - 1 - np.argmin(x)))
-                    / self.window
-                    * 100,
+                    lambda x: (self.window - (self.window - 1 - np.argmin(x))) / self.window * 100,
                     raw=False,
                 )
             )
@@ -162,9 +158,7 @@ class StochasticFactor(BaseFactor):
     随机指标。
     """
 
-    def __init__(
-        self, k_window: int = 14, d_window: int = 3, name: Optional[str] = None
-    ):
+    def __init__(self, k_window: int = 14, d_window: int = 3, name: Optional[str] = None):
         super().__init__(name=name or f"Stochastic_{k_window}")
         self.k_window = k_window
         self.d_window = d_window
@@ -381,9 +375,9 @@ class ADLineFactor(BaseFactor):
             group = group.sort_index()
 
             # CLV (Close Location Value)
-            clv = (
-                (group["close"] - group["low"]) - (group["high"] - group["close"])
-            ) / (group["high"] - group["low"])
+            clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
+                group["high"] - group["low"]
+            )
 
             clv = clv.fillna(0)
 
@@ -435,9 +429,9 @@ class ChaikinOscillatorFactor(BaseFactor):
             group = group.sort_index()
 
             # CLV
-            clv = (
-                (group["close"] - group["low"]) - (group["high"] - group["close"])
-            ) / (group["high"] - group["low"])
+            clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
+                group["high"] - group["low"]
+            )
             clv = clv.fillna(0)
 
             # AD
@@ -640,10 +634,7 @@ class HurstExponentFactor(BaseFactor):
 
                 # R/S 分析
                 lags = range(2, min(50, self.window))
-                tau = [
-                    np.std(np.subtract(window_data[lag:], window_data[:-lag]))
-                    for lag in lags
-                ]
+                tau = [np.std(np.subtract(window_data[lag:], window_data[:-lag])) for lag in lags]
 
                 # 对数回归
                 try:
@@ -794,9 +785,7 @@ class BetaFactor(BaseFactor):
         results = []
 
         # 计算市场收益率 (等权平均)
-        market_returns = data.groupby(data.index)["close"].apply(
-            lambda x: x.pct_change().mean()
-        )
+        market_returns = data.groupby(data.index)["close"].apply(lambda x: x.pct_change().mean())
 
         for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
@@ -855,9 +844,7 @@ class AlphaFactor(BaseFactor):
         results = []
 
         # 计算市场收益率
-        market_returns = data.groupby(data.index)["close"].apply(
-            lambda x: x.pct_change().mean()
-        )
+        market_returns = data.groupby(data.index)["close"].apply(lambda x: x.pct_change().mean())
 
         for symbol, group in data.groupby("symbol"):
             group = group.sort_index()

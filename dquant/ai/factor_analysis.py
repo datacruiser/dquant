@@ -82,9 +82,7 @@ class FactorAnalyzer:
             result.ic_positive_ratio = (ic_series > 0).sum() / len(ic_series)
 
         # 分组收益分析
-        group_returns = self._calculate_group_returns(
-            factor_scores, forward_returns, dates
-        )
+        group_returns = self._calculate_group_returns(factor_scores, forward_returns, dates)
         result.group_returns = group_returns
 
         # 多空收益
@@ -217,9 +215,7 @@ class FactorAnalyzer:
             group_rets = {}
             actual_groups = sorted(day_factors["group"].dropna().unique())
             for group_id in actual_groups:
-                group_ret = self._calculate_group_avg_return(
-                    day_factors, day_returns, group_id
-                )
+                group_ret = self._calculate_group_avg_return(day_factors, day_returns, group_id)
                 if group_ret is not None:
                     group_rets[f"G{int(group_id) + 1}"] = group_ret
 

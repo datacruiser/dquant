@@ -21,9 +21,7 @@ class BaseFactor(ABC):
         self._is_fitted = False
 
     @abstractmethod
-    def fit(
-        self, data: pd.DataFrame, target: Optional[pd.Series] = None
-    ) -> "BaseFactor":
+    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "BaseFactor":
         """
         训练因子模型
 
@@ -64,9 +62,7 @@ class RuleFactor(BaseFactor):
     def __init__(self, name: str = "RuleFactor"):
         super().__init__(name=name)
 
-    def fit(
-        self, data: pd.DataFrame, target: Optional[pd.Series] = None
-    ) -> "RuleFactor":
+    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "RuleFactor":
         """规则因子不需要训练"""
         self._is_fitted = True
         return self

@@ -219,9 +219,7 @@ class ParallelProcessor:
         else:
             # 按行数分割
             chunk_size = max(1, len(df) // self.n_workers)
-            chunks = [
-                df.iloc[i : i + chunk_size] for i in range(0, len(df), chunk_size)
-            ]
+            chunks = [df.iloc[i : i + chunk_size] for i in range(0, len(df), chunk_size)]
             results = self.map(func, chunks)
             return pd.concat(results)
 
@@ -401,9 +399,7 @@ class PerformanceMonitor:
 
         self.stats[name]["calls"] += 1
         self.stats[name]["total_time"] += elapsed
-        self.stats[name]["avg_time"] = (
-            self.stats[name]["total_time"] / self.stats[name]["calls"]
-        )
+        self.stats[name]["avg_time"] = self.stats[name]["total_time"] / self.stats[name]["calls"]
         self.stats[name]["max_time"] = max(self.stats[name]["max_time"], elapsed)
         self.stats[name]["min_time"] = min(self.stats[name]["min_time"], elapsed)
 
@@ -411,9 +407,7 @@ class PerformanceMonitor:
             if "max_memory" not in self.stats[name]:
                 self.stats[name]["max_memory"] = memory
             else:
-                self.stats[name]["max_memory"] = max(
-                    self.stats[name]["max_memory"], memory
-                )
+                self.stats[name]["max_memory"] = max(self.stats[name]["max_memory"], memory)
 
     def monitor(self, func: Callable) -> Callable:
         """监控装饰器"""

@@ -51,9 +51,7 @@ class TestDingTalkNotifier:
 
     def test_with_webhook_env(self):
         """从环境变量读取 webhook"""
-        with patch.dict(
-            os.environ, {"DINGTALK_WEBHOOK": "https://example.com/webhook"}
-        ):
+        with patch.dict(os.environ, {"DINGTALK_WEBHOOK": "https://example.com/webhook"}):
             notifier = DingTalkNotifier()
             assert notifier.webhook_url == "https://example.com/webhook"
 

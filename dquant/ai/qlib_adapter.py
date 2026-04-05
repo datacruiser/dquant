@@ -133,22 +133,15 @@ class QlibModelAdapter(BaseFactor):
                     raise ValueError("No training data provided")
 
                 # 准备特征
-                features = (
-                    self.features
-                    or data.select_dtypes(include=[np.number]).columns.tolist()
-                )
+                features = self.features or data.select_dtypes(include=[np.number]).columns.tolist()
 
                 # 训练 (简化版，实际 Qlib 训练更复杂)
                 # NOTE: 实际使用时，此数据应传入模型训练
-                _ = (
-                    data[features].values if isinstance(data, pd.DataFrame) else data
-                )  # noqa: F841
+                _ = data[features].values if isinstance(data, pd.DataFrame) else data  # noqa: F841
 
                 # 注意: 实际 Qlib 模型需要特定格式的数据
                 # 这里只是示例，真实场景需要按照 Qlib 文档准备数据
-                print(
-                    f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features"
-                )
+                print(f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features")
 
         except Exception as e:
             print(f"[QlibAdapter] Training error: {e}")

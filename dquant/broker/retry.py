@@ -77,9 +77,7 @@ class RetryableBroker(BaseBroker):
                     )
                     # 尝试查询已有订单状态
                     try:
-                        existing_order = self._broker.get_order_status(
-                            existing_order_id
-                        )
+                        existing_order = self._broker.get_order_status(existing_order_id)
                         if existing_order is not None:
                             return OrderResult(
                                 order_id=existing_order.order_id or "",

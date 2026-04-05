@@ -159,9 +159,7 @@ class BacktestEngine:
         for sig in signals:
             # 信号无 timestamp → 分配数据最后一天（保守处理：不执行）
             if sig.timestamp is None:
-                logger.debug(
-                    f"[BACKTEST] 信号无 timestamp，跳过: {sig.symbol} {sig.signal_type}"
-                )
+                logger.debug(f"[BACKTEST] 信号无 timestamp，跳过: {sig.symbol} {sig.signal_type}")
                 continue
 
             sig_date = pd.Timestamp(sig.timestamp).normalize()

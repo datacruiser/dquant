@@ -180,9 +180,7 @@ else:
                     "quantity": pos.volume,
                     "available": pos.can_use_volume,
                     "avg_cost": pos.open_price,
-                    "current_price": (
-                        pos.market_value / pos.volume if pos.volume > 0 else 0
-                    ),
+                    "current_price": (pos.market_value / pos.volume if pos.volume > 0 else 0),
                 }
 
             return result

@@ -105,8 +105,7 @@ class StopLossTakeProfitStrategy(BaseStrategy):
                     )
                 )
                 logger.debug(
-                    f"[SL] 止损触发: {symbol} "
-                    f"亏损 {pct_change:.1%} <= -{self.stop_loss:.1%}"
+                    f"[SL] 止损触发: {symbol} " f"亏损 {pct_change:.1%} <= -{self.stop_loss:.1%}"
                 )
 
             elif pct_change >= self.take_profit:
@@ -126,8 +125,7 @@ class StopLossTakeProfitStrategy(BaseStrategy):
                     )
                 )
                 logger.debug(
-                    f"[TP] 止盈触发: {symbol} "
-                    f"盈利 {pct_change:.1%} >= {self.take_profit:.1%}"
+                    f"[TP] 止盈触发: {symbol} " f"盈利 {pct_change:.1%} >= {self.take_profit:.1%}"
                 )
 
         return sell_signals

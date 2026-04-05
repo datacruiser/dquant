@@ -145,8 +145,8 @@ class TDXLoader(DataSource):
                 record = data[offset : offset + record_size]
 
                 # 解析 (通达信价格需要除以100)
-                date_int, open_p, high_p, low_p, close_p, amount, volume, _ = (
-                    struct.unpack("IIIIIIII", record)
+                date_int, open_p, high_p, low_p, close_p, amount, volume, _ = struct.unpack(
+                    "IIIIIIII", record
                 )
 
                 # 日期转换

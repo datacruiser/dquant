@@ -341,9 +341,7 @@ class TestRotatingLogger:
         )
 
         # Check handler type
-        file_handlers = [
-            h for h in logger.handlers if isinstance(h, RotatingFileHandler)
-        ]
+        file_handlers = [h for h in logger.handlers if isinstance(h, RotatingFileHandler)]
         assert len(file_handlers) == 1
         assert file_handlers[0].maxBytes == 1024
 
@@ -358,14 +356,11 @@ class TestRotatingLogger:
 
         from logging.handlers import RotatingFileHandler
 
-        file_handlers = [
-            h for h in logger.handlers if isinstance(h, RotatingFileHandler)
-        ]
+        file_handlers = [h for h in logger.handlers if isinstance(h, RotatingFileHandler)]
         normal_handlers = [
             h
             for h in logger.handlers
-            if isinstance(h, logging.FileHandler)
-            and not isinstance(h, RotatingFileHandler)
+            if isinstance(h, logging.FileHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(file_handlers) == 0
         assert len(normal_handlers) == 1

@@ -312,19 +312,11 @@ class TradingTimeChecker:
         current_time = dt.time()
 
         # 上午盘: 9:30 - 11:30
-        if (
-            TradingTimeChecker.MORNING_OPEN
-            <= current_time
-            <= TradingTimeChecker.MORNING_CLOSE
-        ):
+        if TradingTimeChecker.MORNING_OPEN <= current_time <= TradingTimeChecker.MORNING_CLOSE:
             return True, "上午交易时间 (9:30-11:30)"
 
         # 下午盘: 13:00 - 15:00
-        if (
-            TradingTimeChecker.AFTERNOON_OPEN
-            <= current_time
-            <= TradingTimeChecker.AFTERNOON_CLOSE
-        ):
+        if TradingTimeChecker.AFTERNOON_OPEN <= current_time <= TradingTimeChecker.AFTERNOON_CLOSE:
             return True, "下午交易时间 (13:00-15:00)"
 
         # 非交易时间

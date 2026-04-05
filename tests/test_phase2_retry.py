@@ -147,9 +147,7 @@ class TestRetryableBroker:
         """REJECTED 状态不重试"""
         inner = MagicMock(spec=BaseBroker)
         inner.name = "mock"
-        inner.place_order.return_value = _make_result(
-            status="REJECTED", filled_quantity=0
-        )
+        inner.place_order.return_value = _make_result(status="REJECTED", filled_quantity=0)
 
         broker = RetryableBroker(inner, max_retries=3, retry_delay=0.01)
         result = broker.place_order(_make_order())

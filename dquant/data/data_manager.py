@@ -195,9 +195,7 @@ class DataManager:
                 return cached
 
         # 创建数据源并加载
-        loader = DataSourceRegistry.create(
-            source, symbols=symbols, start=start, end=end, **kwargs
-        )
+        loader = DataSourceRegistry.create(source, symbols=symbols, start=start, end=end, **kwargs)
         df = loader.load()
 
         # 数据完整性校验
@@ -208,9 +206,7 @@ class DataManager:
                 validator = DataValidator()
                 results = validator.validate(df)
                 if not results.get("passed", True):
-                    logger.warning(
-                        f"[DataManager] 数据校验发现问题: {results.get('issues', {})}"
-                    )
+                    logger.warning(f"[DataManager] 数据校验发现问题: {results.get('issues', {})}")
             except Exception as e:
                 logger.debug(f"[DataManager] 数据校验跳过: {e}")
 
@@ -251,9 +247,7 @@ class DataManager:
             start = None
 
         # 加载新数据
-        new_data = self.load(
-            source=source, symbols=symbols, start=start, use_cache=False, **kwargs
-        )
+        new_data = self.load(source=source, symbols=symbols, start=start, use_cache=False, **kwargs)
 
         # new_data 可能为 None
         if new_data is None:
@@ -266,11 +260,7 @@ class DataManager:
             combined = combined[~combined.index.duplicated(keep="last")]
             return combined.sort_index()
 
-        return (
-            new_data
-            if len(new_data) > 0
-            else (cached if cached is not None else pd.DataFrame())
-        )
+        return new_data if len(new_data) > 0 else (cached if cached is not None else pd.DataFrame())
 
     def load_batch(
         self,
@@ -296,16 +286,12 @@ class DataManager:
                 dfs.append(df)
                 logger.info(f"Loaded {i + 1}/{len(configs)}")
             except Exception as e:
-                logger.error(
-                    f"[DataManager] Failed to load config {i + 1}: {config} — {e}"
-                )
+                logger.error(f"[DataManager] Failed to load config {i + 1}: {config} — {e}")
                 errors.append({"index": i, "config": config, "error": str(e)})
                 dfs.append(pd.DataFrame())
 
         if errors:
-            logger.warning(
-                f"[DataManager] {len(errors)}/{len(configs)} configs failed to load"
-            )
+            logger.warning(f"[DataManager] {len(errors)}/{len(configs)} configs failed to load")
 
         if merge:
             return pd.concat(dfs, axis=0)
@@ -388,9 +374,7 @@ class DataManager:
                     with open(meta_file, "r") as f:
                         meta = json.load(f)
                     cached_time = datetime.fromisoformat(meta["timestamp"])
-                    if datetime.now() - cached_time > timedelta(
-                        hours=self.cache_expire
-                    ):
+                    if datetime.now() - cached_time > timedelta(hours=self.cache_expire):
                         cache_file.unlink()
                         meta_file.unlink()
             logger.info("Expired cache cleared")

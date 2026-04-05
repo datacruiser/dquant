@@ -69,9 +69,7 @@ class MoneyFlowStrategy(BaseStrategy):
 
             # 1. 中单净流入 >= 阈值
             if self.min_medium_flow > 0:
-                candidates = candidates[
-                    candidates["medium_net_inflow"] >= self.min_medium_flow
-                ]
+                candidates = candidates[candidates["medium_net_inflow"] >= self.min_medium_flow]
 
             # 2. 主力也流入
             if self.require_main_flow and "main_net_inflow" in candidates.columns:
@@ -80,8 +78,7 @@ class MoneyFlowStrategy(BaseStrategy):
             # 3. 避免散户大量流入
             if self.avoid_retail_inflow and "small_net_inflow" in candidates.columns:
                 candidates = candidates[
-                    candidates["small_net_inflow"]
-                    < candidates["small_net_inflow"].quantile(0.8)
+                    candidates["small_net_inflow"] < candidates["small_net_inflow"].quantile(0.8)
                 ]
 
             # 按中单净流入排序

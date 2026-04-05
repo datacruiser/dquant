@@ -38,10 +38,7 @@ class SimpleBuyStrategy(BaseStrategy):
         if data.empty:
             return []
         last_date = data.index.max()
-        if (
-            pd.Timestamp(last_date).normalize()
-            < pd.Timestamp(self.buy_date).normalize()
-        ):
+        if pd.Timestamp(last_date).normalize() < pd.Timestamp(self.buy_date).normalize():
             return []
         return [
             Signal(

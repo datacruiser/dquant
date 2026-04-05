@@ -132,9 +132,7 @@ class MockRealtimeSource(RealtimeDataSource):
                 # 随机更新价格
                 if symbol in self.quotes:
                     old_quote = self.quotes[symbol]
-                    new_price = old_quote.price * (
-                        1 + random.random() * 0.002 - DEFAULT_STAMP_DUTY
-                    )
+                    new_price = old_quote.price * (1 + random.random() * 0.002 - DEFAULT_STAMP_DUTY)
 
                     quote = RealtimeQuote(
                         symbol=symbol,

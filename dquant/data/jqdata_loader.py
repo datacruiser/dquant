@@ -255,9 +255,7 @@ class JQDataFactor:
         # 聚宽支持的财务因子
         # indicator: roe, inc_revenue_year_on_year, inc_net_profit_year_on_year, etc.
         df = self._jq.financial.run_query(
-            self._jq.financial_indicator.filter(
-                self._jq.financial_indicator.code == symbol
-            )
+            self._jq.financial_indicator.filter(self._jq.financial_indicator.code == symbol)
         )
         return df[indicator] if indicator in df.columns else pd.Series()
 

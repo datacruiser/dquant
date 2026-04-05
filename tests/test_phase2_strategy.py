@@ -34,9 +34,7 @@ class TestOnBarDetection:
 
             def on_bar(self, bar):
                 if bar.get("close", 0) > 10:
-                    return Signal(
-                        symbol=bar.get("symbol", ""), signal_type=SignalType.BUY
-                    )
+                    return Signal(symbol=bar.get("symbol", ""), signal_type=SignalType.BUY)
                 return None
 
         strategy = BarStrategy()
@@ -92,15 +90,9 @@ class TestOnBarDetection:
                 return []
 
             def on_bar(self, bar):
-                close = (
-                    bar.get("close", 0)
-                    if isinstance(bar, pd.Series)
-                    else bar.get("close", 0)
-                )
+                close = bar.get("close", 0) if isinstance(bar, pd.Series) else bar.get("close", 0)
                 symbol = (
-                    bar.get("symbol", "")
-                    if isinstance(bar, pd.Series)
-                    else bar.get("symbol", "")
+                    bar.get("symbol", "") if isinstance(bar, pd.Series) else bar.get("symbol", "")
                 )
                 if close > 10:
                     return Signal(symbol=symbol, signal_type=SignalType.BUY)

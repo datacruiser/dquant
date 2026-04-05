@@ -53,9 +53,7 @@ class Simulator(BaseBroker):
             pos["quantity"] * pos["price"] for pos in self.positions.values()
         )
         profit_pct = (
-            (total_value - self.initial_cash) / self.initial_cash
-            if self.initial_cash != 0
-            else 0.0
+            (total_value - self.initial_cash) / self.initial_cash if self.initial_cash != 0 else 0.0
         )
         return {
             "cash": self.cash,
@@ -106,11 +104,7 @@ class Simulator(BaseBroker):
             if total_cost > self.cash:
                 # 按整手调整
                 filled_quantity = (
-                    int(
-                        self.cash
-                        / (filled_price * (1 + DEFAULT_COMMISSION))
-                        // MIN_SHARES
-                    )
+                    int(self.cash / (filled_price * (1 + DEFAULT_COMMISSION)) // MIN_SHARES)
                     * MIN_SHARES
                 )
                 if filled_quantity <= 0:
@@ -147,10 +141,7 @@ class Simulator(BaseBroker):
             commission = filled_price * filled_quantity * DEFAULT_COMMISSION
 
         elif order.side == "SELL":
-            if (
-                order.symbol not in self.positions
-                or self.positions[order.symbol]["quantity"] <= 0
-            ):
+            if order.symbol not in self.positions or self.positions[order.symbol]["quantity"] <= 0:
                 order.status = "REJECTED"
                 self.orders[order.order_id] = order
                 return OrderResult(
@@ -173,11 +164,7 @@ class Simulator(BaseBroker):
             pos["quantity"] -= filled_quantity
 
             # 佣金包含基础佣金 + 印花税，确保 P&L 计算准确
-            commission = (
-                filled_price
-                * filled_quantity
-                * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
-            )
+            commission = filled_price * filled_quantity * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
 
             if pos["quantity"] <= 0:
                 del self.positions[order.symbol]

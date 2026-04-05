@@ -94,9 +94,7 @@ class AccMomentumFactor(BaseFactor):
         for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
             ret = group["close"].pct_change()
-            acc_ret = (1 + ret).rolling(self.window).apply(
-                lambda x: x.prod(), raw=True
-            ) - 1
+            acc_ret = (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
             for date, value in acc_ret.items():
                 if pd.notna(value):
                     results.append({"date": date, "symbol": symbol, "score": value})
@@ -116,9 +114,7 @@ class AccMomentumFactor(BaseFactor):
 class VolatilityFactor(BaseFactor):
     """波动率因子 - 收益率标准差"""
 
-    def __init__(
-        self, window: int = 20, prefer_low: bool = True, name: Optional[str] = None
-    ):
+    def __init__(self, window: int = 20, prefer_low: bool = True, name: Optional[str] = None):
         super().__init__(name=name or f"Volatility_{window}")
         self.window = window
         self.prefer_low = prefer_low
@@ -198,9 +194,7 @@ class SkewnessFactor(BaseFactor):
             skewness = returns.rolling(self.window).skew()
             for date, value in skewness.items():
                 if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 负偏度偏好
+                    results.append({"date": date, "symbol": symbol, "score": -value})  # 负偏度偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -228,9 +222,7 @@ class KurtosisFactor(BaseFactor):
             kurtosis = returns.rolling(self.window).kurt()
             for date, value in kurtosis.items():
                 if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 低峰度偏好
+                    results.append({"date": date, "symbol": symbol, "score": -value})  # 低峰度偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -259,9 +251,7 @@ class MaxDrawdownFactor(BaseFactor):
             max_dd = drawdown.rolling(self.window).min()
             for date, value in max_dd.items():
                 if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 小回撤偏好
+                    results.append({"date": date, "symbol": symbol, "score": -value})  # 小回撤偏好
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -291,16 +281,8 @@ class RSIFactor(BaseFactor):
         for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
             delta = group["close"].diff()
-            gain = (
-                delta.where(delta > 0, 0)
-                .ewm(alpha=1 / self.window, adjust=False)
-                .mean()
-            )
-            loss = (
-                (-delta.where(delta < 0, 0))
-                .ewm(alpha=1 / self.window, adjust=False)
-                .mean()
-            )
+            gain = delta.where(delta > 0, 0).ewm(alpha=1 / self.window, adjust=False).mean()
+            loss = (-delta.where(delta < 0, 0)).ewm(alpha=1 / self.window, adjust=False).mean()
             rs = gain / loss.replace(0, float("nan"))
             rsi = 100 - (100 / (1 + rs))
             factor = 50 - rsi  # RSI 越低分数越高
@@ -357,9 +339,7 @@ class MACDFactor(BaseFactor):
 class BollingerPositionFactor(BaseFactor):
     """布林带位置因子"""
 
-    def __init__(
-        self, window: int = 20, num_std: float = 2.0, name: Optional[str] = None
-    ):
+    def __init__(self, window: int = 20, num_std: float = 2.0, name: Optional[str] = None):
         super().__init__(name=name or f"Bollinger_{window}")
         self.window = window
         self.num_std = num_std
@@ -417,12 +397,8 @@ class TrendStrengthFactor(BaseFactor):
                 axis=1,
             ).max(axis=1)
             atr = tr.rolling(self.window).mean()
-            plus_di = 100 * (
-                plus_dm.rolling(self.window).mean() / atr.replace(0, float("nan"))
-            )
-            minus_di = 100 * (
-                minus_dm.rolling(self.window).mean() / atr.replace(0, float("nan"))
-            )
+            plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
+            minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
             di_sum = plus_di + minus_di
             dx = 100 * abs(plus_di - minus_di) / di_sum.replace(0, float("nan"))
 
@@ -440,9 +416,7 @@ class TrendStrengthFactor(BaseFactor):
 class KDJFactor(BaseFactor):
     """KDJ 因子"""
 
-    def __init__(
-        self, n: int = 9, m1: int = 3, m2: int = 3, name: Optional[str] = None
-    ):
+    def __init__(self, n: int = 9, m1: int = 3, m2: int = 3, name: Optional[str] = None):
         super().__init__(name=name or f"KDJ_{n}")
         self.n = n
         self.m1 = m1
@@ -671,9 +645,9 @@ class VWAPFactor(BaseFactor):
             # 简化 VWAP
             typical_price = (group["high"] + group["low"] + group["close"]) / 3
             vol_sum = group["volume"].rolling(self.window).sum()
-            vwap = (typical_price * group["volume"]).rolling(
-                self.window
-            ).sum() / vol_sum.replace(0, float("nan"))
+            vwap = (typical_price * group["volume"]).rolling(self.window).sum() / vol_sum.replace(
+                0, float("nan")
+            )
 
             # 价格与 VWAP 的偏离
             deviation = (group["close"] - vwap) / vwap.replace(0, float("nan"))
@@ -743,9 +717,7 @@ class GapFactor(BaseFactor):
             gap = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
             for date, value in gap.items():
                 if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -abs(value)}
-                    )
+                    results.append({"date": date, "symbol": symbol, "score": -abs(value)})
 
         df = pd.DataFrame(results)
         if len(df) > 0:
@@ -795,9 +767,7 @@ class OvernightReturnFactor(BaseFactor):
         results = []
         for symbol, group in data.groupby("symbol"):
             group = group.sort_index()
-            overnight = (group["open"] - group["close"].shift(1)) / group[
-                "close"
-            ].shift(1)
+            overnight = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
             for date, value in overnight.items():
                 if pd.notna(value):
                     results.append({"date": date, "symbol": symbol, "score": -value})
@@ -817,9 +787,7 @@ class OvernightReturnFactor(BaseFactor):
 class MASlopeFactor(BaseFactor):
     """均线斜率因子"""
 
-    def __init__(
-        self, window: int = 20, slope_window: int = 5, name: Optional[str] = None
-    ):
+    def __init__(self, window: int = 20, slope_window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"MASlope_{window}")
         self.window = window
         self.slope_window = slope_window
@@ -1207,9 +1175,7 @@ FACTOR_REGISTRY = {
 def get_factor(name: str, **kwargs) -> BaseFactor:
     """获取因子实例"""
     if name not in FACTOR_REGISTRY:
-        raise ValueError(
-            f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}"
-        )
+        raise ValueError(f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}")
     return FACTOR_REGISTRY[name](**kwargs)
 
 

@@ -92,9 +92,7 @@ class Portfolio:
 
         if cost > self.cash:
             # 调整为可买入的最大整手数量
-            max_shares = (
-                int(self.cash / (price * (1 + commission)) // MIN_SHARES) * MIN_SHARES
-            )
+            max_shares = int(self.cash / (price * (1 + commission)) // MIN_SHARES) * MIN_SHARES
             if max_shares <= 0:
                 return
             shares = max_shares

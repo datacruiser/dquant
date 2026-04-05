@@ -250,9 +250,7 @@ class Engine:
                         )
                         risk_mgr.reset_daily_start(total_value, date_str)
                         last_date_str = date_str
-                        logger.info(
-                            f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}"
-                        )
+                        logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
 
                     # 4. 获取实时行情
                     realtime_df = self._fetch_realtime_data(symbols)
@@ -340,9 +338,7 @@ class Engine:
                     )
 
                     if consecutive_errors >= max_consecutive_errors:
-                        logger.error(
-                            f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易"
-                        )
+                        logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
                         break
 
                 # 控制循环频率
@@ -354,9 +350,7 @@ class Engine:
         finally:
             # 优雅关机：取消所有 pending 订单
             if tracker.has_pending():
-                logger.info(
-                    f"[LIVE] 关机：取消 {len(tracker.get_pending())} 个 pending 订单"
-                )
+                logger.info(f"[LIVE] 关机：取消 {len(tracker.get_pending())} 个 pending 订单")
                 cancelled = tracker.cancel_all(self.broker)
                 for order_id in cancelled:
                     journal.record(
@@ -377,9 +371,7 @@ class Engine:
             self.broker.disconnect()
             logger.info("[LIVE] 交易会话结束")
 
-    def _fetch_realtime_data(
-        self, symbols: Optional[List[str]]
-    ) -> Optional[pd.DataFrame]:
+    def _fetch_realtime_data(self, symbols: Optional[List[str]]) -> Optional[pd.DataFrame]:
         """获取实时行情数据"""
         try:
             from dquant.data.akshare_loader import AKShareRealTime
@@ -473,9 +465,7 @@ class Engine:
 
         for idx, sig in enumerate(buy_signals):
             remaining_slots = n - idx
-            per_stock_budget = (
-                remaining_cash / remaining_slots if remaining_slots > 0 else 0
-            )
+            per_stock_budget = remaining_cash / remaining_slots if remaining_slots > 0 else 0
             if per_stock_budget <= 0:
                 break
 
@@ -518,9 +508,7 @@ class Engine:
             elif result.status == "REJECTED":
                 logger.warning(f"[LIVE] 买入被拒: {sig.symbol} — {result.status}")
             else:
-                logger.info(
-                    f"[LIVE] 买入挂单: {sig.symbol} x {quantity} — {result.status}"
-                )
+                logger.info(f"[LIVE] 买入挂单: {sig.symbol} x {quantity} — {result.status}")
 
             if result.status in ("PENDING", "PARTIAL_FILLED"):
                 tracker.add(order, result)
@@ -559,10 +547,7 @@ class Engine:
         """用最新价更新持仓价格（通用版）"""
         # Simulator: 直接更新
         if isinstance(self.broker, Simulator):
-            if (
-                "symbol" not in realtime_df.columns
-                or "price" not in realtime_df.columns
-            ):
+            if "symbol" not in realtime_df.columns or "price" not in realtime_df.columns:
                 return
             price_map = dict(zip(realtime_df["symbol"], realtime_df["price"]))
             self.broker.update_prices(price_map)

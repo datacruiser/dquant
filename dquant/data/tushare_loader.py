@@ -200,15 +200,11 @@ class TushareLoader(DataSource):
     def _get_index_constituents(self, index_code: str) -> List[str]:
         """获取指数成分股"""
         try:
-            df = self._pro.index_weight(
-                index_code=index_code, start_date=self.start or "20200101"
-            )
+            df = self._pro.index_weight(index_code=index_code, start_date=self.start or "20200101")
             return df["con_code"].unique().tolist()
         except Exception as e:
             # 备用方案：返回部分股票
-            logger.warning(
-                f"Failed to get constituents for {index_code}: {e}, using sample"
-            )
+            logger.warning(f"Failed to get constituents for {index_code}: {e}, using sample")
             return self._get_all_stocks()[:50]
 
     def _get_all_stocks(self) -> List[str]:
@@ -223,13 +219,9 @@ class TushareLoader(DataSource):
             if self.freq == "D":
                 df = self._pro.daily(
                     ts_code=symbol,
-                    start_date=(
-                        self.start.replace("-", "") if self.start else "20200101"
-                    ),
+                    start_date=(self.start.replace("-", "") if self.start else "20200101"),
                     end_date=(
-                        self.end.replace("-", "")
-                        if self.end
-                        else datetime.now().strftime("%Y%m%d")
+                        self.end.replace("-", "") if self.end else datetime.now().strftime("%Y%m%d")
                     ),
                 )
 
@@ -311,21 +303,19 @@ class TushareLoader(DataSource):
             # 均线
             for window in [5, 10, 20, 60]:
                 group[f"ma_{window}"] = group["close"].rolling(window).mean()
-                group[f"bias_{window}"] = (
-                    group["close"] - group[f"ma_{window}"]
-                ) / group[f"ma_{window}"]
+                group[f"bias_{window}"] = (group["close"] - group[f"ma_{window}"]) / group[
+                    f"ma_{window}"
+                ]
 
             # 成交量因子
             group["volume_ma_5"] = group["volume"].rolling(5).mean()
             group["volume_ma_10"] = group["volume"].rolling(10).mean()
-            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(
-                0, np.nan
-            )
+            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(0, np.nan)
 
             # 价格位置
-            group["price_position_20"] = (
-                group["close"] - group["low"].rolling(20).min()
-            ) / (group["high"].rolling(20).max() - group["low"].rolling(20).min())
+            group["price_position_20"] = (group["close"] - group["low"].rolling(20).min()) / (
+                group["high"].rolling(20).max() - group["low"].rolling(20).min()
+            )
 
             results.append(group)
 

@@ -126,9 +126,7 @@ class FactorCombiner:
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged["factor"].corr(
-                            merged["target"], method="spearman"
-                        )
+                        corr = merged["factor"].corr(merged["target"], method="spearman")
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -161,9 +159,7 @@ class FactorCombiner:
                     merged = merged.dropna()
 
                     if len(merged) > 1:
-                        corr = merged["factor"].corr(
-                            merged["target"], method="spearman"
-                        )
+                        corr = merged["factor"].corr(merged["target"], method="spearman")
                         if pd.notna(corr):
                             ics.append(corr)
 
@@ -194,14 +190,10 @@ class FactorCombiner:
         else:
             raise ValueError(f"Unknown method: {method}")
 
-    def _combine_equal(
-        self, weights: Optional[Dict[str, float]] = None
-    ) -> pd.DataFrame:
+    def _combine_equal(self, weights: Optional[Dict[str, float]] = None) -> pd.DataFrame:
         """等权或自定义权重组合"""
         if weights is None:
-            weights = {
-                name: 1.0 / len(self.factor_values) for name in self.factor_values
-            }
+            weights = {name: 1.0 / len(self.factor_values) for name in self.factor_values}
         else:
             total = sum(weights.values())
             weights = {k: v / total for k, v in weights.items()}
@@ -379,9 +371,7 @@ class CombinedFactor(BaseFactor):
 
         self._combiner = None
 
-    def fit(
-        self, data: pd.DataFrame, target: Optional[pd.Series] = None
-    ) -> "CombinedFactor":
+    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None) -> "CombinedFactor":
         """训练"""
         self._combiner = FactorCombiner()
 
@@ -439,9 +429,7 @@ def register_factor(name: str):
 def get_factor(name: str, **kwargs) -> BaseFactor:
     """获取因子实例"""
     if name not in FACTOR_REGISTRY:
-        raise ValueError(
-            f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}"
-        )
+        raise ValueError(f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}")
     return FACTOR_REGISTRY[name](**kwargs)
 
 

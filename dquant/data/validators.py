@@ -92,9 +92,7 @@ class DataValidator:
         # open/close 不在 [low, high] 范围
         for col in ["open", "close"]:
             if col in data.columns:
-                out_of_range = (
-                    (data[col] < data["low"]) | (data[col] > data["high"])
-                ).sum()
+                out_of_range = ((data[col] < data["low"]) | (data[col] > data["high"])).sum()
                 if out_of_range > 0:
                     issues[f"{col}_out_of_range"] = out_of_range
                     count += out_of_range

@@ -214,9 +214,7 @@ class YahooLoader(DataSource):
         return 100 - (100 / (1 + rs))
 
     @staticmethod
-    def _calculate_macd(
-        series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
-    ):
+    def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
         """计算 MACD"""
         ema_fast = series.ewm(span=fast, adjust=False).mean()
         ema_slow = series.ewm(span=slow, adjust=False).mean()

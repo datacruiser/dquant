@@ -261,9 +261,7 @@ class AKShareLoader(DataSource):
 
             # 成交量因子
             group["volume_ma_5"] = group["volume"].rolling(5).mean()
-            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(
-                0, np.nan
-            )
+            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(0, np.nan)
 
             results.append(group)
 
