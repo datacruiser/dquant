@@ -206,13 +206,107 @@ class TestSellLotSize:
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 100, 10.0, commission=0)
         cash_before = pf.cash
-        
+
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 卖出 100 股 @ 10.0, stamp_duty=0.001
         pf.sell("TEST.SZ", 100, 10.0, commission=0, stamp_duty=0.001)
         # 收入 = 100 * 10.0 * (1 - 0 - 0.001) = 999
         assert abs(pf.cash - (cash_before + 999.0)) < 0.01
+
+
+# ============================================================
+# 2b. T+1 冻结持仓专项测试
+# ============================================================
+
+
+class TestTPlus1LockedShares:
+    """验证 T+1 冻结/释放/累积/扣减逻辑"""
+
+    def test_cannot_sell_on_buy_day(self):
+        """当日买入的股票不可卖出（locked_shares 阻断）"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        # 同一天尝试卖出 → available = max(0, 500-500) = 0 → 卖出被阻断
+        pf.sell("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].shares == 500
+        assert pf.positions["TEST.SZ"].locked_shares == 500
+
+    def test_lock_accumulates_on_same_day_buys(self):
+        """同日多次买入累积 locked_shares"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)
+        pf.buy("TEST.SZ", 200, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 500
+        assert pos.locked_shares == 500
+        assert pos.available_shares == 0
+
+    def test_unlocked_after_next_day(self):
+        """次日 locked_shares 被清零，全部可用"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].available_shares == 0
+
+        # 过一天 → locked_shares 清零
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        assert pf.positions["TEST.SZ"].locked_shares == 0
+        assert pf.positions["TEST.SZ"].available_shares == 500
+
+    def test_multi_day_buy_partial_availability(self):
+        """Day1 买入 500, Day2 又买入 300 → Day2 可卖 500，锁定 300"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        # Day 2: 释放 Day1 锁定 + 新买 300
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 800
+        assert pos.locked_shares == 300
+        assert pos.available_shares == 500
+
+        # 尝试卖 600 → 实际只能卖 500（受限于 available）
+        pf.sell("TEST.SZ", 600, 10.0, commission=0)
+        assert pos.shares == 300
+        assert pos.locked_shares == 300  # min(300, 300)
+
+    def test_partial_sell_clamps_locked(self):
+        """部分卖出后 locked_shares 被 min(locked, shares) 钳制"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)  # locked=300
+
+        # 卖出 500（全部 available）→ shares=300, locked=min(300,300)=300
+        pf.sell("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].locked_shares == 300
+        assert pf.positions["TEST.SZ"].available_shares == 0
+
+        # 次日释放后可卖剩余
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 3))
+        assert pf.positions["TEST.SZ"].available_shares == 300
+
+    def test_locked_cleared_across_weekend(self):
+        """跨周末 locked_shares 正确释放"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 6))   # Friday
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].locked_shares == 500
+
+        # 跳到 Monday (2023-01-09)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 9))
+        assert pf.positions["TEST.SZ"].locked_shares == 0
+        assert pf.positions["TEST.SZ"].available_shares == 500
 
 
 # ============================================================
