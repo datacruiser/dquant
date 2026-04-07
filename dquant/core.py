@@ -3,7 +3,9 @@
 """
 
 import signal
+import threading
 import time
+import concurrent.futures
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -70,16 +72,19 @@ class Engine:
         self.initial_cash = initial_cash
 
         # 初始化券商
-        self.broker: BaseBroker
-        if broker is None:
-            self.broker = Simulator(initial_cash=initial_cash)
-        elif isinstance(broker, str):
-            self.broker = self._init_broker(broker, initial_cash)
-        else:
-            self.broker = broker
+        self.broker: BaseBroker = self._resolve_broker(broker, initial_cash)
 
         self._backtest_engine: Optional[BacktestEngine] = None
-        self._running = False
+        self._running = threading.Event()
+
+    def _resolve_broker(self, broker: Union[str, BaseBroker, None], initial_cash: float) -> BaseBroker:
+        """解析并初始化券商接口"""
+        if broker is None:
+            return Simulator(initial_cash=initial_cash)
+        elif isinstance(broker, str):
+            return self._init_broker(broker, initial_cash)
+        else:
+            return broker
 
     def _init_broker(self, broker_name: str, initial_cash: float) -> BaseBroker:
         """初始化券商接口"""
@@ -203,11 +208,11 @@ class Engine:
         time_checker = TradingTimeChecker()
 
         # 信号处理：优雅关机
-        self._running = True
+        self._running.set()
 
         def _shutdown_handler(signum, frame):
             logger.info(f"[LIVE] 收到信号 {signum}，准备优雅关机...")
-            self._running = False
+            self._running.clear()
 
         original_sigint = signal.getsignal(signal.SIGINT)
         original_sigterm = signal.getsignal(signal.SIGTERM)
@@ -217,53 +222,66 @@ class Engine:
         consecutive_errors = 0
         last_date_str = ""
 
-        import concurrent.futures
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
-
         try:
-            while self._running:
-                loop_start = time.time()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                while self._running.is_set():
+                    loop_start = time.time()
 
-                try:
-                    now = datetime.now()
-                    date_str = now.strftime("%Y-%m-%d")
+                    try:
+                        now = datetime.now()
+                        date_str = now.strftime("%Y-%m-%d")
 
-                    # 0. 检查 broker 连接
-                    if not self.broker.is_connected():
-                        if not self._try_reconnect(**kwargs):
+                        # 0. 检查 broker 连接
+                        if not self.broker.is_connected():
+                            if not self._try_reconnect(**kwargs):
+                                time.sleep(interval)
+                                continue
+
+                        # 1. 检查交易日
+                        if not is_trading_day(now):
+                            logger.debug(f"[LIVE] 非交易日: {date_str}")
                             time.sleep(interval)
                             continue
 
-                    # 1. 检查交易日
-                    if not is_trading_day(now):
-                        logger.debug(f"[LIVE] 非交易日: {date_str}")
-                        time.sleep(interval)
-                        continue
+                        # 2. 检查交易时间
+                        can_trade, time_msg = time_checker.is_trading_time(now)
+                        if not can_trade:
+                            logger.debug(f"[LIVE] {time_msg}")
+                            time.sleep(interval)
+                            continue
 
-                    # 2. 检查交易时间
-                    can_trade, time_msg = time_checker.is_trading_time(now)
-                    if not can_trade:
-                        logger.debug(f"[LIVE] {time_msg}")
-                        time.sleep(interval)
-                        continue
+                        # 3. 新一天 → 重置日亏损基准
+                        if date_str != last_date_str:
+                            account = self.broker.get_account()
+                            total_value = account.get(
+                                "total_value", account.get("cash", self.initial_cash)
+                            )
+                            risk_mgr.reset_daily_start(total_value, date_str)
+                            last_date_str = date_str
+                            logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
 
-                    # 3. 新一天 → 重置日亏损基准
-                    if date_str != last_date_str:
-                        account = self.broker.get_account()
-                        total_value = account.get(
-                            "total_value", account.get("cash", self.initial_cash)
+                        # 4. 获取实时行情 & 并发轮询挂单
+                        future_data = executor.submit(self._fetch_realtime_data, symbols)
+                        future_poll = None
+                        if tracker.has_pending() and not dry_run:
+                            future_poll = executor.submit(self._poll_pending_orders, tracker, journal, strategy_name)
+                            
+                        realtime_df = future_data.result()
+                        if future_poll:
+                            future_poll.result()
+
+                    except Exception as e:
+                        consecutive_errors += 1
+                        logger.error(
+                            f"[LIVE] 循环异常 ({consecutive_errors}/{max_consecutive_errors}): {e}"
                         )
-                        risk_mgr.reset_daily_start(total_value, date_str)
-                        last_date_str = date_str
-                        logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
 
-                    # 4. 获取实时行情 & 并发轮询挂单
-                    future_data = executor.submit(self._fetch_realtime_data, symbols)
-                    if tracker.has_pending() and not dry_run:
-                        future_poll = executor.submit(self._poll_pending_orders, tracker, journal, strategy_name)
-                        future_poll.result()
+                        if consecutive_errors >= max_consecutive_errors:
+                            logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
+                            break
                         
-                    realtime_df = future_data.result()
+                        time.sleep(interval)
+                        continue
 
                     if realtime_df is None or realtime_df.empty:
                         logger.warning("[LIVE] 获取实时行情失败，跳过本轮")
@@ -335,20 +353,10 @@ class Engine:
                             tracker,
                         )
 
-                    # 10. 更新持仓价格
+                    # 11. 更新持仓价格
                     self._update_position_prices(realtime_df)
 
                     consecutive_errors = 0
-
-                except Exception as e:
-                    consecutive_errors += 1
-                    logger.error(
-                        f"[LIVE] 循环异常 ({consecutive_errors}/{max_consecutive_errors}): {e}"
-                    )
-
-                    if consecutive_errors >= max_consecutive_errors:
-                        logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
-                        break
 
                 # 控制循环频率
                 elapsed = time.time() - loop_start
@@ -386,19 +394,28 @@ class Engine:
             # 1. 优先尝试从 broker 获取批量行情
             if hasattr(self.broker, "get_market_data") and symbols:
                 data = []
-                for symbol in symbols:
+                
+                def _fetch_single_quote(symbol):
                     try:
                         quote = self.broker.get_market_data(symbol)
                         if quote and "price" in quote:
-                            data.append({
+                            return {
                                 "symbol": symbol,
                                 "price": quote["price"],
                                 "volume": quote.get("volume", 0),
                                 "amount": quote.get("amount", 0),
                                 "time": datetime.now()
-                            })
+                            }
                     except Exception as e:
                         logger.warning(f"[LIVE] 从 broker 获取 {symbol} 行情失败: {e}")
+                    return None
+
+                # 并发拉取各个标的的行情，避免串行网络请求阻塞
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(symbols))) as fetch_executor:
+                    results = fetch_executor.map(_fetch_single_quote, symbols)
+                    for res in results:
+                        if res:
+                            data.append(res)
                 
                 if data:
                     df = pd.DataFrame(data)
@@ -443,7 +460,9 @@ class Engine:
             return None
 
         pos = positions[symbol]
-        quantity = pos.get("quantity", pos.get("available", 0))
+        # Simulator 返回 dict 结构: {'shares': 100} 或 {'available': 100}
+        # 真实 broker 返回: {'quantity': 100, 'available': 100}
+        quantity = pos.get("available", pos.get("shares", pos.get("quantity", 0)))
         if quantity <= 0:
             return None
 
@@ -452,7 +471,7 @@ class Engine:
 
         # 若可用持仓不足一手，或者卖出整手后剩余不足一手，则直接全卖（清仓零股）
         if lot_quantity == 0 or (0 < quantity - lot_quantity < MIN_SHARES):
-            quantity = quantity
+            pass  # 保持原数量，直接全量清仓
         else:
             quantity = lot_quantity
 
