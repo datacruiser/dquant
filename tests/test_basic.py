@@ -36,11 +36,15 @@ def test_portfolio():
     portfolio = Portfolio(initial_cash=1000000)
     assert portfolio.cash == 1000000
     assert portfolio.total_value == 1000000
+    
+    portfolio.update_prices({}, pd.Timestamp("2023-01-01"))
 
     # 买入
     portfolio.buy("000001.SZ", 1000, 10.0)
     assert portfolio.cash == 990000
     assert "000001.SZ" in portfolio.positions
+    
+    portfolio.update_prices({"000001.SZ": 10.0}, pd.Timestamp("2023-01-02"))
 
     # 卖出
     portfolio.sell("000001.SZ", 500, 11.0)

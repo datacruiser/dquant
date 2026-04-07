@@ -23,6 +23,12 @@ class Position:
     avg_cost: float
     current_price: float = 0.0
     timestamp: Optional[datetime] = None
+    locked_shares: float = 0.0  # T+1 冻结的股数
+
+    @property
+    def available_shares(self) -> float:
+        """可用持仓（总股数 - T+1冻结股数）"""
+        return max(0.0, self.shares - self.locked_shares)
 
     @property
     def market_value(self) -> float:
@@ -68,7 +74,15 @@ class Portfolio:
         return self.total_value / self.initial_cash
 
     def update_prices(self, prices: Dict[str, float], timestamp: datetime = None):
-        """更新持仓价格"""
+        """更新持仓价格，并释放 T+1 冻结持仓"""
+        # 如果日期变更，释放昨日冻结的持仓 (T+1)
+        if self.timestamp_history:
+            last_date = self.timestamp_history[-1]
+            # timestamp 有可能是 pd.Timestamp 或 datetime
+            if timestamp and pd.to_datetime(timestamp).date() > pd.to_datetime(last_date).date():
+                for pos in self.positions.values():
+                    pos.locked_shares = 0.0
+
         # 防止同一日期重复追加 NAV
         if self.timestamp_history and self.timestamp_history[-1] == timestamp:
             return
@@ -105,12 +119,14 @@ class Portfolio:
             total_shares = pos.shares + shares
             pos.avg_cost = (pos.avg_cost * pos.shares + price * shares) / total_shares
             pos.shares = total_shares
+            pos.locked_shares += shares
         else:
             self.positions[symbol] = Position(
                 symbol=symbol,
                 shares=shares,
                 avg_cost=price,
                 current_price=price,
+                locked_shares=shares,
             )
 
     def sell(
@@ -126,19 +142,25 @@ class Portfolio:
             return
 
         pos = self.positions[symbol]
-        shares = min(shares, pos.shares)
+        
+        # 受限于 T+1 规则，只能卖出可用持仓
+        available = pos.available_shares
+        if available <= 0:
+            return
+            
+        shares = min(shares, available)
 
         # 整手处理：向下取整到 MIN_SHARES 的整数倍
         lot_shares = int(shares // MIN_SHARES) * MIN_SHARES
 
-        # 若剩余不足一手，清仓
+        # 若可用持仓不足一手，清仓可用部分
         if lot_shares == 0:
-            lot_shares = pos.shares
+            lot_shares = available
         else:
-            # 检查卖出后剩余是否不足一手
-            remaining = pos.shares - lot_shares
+            # 检查卖出整手后剩余是否不足一手
+            remaining = available - lot_shares
             if 0 < remaining < MIN_SHARES:
-                lot_shares = pos.shares  # 清仓
+                lot_shares = available  # 清仓可用部分
 
         if lot_shares <= 0:
             return

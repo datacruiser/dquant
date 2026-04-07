@@ -53,7 +53,7 @@ class Engine:
         self,
         data: DataSource,
         strategy: BaseStrategy,
-        broker: Optional[Union[str, BaseBroker]] = None,
+        broker: Union[str, BaseBroker, None] = None,
         initial_cash: float = DEFAULT_INITIAL_CASH,
     ):
         """
@@ -70,6 +70,7 @@ class Engine:
         self.initial_cash = initial_cash
 
         # 初始化券商
+        self.broker: BaseBroker
         if broker is None:
             self.broker = Simulator(initial_cash=initial_cash)
         elif isinstance(broker, str):
@@ -78,6 +79,7 @@ class Engine:
             self.broker = broker
 
         self._backtest_engine: Optional[BacktestEngine] = None
+        self._running = False
 
     def _init_broker(self, broker_name: str, initial_cash: float) -> BaseBroker:
         """初始化券商接口"""
@@ -215,6 +217,9 @@ class Engine:
         consecutive_errors = 0
         last_date_str = ""
 
+        import concurrent.futures
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
         try:
             while self._running:
                 loop_start = time.time()
@@ -252,8 +257,14 @@ class Engine:
                         last_date_str = date_str
                         logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
 
-                    # 4. 获取实时行情
-                    realtime_df = self._fetch_realtime_data(symbols)
+                    # 4. 获取实时行情 & 并发轮询挂单
+                    future_data = executor.submit(self._fetch_realtime_data, symbols)
+                    if tracker.has_pending() and not dry_run:
+                        future_poll = executor.submit(self._poll_pending_orders, tracker, journal, strategy_name)
+                        future_poll.result()
+                        
+                    realtime_df = future_data.result()
+
                     if realtime_df is None or realtime_df.empty:
                         logger.warning("[LIVE] 获取实时行情失败，跳过本轮")
                         time.sleep(interval)
@@ -311,10 +322,8 @@ class Engine:
                             if result.status in ("PENDING", "PARTIAL_FILLED"):
                                 tracker.add(order, result)
 
-                    # 9. 轮询未完成订单
-                    if tracker.has_pending() and not dry_run:
-                        self._poll_pending_orders(tracker, journal, strategy_name)
-
+                    # 9. (已移至上方与拉取行情并发)
+                    
                     # 10. 执行买入信号 (等权仓位)
                     if buy_signals:
                         self._execute_buys(
@@ -374,6 +383,32 @@ class Engine:
     def _fetch_realtime_data(self, symbols: Optional[List[str]]) -> Optional[pd.DataFrame]:
         """获取实时行情数据"""
         try:
+            # 1. 优先尝试从 broker 获取批量行情
+            if hasattr(self.broker, "get_market_data") and symbols:
+                data = []
+                for symbol in symbols:
+                    try:
+                        quote = self.broker.get_market_data(symbol)
+                        if quote and "price" in quote:
+                            data.append({
+                                "symbol": symbol,
+                                "price": quote["price"],
+                                "volume": quote.get("volume", 0),
+                                "amount": quote.get("amount", 0),
+                                "time": datetime.now()
+                            })
+                    except Exception as e:
+                        logger.warning(f"[LIVE] 从 broker 获取 {symbol} 行情失败: {e}")
+                
+                if data:
+                    df = pd.DataFrame(data)
+                    for col in ["open", "high", "low", "close"]:
+                        if col not in df.columns:
+                            df[col] = df["price"]
+                    df.set_index("symbol", inplace=True)
+                    return df
+
+            # 2. 如果 broker 不支持或获取失败，回退到 akshare
             from dquant.data.akshare_loader import AKShareRealTime
 
             return AKShareRealTime.get_realtime_quotes(symbols=symbols)
@@ -413,7 +448,14 @@ class Engine:
             return None
 
         # 整手处理
-        quantity = (quantity // MIN_SHARES) * MIN_SHARES
+        lot_quantity = int(quantity // MIN_SHARES) * MIN_SHARES
+
+        # 若可用持仓不足一手，或者卖出整手后剩余不足一手，则直接全卖（清仓零股）
+        if lot_quantity == 0 or (0 < quantity - lot_quantity < MIN_SHARES):
+            quantity = quantity
+        else:
+            quantity = lot_quantity
+
         if quantity <= 0:
             return None
 

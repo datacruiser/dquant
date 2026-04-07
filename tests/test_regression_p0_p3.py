@@ -143,8 +143,12 @@ class TestSellLotSize:
     def test_normal_lot_sell(self):
         """正常整手卖出"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
         assert pf.positions["TEST.SZ"].shares == 500
+
+        # 过一天释放 T+1 冻结
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         pf.sell("TEST.SZ", 200, 10.0, commission=0)
         assert pf.positions["TEST.SZ"].shares == 300
@@ -152,7 +156,10 @@ class TestSellLotSize:
     def test_fractional_sell_rounds_down(self):
         """小数卖出向下取整"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 123.45 股 → 向下取整到 100
         pf.sell("TEST.SZ", 123.45, 10.0, commission=0)
@@ -161,7 +168,10 @@ class TestSellLotSize:
     def test_small_sell_clears_position(self):
         """卖出数量不足一手时清仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 200, 10.0, commission=0)
+        
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 50 股 → lot_shares=0 → 清仓 200
         pf.sell("TEST.SZ", 50, 10.0, commission=0)
@@ -170,7 +180,10 @@ class TestSellLotSize:
     def test_remaining_fractional_clears_position(self):
         """卖出后剩余不足一手时清仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 250, 10.0, commission=0)
+        
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 200 → lot_shares=200, remaining=50 < 100 → 清仓 250
         pf.sell("TEST.SZ", 200, 10.0, commission=0)
@@ -179,7 +192,10 @@ class TestSellLotSize:
     def test_full_sell_removes_position(self):
         """全部卖出移除持仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         pf.sell("TEST.SZ", 500, 10.0, commission=0)
         assert "TEST.SZ" not in pf.positions
@@ -187,8 +203,11 @@ class TestSellLotSize:
     def test_sell_revenue_includes_stamp_duty(self):
         """卖出收入扣除印花税"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 100, 10.0, commission=0)
         cash_before = pf.cash
+        
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 卖出 100 股 @ 10.0, stamp_duty=0.001
         pf.sell("TEST.SZ", 100, 10.0, commission=0, stamp_duty=0.001)
