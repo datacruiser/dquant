@@ -608,9 +608,12 @@ class Engine:
         """用最新价更新持仓价格（通用版）"""
         # Simulator: 直接更新
         if isinstance(self.broker, Simulator):
-            if "symbol" not in realtime_df.columns or "price" not in realtime_df.columns:
+            if "price" not in realtime_df.columns:
                 return
-            price_map = dict(zip(realtime_df["symbol"], realtime_df["price"]))
+            if "symbol" in realtime_df.columns:
+                price_map = dict(zip(realtime_df["symbol"], realtime_df["price"]))
+            else:
+                price_map = dict(zip(realtime_df.index, realtime_df["price"]))
             self.broker.update_prices(price_map)
             return
 

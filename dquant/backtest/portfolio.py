@@ -172,8 +172,10 @@ class Portfolio:
         if pos.shares < 1e-5:
             del self.positions[symbol]
         elif pos.shares < MIN_SHARES:
-            # 零股蒸发补偿现金（假设以相同价格卖出剩余零股，不收手续费）
-            self.cash += pos.shares * price
+            # 零股补偿：仅补偿未锁定部分，锁定部分因 T+1 限制丢弃
+            unlocked = max(0.0, pos.shares - pos.locked_shares)
+            if unlocked > 0:
+                self.cash += unlocked * price
             del self.positions[symbol]
 
     def rebalance(

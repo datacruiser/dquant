@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from dquant.broker.base import Order, OrderResult
@@ -103,3 +104,43 @@ def test_live_order_rejected():
             
     # 被拒订单不应进入 pending tracker
     assert not tracker.has_pending()
+
+
+def test_update_position_prices_with_symbol_as_index():
+    """测试 _update_position_prices 能正确处理 symbol 作为 index 的情况（BUG FIX 回归测试）
+
+    _fetch_realtime_data 返回的 DataFrame 执行了 set_index("symbol")，
+    导致 symbol 不再是列名而是索引。_update_position_prices 必须能处理这两种情况。
+    """
+    broker = Simulator(initial_cash=100000)
+    from dquant.data.data_manager import DataManager
+    data = DataManager()
+    engine = Engine(strategy=DummyStrategy(), data=data, broker=broker)
+
+    # 先在 broker 中建立一个持仓
+    broker.positions["000001.SZ"] = {
+        "quantity": 100,
+        "avg_cost": 10.0,
+        "price": 10.0,
+    }
+
+    # 模拟 _fetch_realtime_data 返回的 DataFrame (symbol 已被 set_index)
+    df = pd.DataFrame({
+        "symbol": ["000001.SZ"],
+        "price": [15.0],
+        "open": [15.0],
+        "high": [15.0],
+        "low": [15.0],
+        "close": [15.0],
+    })
+    df.set_index("symbol", inplace=True)
+
+    # symbol 不在 columns 中（被移到了 index）
+    assert "symbol" not in df.columns
+    assert "price" in df.columns
+
+    # 调用 _update_position_prices — 不应静默跳过
+    engine._update_position_prices(df)
+
+    # 验证价格已更新
+    assert broker.positions["000001.SZ"]["price"] == 15.0
