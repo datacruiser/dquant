@@ -19,7 +19,7 @@ import pytest
 
 from dquant.backtest.engine import BacktestEngine
 from dquant.backtest.portfolio import Portfolio, Position
-from dquant.constants import MIN_SHARES, normalize_symbol
+from dquant.constants import DEFAULT_STAMP_DUTY, MIN_SHARES, normalize_symbol
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
 # ============================================================
@@ -143,8 +143,12 @@ class TestSellLotSize:
     def test_normal_lot_sell(self):
         """正常整手卖出"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
         assert pf.positions["TEST.SZ"].shares == 500
+
+        # 过一天释放 T+1 冻结
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         pf.sell("TEST.SZ", 200, 10.0, commission=0)
         assert pf.positions["TEST.SZ"].shares == 300
@@ -152,7 +156,10 @@ class TestSellLotSize:
     def test_fractional_sell_rounds_down(self):
         """小数卖出向下取整"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 123.45 股 → 向下取整到 100
         pf.sell("TEST.SZ", 123.45, 10.0, commission=0)
@@ -161,7 +168,10 @@ class TestSellLotSize:
     def test_small_sell_clears_position(self):
         """卖出数量不足一手时清仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 200, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 50 股 → lot_shares=0 → 清仓 200
         pf.sell("TEST.SZ", 50, 10.0, commission=0)
@@ -170,7 +180,10 @@ class TestSellLotSize:
     def test_remaining_fractional_clears_position(self):
         """卖出后剩余不足一手时清仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 250, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 200 → lot_shares=200, remaining=50 < 100 → 清仓 250
         pf.sell("TEST.SZ", 200, 10.0, commission=0)
@@ -179,7 +192,10 @@ class TestSellLotSize:
     def test_full_sell_removes_position(self):
         """全部卖出移除持仓"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         pf.sell("TEST.SZ", 500, 10.0, commission=0)
         assert "TEST.SZ" not in pf.positions
@@ -187,13 +203,190 @@ class TestSellLotSize:
     def test_sell_revenue_includes_stamp_duty(self):
         """卖出收入扣除印花税"""
         pf = Portfolio(initial_cash=100000)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 100, 10.0, commission=0)
         cash_before = pf.cash
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 卖出 100 股 @ 10.0, stamp_duty=0.001
         pf.sell("TEST.SZ", 100, 10.0, commission=0, stamp_duty=0.001)
         # 收入 = 100 * 10.0 * (1 - 0 - 0.001) = 999
         assert abs(pf.cash - (cash_before + 999.0)) < 0.01
+
+
+# ============================================================
+# 2b. T+1 冻结持仓专项测试
+# ============================================================
+
+
+class TestTPlus1LockedShares:
+    """验证 T+1 冻结/释放/累积/扣减逻辑"""
+
+    def test_cannot_sell_on_buy_day(self):
+        """当日买入的股票不可卖出（locked_shares 阻断）"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        # 同一天尝试卖出 → available = max(0, 500-500) = 0 → 卖出被阻断
+        pf.sell("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].shares == 500
+        assert pf.positions["TEST.SZ"].locked_shares == 500
+
+    def test_lock_accumulates_on_same_day_buys(self):
+        """同日多次买入累积 locked_shares"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)
+        pf.buy("TEST.SZ", 200, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 500
+        assert pos.locked_shares == 500
+        assert pos.available_shares == 0
+
+    def test_unlocked_after_next_day(self):
+        """次日 locked_shares 被清零，全部可用"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].available_shares == 0
+
+        # 过一天 → locked_shares 清零
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        assert pf.positions["TEST.SZ"].locked_shares == 0
+        assert pf.positions["TEST.SZ"].available_shares == 500
+
+    def test_multi_day_buy_partial_availability(self):
+        """Day1 买入 500, Day2 又买入 300 → Day2 可卖 500，锁定 300"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        # Day 2: 释放 Day1 锁定 + 新买 300
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 800
+        assert pos.locked_shares == 300
+        assert pos.available_shares == 500
+
+        # 尝试卖 600 → 实际只能卖 500（受限于 available）
+        pf.sell("TEST.SZ", 600, 10.0, commission=0)
+        assert pos.shares == 300
+        assert pos.locked_shares == 300  # min(300, 300)
+
+    def test_partial_sell_clamps_locked(self):
+        """部分卖出后 locked_shares 被 min(locked, shares) 钳制"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)  # locked=300
+
+        # 卖出 500（全部 available）→ shares=300, locked=min(300,300)=300
+        pf.sell("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].locked_shares == 300
+        assert pf.positions["TEST.SZ"].available_shares == 0
+
+        # 次日释放后可卖剩余
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 3))
+        assert pf.positions["TEST.SZ"].available_shares == 300
+
+    def test_locked_cleared_across_weekend(self):
+        """跨周末 locked_shares 正确释放"""
+        pf = Portfolio(initial_cash=100000)
+        pf.update_prices({}, datetime(2023, 1, 6))  # Friday
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].locked_shares == 500
+
+        # 跳到 Monday (2023-01-09)
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 9))
+        assert pf.positions["TEST.SZ"].locked_shares == 0
+        assert pf.positions["TEST.SZ"].available_shares == 500
+
+    def test_dust_compensation_does_not_sell_locked_shares(self):
+        """零股补偿不应变现 T+1 锁定股份（BUG FIX 回归测试）"""
+        pf = Portfolio(initial_cash=500000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        # 买入 500 股（整手）
+        pf.buy("TEST.SZ", 500, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].locked_shares == 500
+
+        # Day 2: 解锁 500, 再买入 200 → locked=200, available=500
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 200, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 700
+        assert pos.locked_shares == 200
+        assert pos.available_shares == 500
+
+        # 卖出 500 → shares=200, locked=min(200,200)=200
+        cash_before = pf.cash
+        pf.sell("TEST.SZ", 500, 10.0, commission=0)
+
+        # 剩余 200 股 >= MIN_SHARES(100)，不触发零股补偿
+        assert "TEST.SZ" in pf.positions
+        assert pf.positions["TEST.SZ"].shares == 200
+        assert pf.positions["TEST.SZ"].locked_shares == 200
+
+        # Day 3: 解锁 200, 再卖 100 → 剩余 100 = MIN_SHARES，不触发零股
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 3))
+        pf.sell("TEST.SZ", 100, 10.0, commission=0)
+        assert pf.positions["TEST.SZ"].shares == 100
+
+        # 再卖 50 → lot_shares=0, 清仓 available=100
+        cash_before = pf.cash
+        pf.sell("TEST.SZ", 50, 10.0, commission=0)
+        # 100 股全部 available 且清仓了，无剩余零股
+        assert "TEST.SZ" not in pf.positions
+        expected_revenue = 100 * 10.0 * (1 - 0 - DEFAULT_STAMP_DUTY)
+        assert abs(pf.cash - (cash_before + expected_revenue)) < 0.01
+
+    def test_dust_compensation_sells_unlocked_dust_only(self):
+        """零股补偿仅变现未锁定的零股部分（全部 unlocked 的零股应被补偿）"""
+        pf = Portfolio(initial_cash=200000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 200, 10.0, commission=0)
+
+        # Day 2: 解锁 200
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        # 卖出 50 股 → lot_shares=0 → 清仓 available=200（整手规则：不足一手全卖）
+        cash_before = pf.cash
+        pf.sell("TEST.SZ", 50, 10.0, commission=0)
+
+        # 200 股全部清仓（不足一手触发清仓），无剩余零股
+        assert "TEST.SZ" not in pf.positions
+        expected_revenue = 200 * 10.0 * (1 - 0 - DEFAULT_STAMP_DUTY)
+        assert abs(pf.cash - (cash_before + expected_revenue)) < 0.01
+
+    def test_dust_compensation_partially_locked(self):
+        """零股补偿中混合锁定/非锁定时，仅补偿非锁定部分"""
+        pf = Portfolio(initial_cash=500000)
+        pf.update_prices({}, datetime(2023, 1, 1))
+        pf.buy("TEST.SZ", 300, 10.0, commission=0)
+
+        # Day 2: 解锁 300, 再买入 100 → shares=400, locked=100, available=300
+        pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
+        pf.buy("TEST.SZ", 100, 10.0, commission=0)
+
+        pos = pf.positions["TEST.SZ"]
+        assert pos.shares == 400
+        assert pos.locked_shares == 100
+        assert pos.available_shares == 300
+
+        # 卖出 300 (全部 available) → shares=100, locked=100
+        cash_before = pf.cash
+        pf.sell("TEST.SZ", 300, 10.0, commission=0)
+
+        # shares=100, locked=100 → 100 == MIN_SHARES，不触发零股补偿
+        assert "TEST.SZ" in pf.positions
+        expected_revenue = 300 * 10.0 * (1 - 0 - DEFAULT_STAMP_DUTY)
+        assert abs(pf.cash - (cash_before + expected_revenue)) < 0.01
 
 
 # ============================================================

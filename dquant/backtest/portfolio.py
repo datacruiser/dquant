@@ -23,6 +23,12 @@ class Position:
     avg_cost: float
     current_price: float = 0.0
     timestamp: Optional[datetime] = None
+    locked_shares: float = 0.0  # T+1 冻结的股数
+
+    @property
+    def available_shares(self) -> float:
+        """可用持仓（总股数 - T+1冻结股数）"""
+        return max(0.0, self.shares - self.locked_shares)
 
     @property
     def market_value(self) -> float:
@@ -68,7 +74,18 @@ class Portfolio:
         return self.total_value / self.initial_cash
 
     def update_prices(self, prices: Dict[str, float], timestamp: datetime = None):
-        """更新持仓价格"""
+        """更新持仓价格，并释放 T+1 冻结持仓"""
+        # 如果日期变更，释放昨日冻结的持仓 (T+1)
+        # 注意：如果是第一天，直接放行，但通常第一天不会有冻结需要释放
+        if timestamp:
+            if (
+                not self.timestamp_history
+                or pd.to_datetime(timestamp).date()
+                > pd.to_datetime(self.timestamp_history[-1]).date()
+            ):
+                for pos in self.positions.values():
+                    pos.locked_shares = 0.0
+
         # 防止同一日期重复追加 NAV
         if self.timestamp_history and self.timestamp_history[-1] == timestamp:
             return
@@ -105,12 +122,14 @@ class Portfolio:
             total_shares = pos.shares + shares
             pos.avg_cost = (pos.avg_cost * pos.shares + price * shares) / total_shares
             pos.shares = total_shares
+            pos.locked_shares += shares
         else:
             self.positions[symbol] = Position(
                 symbol=symbol,
                 shares=shares,
                 avg_cost=price,
                 current_price=price,
+                locked_shares=shares,
             )
 
     def sell(
@@ -126,19 +145,25 @@ class Portfolio:
             return
 
         pos = self.positions[symbol]
-        shares = min(shares, pos.shares)
+
+        # 受限于 T+1 规则，只能卖出可用持仓
+        available = pos.available_shares
+        if available <= 0:
+            return
+
+        shares = min(shares, available)
 
         # 整手处理：向下取整到 MIN_SHARES 的整数倍
         lot_shares = int(shares // MIN_SHARES) * MIN_SHARES
 
-        # 若剩余不足一手，清仓
+        # 若可用持仓不足一手，清仓可用部分
         if lot_shares == 0:
-            lot_shares = pos.shares
+            lot_shares = available
         else:
-            # 检查卖出后剩余是否不足一手
-            remaining = pos.shares - lot_shares
+            # 检查卖出整手后剩余是否不足一手
+            remaining = available - lot_shares
             if 0 < remaining < MIN_SHARES:
-                lot_shares = pos.shares  # 清仓
+                lot_shares = available  # 清仓可用部分
 
         if lot_shares <= 0:
             return
@@ -146,8 +171,15 @@ class Portfolio:
         revenue = lot_shares * price * (1 - commission - stamp_duty)
         self.cash += revenue
         pos.shares -= lot_shares
+        pos.locked_shares = min(pos.locked_shares, pos.shares)
 
-        if pos.shares < MIN_SHARES:
+        if pos.shares < 1e-5:
+            del self.positions[symbol]
+        elif pos.shares < MIN_SHARES:
+            # 零股补偿：仅补偿未锁定部分，锁定部分因 T+1 限制丢弃
+            unlocked = max(0.0, pos.shares - pos.locked_shares)
+            if unlocked > 0:
+                self.cash += unlocked * price
             del self.positions[symbol]
 
     def rebalance(
@@ -176,7 +208,7 @@ class Portfolio:
                 pos = self.positions[symbol]
                 self.sell(
                     symbol,
-                    pos.shares,
+                    pos.available_shares,  # T+1 下可能只能清可用部分
                     prices.get(symbol, pos.current_price),
                     commission,
                 )
