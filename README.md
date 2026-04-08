@@ -14,7 +14,7 @@
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-197%20passed-brightgreen?style=flat)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-232%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -27,6 +27,7 @@
 - **回测/实盘统一** — 同一策略无缝切换回测与实盘
 - **实盘就绪** — 风控管理、订单追踪、自动重连、优雅关机
 - **高性能** — 向量化回测引擎，Numba 加速，并行计算
+- **T+1 规则** — A 股 T+1 交收制度，回测与实盘统一强制
 - **易扩展** — 模块化设计，易于添加新数据源和策略
 
 ## 📦 安装
@@ -73,6 +74,8 @@ print(result.metrics)
 - 总收益率 / 年化收益率 / 夏普比率 / 最大回撤 / 卡玛比率
 - 支持基准净值曲线对比
 - 滑点模拟、A 股交易成本（佣金 + 印花税）
+- T+1 冻结/释放：当日买入股份次日方可卖出
+- 零股整手约束：不足一手自动清仓并补偿
 - 信号驱动卖出 + 策略隐式调仓
 
 ```python
@@ -116,6 +119,8 @@ engine.live(dry_run=True)
 | 能力 | 说明 |
 |------|------|
 | 风控管理 | 回撤监控 + 日亏损熔断 |
+| T+1 锁仓 | 当日买入锁定，次日释放，回测/实盘统一 |
+| 并发行情 | ThreadPoolExecutor 并发拉取多标的数据 |
 | 订单追踪 | PENDING/PARTIAL_FILLED 超时自动取消 |
 | 订单重试 | 指数退避重试瞬态网络错误 |
 | 优雅关机 | SIGINT/SIGTERM 自动取消 pending 订单 |
@@ -163,13 +168,13 @@ predictions = factor.predict(test_data)
 ```
 dquant/
 ├── dquant/
-│   ├── core.py              # 核心引擎 (回测 + 实盘)
+│   ├── core.py              # 核心引擎 (回测 + 实盘 + 并发行情)
 │   ├── config.py            # 配置管理
 │   ├── risk.py              # 风控 (PositionSizer, RiskManager, StopLoss)
 │   ├── constants.py         # 集中常量
 │   ├── data/                # 数据源 (10+ loaders + DataManager)
 │   ├── strategy/            # 策略层 (5 策略 + 止损止盈装饰器)
-│   ├── backtest/            # 回测引擎 (Portfolio, Metrics, Benchmark)
+│   ├── backtest/            # 回测引擎 (Portfolio, Metrics, Benchmark, T+1)
 │   ├── broker/              # 券商接口 (Simulator, XTP, QMT)
 │   │   ├── base.py          # BaseBroker ABC + Order/OrderResult
 │   │   ├── simulator.py     # 模拟交易
@@ -180,7 +185,7 @@ dquant/
 │   ├── notify/              # 通知 (钉钉 + 日志)
 │   ├── ai/                  # AI 模块 (因子 + ML + RL + Qlib)
 │   └── visualization/       # 可视化
-├── tests/                   # 测试 (197 tests)
+├── tests/                   # 测试 (232 tests)
 └── pyproject.toml
 ```
 
@@ -207,7 +212,7 @@ dquant/
 python -m pytest tests/ -v
 
 # 当前状态
-# 197 passed, 1 skipped, 0 failures
+# 232 passed, 1 skipped, 0 failures
 ```
 
 ## 🤝 贡献
