@@ -141,12 +141,12 @@ class Portfolio:
             return
 
         pos = self.positions[symbol]
-        
+
         # 受限于 T+1 规则，只能卖出可用持仓
         available = pos.available_shares
         if available <= 0:
             return
-            
+
         shares = min(shares, available)
 
         # 整手处理：向下取整到 MIN_SHARES 的整数倍

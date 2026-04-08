@@ -265,7 +265,7 @@ class Engine:
                         future_poll = None
                         if tracker.has_pending() and not dry_run:
                             future_poll = executor.submit(self._poll_pending_orders, tracker, journal, strategy_name)
-                            
+
                         realtime_df = future_data.result()
                         if future_poll:
                             future_poll.result()
@@ -279,7 +279,7 @@ class Engine:
                         if consecutive_errors >= max_consecutive_errors:
                             logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
                             break
-                        
+
                         time.sleep(interval)
                         continue
 
@@ -341,7 +341,7 @@ class Engine:
                                 tracker.add(order, result)
 
                     # 9. (已移至上方与拉取行情并发)
-                    
+
                     # 10. 执行买入信号 (等权仓位)
                     if buy_signals:
                         self._execute_buys(
@@ -394,7 +394,7 @@ class Engine:
             # 1. 优先尝试从 broker 获取批量行情
             if hasattr(self.broker, "get_market_data") and symbols:
                 data = []
-                
+
                 def _fetch_single_quote(symbol):
                     try:
                         quote = self.broker.get_market_data(symbol)
@@ -416,7 +416,7 @@ class Engine:
                     for res in results:
                         if res:
                             data.append(res)
-                
+
                 if data:
                     df = pd.DataFrame(data)
                     for col in ["open", "high", "low", "close"]:
