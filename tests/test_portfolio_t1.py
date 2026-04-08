@@ -1,6 +1,8 @@
-import pytest
 from datetime import datetime
+
 import pandas as pd
+import pytest
+
 from dquant.backtest.portfolio import Portfolio, Position
 
 

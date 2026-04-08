@@ -2,10 +2,10 @@
 核心引擎 - 整合数据、策略、回测、实盘
 """
 
+import concurrent.futures
 import signal
 import threading
 import time
-import concurrent.futures
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 

@@ -19,7 +19,7 @@ import pytest
 
 from dquant.backtest.engine import BacktestEngine
 from dquant.backtest.portfolio import Portfolio, Position
-from dquant.constants import MIN_SHARES, DEFAULT_STAMP_DUTY, normalize_symbol
+from dquant.constants import DEFAULT_STAMP_DUTY, MIN_SHARES, normalize_symbol
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
 # ============================================================
