@@ -158,7 +158,7 @@ class TestSellLotSize:
         pf = Portfolio(initial_cash=100000)
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
-        
+
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 123.45 股 → 向下取整到 100
@@ -170,7 +170,7 @@ class TestSellLotSize:
         pf = Portfolio(initial_cash=100000)
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 200, 10.0, commission=0)
-        
+
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 50 股 → lot_shares=0 → 清仓 200
@@ -182,7 +182,7 @@ class TestSellLotSize:
         pf = Portfolio(initial_cash=100000)
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 250, 10.0, commission=0)
-        
+
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         # 请求卖出 200 → lot_shares=200, remaining=50 < 100 → 清仓 250
@@ -194,7 +194,7 @@ class TestSellLotSize:
         pf = Portfolio(initial_cash=100000)
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 1))
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
-        
+
         pf.update_prices({"TEST.SZ": 10.0}, datetime(2023, 1, 2))
 
         pf.sell("TEST.SZ", 500, 10.0, commission=0)
@@ -299,7 +299,7 @@ class TestTPlus1LockedShares:
     def test_locked_cleared_across_weekend(self):
         """跨周末 locked_shares 正确释放"""
         pf = Portfolio(initial_cash=100000)
-        pf.update_prices({}, datetime(2023, 1, 6))   # Friday
+        pf.update_prices({}, datetime(2023, 1, 6))  # Friday
         pf.buy("TEST.SZ", 500, 10.0, commission=0)
         assert pf.positions["TEST.SZ"].locked_shares == 500
 

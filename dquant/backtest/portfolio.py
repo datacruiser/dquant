@@ -78,7 +78,11 @@ class Portfolio:
         # 如果日期变更，释放昨日冻结的持仓 (T+1)
         # 注意：如果是第一天，直接放行，但通常第一天不会有冻结需要释放
         if timestamp:
-            if not self.timestamp_history or pd.to_datetime(timestamp).date() > pd.to_datetime(self.timestamp_history[-1]).date():
+            if (
+                not self.timestamp_history
+                or pd.to_datetime(timestamp).date()
+                > pd.to_datetime(self.timestamp_history[-1]).date()
+            ):
                 for pos in self.positions.values():
                     pos.locked_shares = 0.0
 

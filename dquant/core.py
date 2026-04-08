@@ -77,7 +77,9 @@ class Engine:
         self._backtest_engine: Optional[BacktestEngine] = None
         self._running = threading.Event()
 
-    def _resolve_broker(self, broker: Union[str, BaseBroker, None], initial_cash: float) -> BaseBroker:
+    def _resolve_broker(
+        self, broker: Union[str, BaseBroker, None], initial_cash: float
+    ) -> BaseBroker:
         """解析并初始化券商接口"""
         if broker is None:
             return Simulator(initial_cash=initial_cash)
@@ -258,13 +260,17 @@ class Engine:
                             )
                             risk_mgr.reset_daily_start(total_value, date_str)
                             last_date_str = date_str
-                            logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
+                            logger.info(
+                                f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}"
+                            )
 
                         # 4. 获取实时行情 & 并发轮询挂单
                         future_data = executor.submit(self._fetch_realtime_data, symbols)
                         future_poll = None
                         if tracker.has_pending() and not dry_run:
-                            future_poll = executor.submit(self._poll_pending_orders, tracker, journal, strategy_name)
+                            future_poll = executor.submit(
+                                self._poll_pending_orders, tracker, journal, strategy_name
+                            )
 
                         realtime_df = future_data.result()
                         if future_poll:
@@ -277,7 +283,9 @@ class Engine:
                         )
 
                         if consecutive_errors >= max_consecutive_errors:
-                            logger.error(f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易")
+                            logger.error(
+                                f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易"
+                            )
                             break
 
                         time.sleep(interval)
@@ -404,14 +412,16 @@ class Engine:
                                 "price": quote["price"],
                                 "volume": quote.get("volume", 0),
                                 "amount": quote.get("amount", 0),
-                                "time": datetime.now()
+                                "time": datetime.now(),
                             }
                     except Exception as e:
                         logger.warning(f"[LIVE] 从 broker 获取 {symbol} 行情失败: {e}")
                     return None
 
                 # 并发拉取各个标的的行情，避免串行网络请求阻塞
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, len(symbols))) as fetch_executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=min(10, len(symbols))
+                ) as fetch_executor:
                     results = fetch_executor.map(_fetch_single_quote, symbols)
                     for res in results:
                         if res:
