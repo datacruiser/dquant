@@ -33,10 +33,18 @@
 ## 📦 安装
 
 ```bash
+# 基础安装
 pip install -e .
-```
 
-详见 [安装指南](#安装依赖)。
+# 可选依赖
+pip install -e ".[ai]"        # XGBoost + LightGBM
+pip install -e ".[data]"      # AKShare + Tushare
+pip install -e ".[calendar]"  # 交易日历
+pip install -e ".[dev]"       # 开发工具 (pytest, black)
+
+# 全量安装
+pip install -e ".[ai,data,calendar,dev]"
+```
 
 ## 🚀 快速开始
 
