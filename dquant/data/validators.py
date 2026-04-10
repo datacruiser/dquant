@@ -59,7 +59,12 @@ class DataValidator:
         Returns:
             重复行数
         """
-        return data.duplicated(subset=subset).sum()
+        if subset:
+            # 只使用实际存在的列
+            subset = [c for c in subset if c in data.columns]
+            if not subset:
+                return 0
+        return data.duplicated(subset=subset if subset else None).sum()
 
     @staticmethod
     def check_price_validity(
