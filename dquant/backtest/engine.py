@@ -18,15 +18,42 @@ logger = get_logger(__name__)
 # A 股涨跌停限制
 DEFAULT_PRICE_LIMIT = 0.10  # 主板 ±10%
 ST_PRICE_LIMIT = 0.05  # ST 板块 ±5%
+GEM_PRICE_LIMIT = 0.20  # 创业板 (300xxx) ±20%
+STAR_PRICE_LIMIT = 0.20  # 科创板 (688xxx) ±20%
 BJ_PRICE_LIMIT = 0.30  # 北交所 ±30%
 
+# ST 股票名称关键字（需要在数据中提供 symbol_name 列）
+_ST_KEYWORDS = frozenset({"ST", "*ST", "S*ST", "SST", "S"})
 
-def _get_price_limit(symbol: str) -> float:
-    """根据股票代码判断涨跌停幅度"""
+
+def _get_price_limit(symbol: str, symbol_name: str = "") -> float:
+    """根据股票代码和名称判断涨跌停幅度
+
+    Args:
+        symbol: 股票代码 (如 '000001.SZ')
+        symbol_name: 股票名称 (如 '*ST某某')，用于 ST 判断
+    """
     code = symbol.split(".")[0] if "." in symbol else symbol
+
     # 北交所: 4/8 开头
     if code and code[0] in ("4", "8"):
         return BJ_PRICE_LIMIT
+
+    # 科创板: 688 开头
+    if code.startswith("688"):
+        return STAR_PRICE_LIMIT
+
+    # 创业板: 300 开头
+    if code.startswith("300"):
+        return GEM_PRICE_LIMIT
+
+    # ST 股: 名称含 ST 关键字
+    if symbol_name:
+        name_upper = symbol_name.upper().strip()
+        for kw in _ST_KEYWORDS:
+            if name_upper.startswith(kw):
+                return ST_PRICE_LIMIT
+
     return DEFAULT_PRICE_LIMIT
 
 
@@ -103,6 +130,18 @@ class BacktestEngine:
             opens = dict(zip(daily_data["symbol"], daily_data["open"])) \
                 if "open" in daily_data.columns else prices
 
+            # 提取股票名称（用于 ST 判断）
+            names = dict(zip(daily_data["symbol"], daily_data["symbol_name"])) \
+                if "symbol_name" in daily_data.columns else None
+
+            # 首次检测到无 symbol_name 列时发出一次性警告
+            if names is None and not hasattr(self, "_warned_no_names"):
+                logger.warning(
+                    "[BACKTEST] 数据缺少 symbol_name 列，ST 股票涨跌停检测将退化为主板规则 (±10%)。"
+                    "建议在数据源中添加 symbol_name 字段以启用 ST 判断。"
+                )
+                self._warned_no_names = True
+
             buy_trade_prices = {
                 symbol: price * (1 + self.slippage) for symbol, price in prices.items()
             }
@@ -114,7 +153,7 @@ class BacktestEngine:
             limit_up = set()
             limit_down = set()
             if self.enforce_price_limit:
-                limit_up, limit_down = self._check_price_limits(prices, opens)
+                limit_up, limit_down = self._check_price_limits(prices, opens, names)
 
             # 更新持仓价格 (在执行交易前记录 NAV)
             self.portfolio.update_prices(prices, date)
@@ -127,45 +166,69 @@ class BacktestEngine:
             buy_sigs = [s for s in day_signals if s.is_buy and s.symbol not in limit_up]
             sell_sigs = [s for s in day_signals if s.is_sell and s.symbol not in limit_down]
 
-            # 执行买入
+            # 执行买入（rebalance 也受涨跌停约束）
             if buy_sigs:
                 target_weights = {s.symbol: s.strength for s in buy_sigs}
+
+                # 记录买入前持仓，用于判断实际成交
+                pre_buy_positions = {
+                    sym: pos.shares for sym, pos in self.portfolio.positions.items()
+                }
+                pre_buy_cash = self.portfolio.cash
+
                 self.portfolio.rebalance(
                     target_weights,
                     buy_trade_prices,
                     self.commission,
+                    blocked_buys=limit_up,
+                    blocked_sells=limit_down,
                 )
 
+                # 仅记录实际发生了变化的买入
                 for s in buy_sigs:
-                    self.trades.append(
-                        {
-                            "date": date,
-                            "symbol": s.symbol,
-                            "action": "BUY",
-                            "price": prices.get(s.symbol, 0),
-                            "score": s.metadata.get("score", 0) if s.metadata else 0,
-                        }
+                    pos = self.portfolio.positions.get(s.symbol)
+                    bought = (
+                        pos is not None
+                        and pos.shares > pre_buy_positions.get(s.symbol, 0)
+                    ) or (
+                        s.symbol not in pre_buy_positions and pos is not None
                     )
+                    if bought:
+                        self.trades.append(
+                            {
+                                "date": date,
+                                "symbol": s.symbol,
+                                "action": "BUY",
+                                "price": prices.get(s.symbol, 0),
+                                "score": s.metadata.get("score", 0) if s.metadata else 0,
+                            }
+                        )
 
-            # 执行卖出
+            # 执行卖出（双层保护：信号层已过滤 limit_down，此处执行层冗余校验）
             for s in sell_sigs:
+                # 执行层防御：即使信号层已过滤，也再次校验跌停不可卖出
+                if s.symbol in limit_down:
+                    continue
                 if s.symbol in self.portfolio.positions:
                     pos = self.portfolio.positions[s.symbol]
+                    shares_before = pos.shares
                     self.portfolio.sell(
                         s.symbol,
                         pos.shares,
                         sell_trade_prices.get(s.symbol, pos.current_price),
                         self.commission,
                     )
-                    self.trades.append(
-                        {
-                            "date": date,
-                            "symbol": s.symbol,
-                            "action": "SELL",
-                            "price": prices.get(s.symbol, 0),
-                            "score": s.metadata.get("score", 0) if s.metadata else 0,
-                        }
-                    )
+                    # 仅在持仓实际发生变化时记录成交
+                    if pos.shares < shares_before or s.symbol not in self.portfolio.positions:
+                        self.trades.append(
+                            {
+                                "date": date,
+                                "symbol": s.symbol,
+                                "action": "SELL",
+                                "price": prices.get(s.symbol, 0),
+                                "score": s.metadata.get("score", 0) if s.metadata else 0,
+                            }
+                        )
 
             # 保存当日收盘价供下日涨跌停判断
             self._prev_close = dict(prices)
@@ -173,14 +236,23 @@ class BacktestEngine:
         return self._create_result()
 
     def _check_price_limits(
-        self, prices: Dict[str, float], opens: Dict[str, float]
+        self,
+        prices: Dict[str, float],
+        opens: Dict[str, float],
+        names: Optional[Dict[str, str]] = None,
     ) -> tuple:
         """
         检查涨跌停股票
 
+        Args:
+            prices: {symbol: close_price}
+            opens: {symbol: open_price}
+            names: {symbol: symbol_name} 股票名称（用于 ST 判断）
+
         Returns:
             (涨停股票集合, 跌停股票集合)
         """
+        names = names or {}
         limit_up = set()
         limit_down = set()
 
@@ -189,7 +261,7 @@ class BacktestEngine:
             if prev is None or prev <= 0:
                 continue
 
-            limit_pct = _get_price_limit(symbol)
+            limit_pct = _get_price_limit(symbol, names.get(symbol, ""))
             pct_change = (close_price - prev) / prev
 
             # 涨停：涨幅达到限制（精确到小数点后 4 位以避免浮点误差）
