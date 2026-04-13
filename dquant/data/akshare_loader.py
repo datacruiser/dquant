@@ -2,6 +2,7 @@
 AKShare 数据加载器
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -9,6 +10,10 @@ import numpy as np
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.rate_limiter import RateLimiter
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class AKShareLoader(DataSource):
@@ -47,11 +52,15 @@ class AKShareLoader(DataSource):
         freq: str = "d",  # d=日线, w=周线, m=月线
         adjust: str = "qfq",  # qfq=前复权, hfq=后复权, None=不复权
         include_factors: bool = True,  # 是否计算因子
+        max_workers: int = 5,  # 并发加载数
+        rate_limit: int = 10,  # 每秒最大请求数
     ):
         super().__init__(symbols=symbols, start=start, end=end)
         self.freq = freq
         self.adjust = adjust
         self.include_factors = include_factors
+        self.max_workers = max_workers
+        self._rate_limiter = RateLimiter(max_calls=rate_limit, period=1.0)
 
     def _load_single_symbol(self, symbol):
         """加载单个股票数据"""
@@ -90,7 +99,7 @@ class AKShareLoader(DataSource):
             return None
 
     def load(self) -> pd.DataFrame:
-        """加载数据"""
+        """加载数据（并发）"""
         try:
             import akshare as ak  # noqa: F401
         except ImportError:
@@ -98,27 +107,36 @@ class AKShareLoader(DataSource):
 
         # 获取股票列表
         symbol_list = self._get_symbol_list()
+        logger.info(f"[AKShare] 开始加载 {len(symbol_list)} 只股票 (workers={self.max_workers})")
 
         all_data = []
         failed = []
+        completed = 0
 
-        for i, symbol in enumerate(symbol_list):
-            try:
-                # 获取日线数据
-                df = self._get_stock_data(symbol)
-                if df is not None and len(df) > 0:
-                    all_data.append(df)
+        def _fetch_one(symbol):
+            """获取单个股票数据（带速率限制）"""
+            self._rate_limiter.wait()
+            return symbol, self._get_stock_data(symbol)
 
-                # 进度显示
-                if (i + 1) % 50 == 0:
-                    print(f"  [AKShare] 已加载 {i + 1}/{len(symbol_list)} 只股票")
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(_fetch_one, s): s for s in symbol_list}
 
-            except Exception:
-                failed.append(symbol)
-                continue
+            for future in as_completed(futures):
+                completed += 1
+                try:
+                    symbol, df = future.result()
+                    if df is not None and len(df) > 0:
+                        all_data.append(df)
+                    else:
+                        failed.append(symbol)
+                except Exception:
+                    failed.append(futures[future])
+
+                if completed % 50 == 0:
+                    logger.info(f"[AKShare] 已加载 {completed}/{len(symbol_list)} 只股票")
 
         if failed:
-            print(f"  [AKShare] 加载失败: {len(failed)} 只")
+            logger.warning(f"[AKShare] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")
@@ -139,6 +157,7 @@ class AKShareLoader(DataSource):
         # 验证格式
         self.validate(result)
 
+        logger.info(f"[AKShare] 加载完成: {len(result)} 行, {result['symbol'].nunique()} 只股票")
         return result.sort_index()
 
     def _get_symbol_list(self) -> List[str]:

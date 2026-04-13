@@ -129,6 +129,7 @@ class Engine:
         commission: float = DEFAULT_COMMISSION,
         slippage: float = DEFAULT_SLIPPAGE,
         benchmark: Optional[str] = None,
+        enforce_price_limit: bool = True,
     ) -> "BacktestResult":
         """
         运行回测
@@ -139,6 +140,7 @@ class Engine:
             commission: 手续费率
             slippage: 滑点
             benchmark: 基准 (如 '000300.SH')
+            enforce_price_limit: 是否强制涨跌停限制（默认开启）
 
         Returns:
             BacktestResult: 回测结果
@@ -160,6 +162,7 @@ class Engine:
             commission=commission,
             slippage=slippage,
             benchmark=benchmark,
+            enforce_price_limit=enforce_price_limit,
         )
 
         # 运行回测

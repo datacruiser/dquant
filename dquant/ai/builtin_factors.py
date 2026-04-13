@@ -878,7 +878,7 @@ class BiasFactor(BaseFactor):
 
 
 class PERatioFactor(BaseFactor):
-    """PE 因子 - 市盈率"""
+    """PE 因子 - 市盈率（低 PE 偏好）"""
 
     def __init__(self, name: str = "PE"):
         super().__init__(name=name)
@@ -888,23 +888,18 @@ class PERatioFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        if "pe" in data.columns:
-            for idx, row in data.iterrows():
-                if pd.notna(row["pe"]) and row["pe"] > 0:
-                    results.append(
-                        {"date": idx, "symbol": row["symbol"], "score": -row["pe"]}
-                    )  # 低 PE 偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        if "pe" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
+        mask = data["pe"].notna() & (data["pe"] > 0)
+        df = data.loc[mask, ["symbol"]].copy()
+        df["score"] = -data.loc[mask, "pe"].values
+        df["date"] = data.index[mask]
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class PBRatioFactor(BaseFactor):
-    """PB 因子 - 市净率"""
+    """PB 因子 - 市净率（低 PB 偏好）"""
 
     def __init__(self, name: str = "PB"):
         super().__init__(name=name)
@@ -914,23 +909,18 @@ class PBRatioFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        if "pb" in data.columns:
-            for idx, row in data.iterrows():
-                if pd.notna(row["pb"]) and row["pb"] > 0:
-                    results.append(
-                        {"date": idx, "symbol": row["symbol"], "score": -row["pb"]}
-                    )  # 低 PB 偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        if "pb" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
+        mask = data["pb"].notna() & (data["pb"] > 0)
+        df = data.loc[mask, ["symbol"]].copy()
+        df["score"] = -data.loc[mask, "pb"].values
+        df["date"] = data.index[mask]
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class ROEFactor(BaseFactor):
-    """ROE 因子 - 净资产收益率"""
+    """ROE 因子 - 净资产收益率（高 ROE 偏好）"""
 
     def __init__(self, name: str = "ROE"):
         super().__init__(name=name)
@@ -940,23 +930,18 @@ class ROEFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        if "roe" in data.columns:
-            for idx, row in data.iterrows():
-                if pd.notna(row["roe"]):
-                    results.append(
-                        {"date": idx, "symbol": row["symbol"], "score": row["roe"]}
-                    )  # 高 ROE 偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        if "roe" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
+        mask = data["roe"].notna()
+        df = data.loc[mask, ["symbol"]].copy()
+        df["score"] = data.loc[mask, "roe"].values
+        df["date"] = data.index[mask]
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class RevenueGrowthFactor(BaseFactor):
-    """营收增长率因子"""
+    """营收增长率因子（需 revenue 列，计算 4 期同比）"""
 
     def __init__(self, name: str = "RevenueGrowth"):
         super().__init__(name=name)
@@ -966,24 +951,27 @@ class RevenueGrowthFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        if "revenue" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
         results = []
-        if "revenue" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-                growth = group["revenue"].pct_change(4)  # 同比增长
-                for date, value in growth.items():
-                    if pd.notna(value):
-                        results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        for symbol, group in data.groupby("symbol"):
+            group = group.sort_index()
+            growth = group["revenue"].pct_change(4)
+            valid = growth.notna()
+            if valid.any():
+                sub = group.loc[valid].copy()
+                sub["score"] = growth[valid].values
+                results.append(sub[["symbol", "score"]])
+        if not results:
+            return pd.DataFrame(columns=["symbol", "score"])
+        df = pd.concat(results)
+        df["date"] = df.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class ProfitGrowthFactor(BaseFactor):
-    """利润增长率因子"""
+    """利润增长率因子（需 profit 列，计算 4 期同比）"""
 
     def __init__(self, name: str = "ProfitGrowth"):
         super().__init__(name=name)
@@ -993,24 +981,27 @@ class ProfitGrowthFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        if "profit" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
         results = []
-        if "profit" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-                growth = group["profit"].pct_change(4)
-                for date, value in growth.items():
-                    if pd.notna(value):
-                        results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        for symbol, group in data.groupby("symbol"):
+            group = group.sort_index()
+            growth = group["profit"].pct_change(4)
+            valid = growth.notna()
+            if valid.any():
+                sub = group.loc[valid].copy()
+                sub["score"] = growth[valid].values
+                results.append(sub[["symbol", "score"]])
+        if not results:
+            return pd.DataFrame(columns=["symbol", "score"])
+        df = pd.concat(results)
+        df["date"] = df.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class MarketCapFactor(BaseFactor):
-    """市值因子"""
+    """市值因子（小市值偏好，需 market_cap 列）"""
 
     def __init__(self, name: str = "MarketCap"):
         super().__init__(name=name)
@@ -1020,24 +1011,14 @@ class MarketCapFactor(BaseFactor):
         return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        if "market_cap" in data.columns:
-            for idx, row in data.iterrows():
-                if pd.notna(row["market_cap"]):
-                    # 小市值偏好
-                    results.append(
-                        {
-                            "date": idx,
-                            "symbol": row["symbol"],
-                            "score": -np.log(row["market_cap"]),
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        if "market_cap" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
+        mask = data["market_cap"].notna() & (data["market_cap"] > 0)
+        df = data.loc[mask, ["symbol"]].copy()
+        df["score"] = -np.log(data.loc[mask, "market_cap"].values)
+        df["date"] = data.index[mask]
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 # ============================================================

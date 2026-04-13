@@ -4,11 +4,17 @@
 提供仓位管理、风险控制、资金管理等功能。
 """
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -201,6 +207,67 @@ class RiskManager:
         self.daily_start_date: Optional[str] = None
         self.halt_trading: bool = False
 
+        # 持久化路径（可选）
+        self._state_path: Optional[Path] = None
+
+    def enable_persistence(self, state_path: str = "risk_state.json"):
+        """
+        启用风控状态持久化
+
+        Args:
+            state_path: 状态文件路径
+        """
+        self._state_path = Path(state_path)
+        # 尝试恢复已有状态
+        self.restore_state()
+
+    def save_state(self):
+        """保存当前风控状态到文件"""
+        if self._state_path is None:
+            return
+
+        state = {
+            "peak_value": self.peak_value,
+            "current_drawdown": self.current_drawdown,
+            "daily_start_value": self.daily_start_value,
+            "daily_start_date": self.daily_start_date,
+            "halt_trading": self.halt_trading,
+        }
+        try:
+            with open(self._state_path, "w") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            logger.error(f"[RiskManager] Failed to save state: {e}")
+
+    def restore_state(self) -> bool:
+        """
+        从文件恢复风控状态
+
+        Returns:
+            是否成功恢复
+        """
+        if self._state_path is None or not self._state_path.exists():
+            return False
+
+        try:
+            with open(self._state_path, "r") as f:
+                state = json.load(f)
+
+            self.peak_value = state.get("peak_value", 0.0)
+            self.current_drawdown = state.get("current_drawdown", 0.0)
+            self.daily_start_value = state.get("daily_start_value", 0.0)
+            self.daily_start_date = state.get("daily_start_date")
+            self.halt_trading = state.get("halt_trading", False)
+
+            logger.info(
+                f"[RiskManager] State restored: peak={self.peak_value:.2f}, "
+                f"dd={self.current_drawdown:.2%}, halt={self.halt_trading}"
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"[RiskManager] Failed to restore state: {e}")
+            return False
+
     def check_position_limit(
         self,
         symbol: str,
@@ -247,6 +314,7 @@ class RiskManager:
         if triggered:
             self.halt_trading = True
 
+        self.save_state()
         return triggered, self.current_drawdown
 
     def reset_daily_start(self, current_value: float, date_str: str):
@@ -260,6 +328,7 @@ class RiskManager:
         if self.daily_start_date != date_str:
             self.daily_start_value = current_value
             self.daily_start_date = date_str
+            self.save_state()
 
     def check_daily_loss(self, current_value: float) -> Tuple[bool, float]:
         """
@@ -277,6 +346,7 @@ class RiskManager:
         if triggered:
             self.halt_trading = True
 
+        self.save_state()
         return triggered, daily_loss
 
     def should_halt(self) -> bool:

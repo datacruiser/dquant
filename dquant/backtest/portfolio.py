@@ -187,6 +187,8 @@ class Portfolio:
         target_weights: Dict[str, float],
         prices: Dict[str, float],
         commission: float = 0,
+        blocked_buys: Optional[set] = None,
+        blocked_sells: Optional[set] = None,
     ):
         """
         再平衡到目标权重
@@ -195,15 +197,22 @@ class Portfolio:
             target_weights: {symbol: weight} 目标权重
             prices: {symbol: price} 当前价格
             commission: 手续费率
+            blocked_buys: 不可买入的标的集合（如涨停股）
+            blocked_sells: 不可卖出的标的集合（如跌停股）
         """
+        blocked_buys = blocked_buys or set()
+        blocked_sells = blocked_sells or set()
+
         total = self.total_value
 
         # 计算目标市值
         target_values = {s: total * w for s, w in target_weights.items()}
 
-        # 先卖出
+        # 先卖出（隐式调仓卖出也受 blocked_sells 约束）
         for symbol in list(self.positions.keys()):
             if symbol not in target_weights:
+                if symbol in blocked_sells:
+                    continue  # 跌停日不可卖出，跳过清仓
                 # 清仓
                 pos = self.positions[symbol]
                 self.sell(
@@ -231,11 +240,15 @@ class Portfolio:
             diff = target_value - current_value
 
             if diff > 0:
-                # 需要买入
+                # 需要买入（受 blocked_buys 约束）
+                if symbol in blocked_buys:
+                    continue
                 shares = diff / prices[symbol]
                 self.buy(symbol, shares, prices[symbol], commission)
             elif diff < 0:
-                # 需要卖出
+                # 需要卖出（受 blocked_sells 约束）
+                if symbol in blocked_sells:
+                    continue
                 shares = -diff / prices[symbol]
                 self.sell(symbol, shares, prices[symbol], commission)
 
