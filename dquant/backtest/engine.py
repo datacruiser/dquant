@@ -174,8 +174,6 @@ class BacktestEngine:
                 pre_buy_positions = {
                     sym: pos.shares for sym, pos in self.portfolio.positions.items()
                 }
-                pre_buy_cash = self.portfolio.cash
-
                 self.portfolio.rebalance(
                     target_weights,
                     buy_trade_prices,

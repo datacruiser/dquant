@@ -4,14 +4,14 @@
 支持多策略并行运行、信号合成、以及多种组合优化方法。
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from dquant.logger import get_logger
-from dquant.strategy.base import BaseStrategy, Signal, SignalType
+from dquant.strategy.base import BaseStrategy, Signal
 
 logger = get_logger(__name__)
 
@@ -252,9 +252,6 @@ class PortfolioOptimizer:
             best_sharpe = -np.inf
             best_weights = np.ones(self.n_assets) / self.n_assets
 
-            n_grid = max(5, 20 // self.n_assets)
-            grid_points = np.linspace(0.01, 0.99, n_grid)
-
             # 生成随机权重组合
             np.random.seed(42)
             for _ in range(5000):
@@ -338,8 +335,9 @@ class PortfolioOptimizer:
             try:
                 tau_Sigma = tau * Sigma
                 tau_Sigma_P = tau_Sigma @ P
-                Omega_inv = 1.0 / Omega[0, 0] if Omega[0, 0] > 0 else 0
-                M = np.linalg.inv(tau_Sigma + np.outer(P, P) * (1.0 / Omega_inv) if Omega_inv > 0 else tau_Sigma)
+                Omega_inv = (
+                    1.0 / Omega[0, 0] if Omega[0, 0] > 0 else 0
+                )
                 mu_bl = pi + tau_Sigma_P * Omega_inv * (Q[0] - P @ pi)
             except np.linalg.LinAlgError:
                 mu_bl = pi
