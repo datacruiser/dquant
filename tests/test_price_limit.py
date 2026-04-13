@@ -16,8 +16,8 @@ from dquant.backtest.engine import (
     BJ_PRICE_LIMIT,
     DEFAULT_PRICE_LIMIT,
     GEM_PRICE_LIMIT,
-    STAR_PRICE_LIMIT,
     ST_PRICE_LIMIT,
+    STAR_PRICE_LIMIT,
     BacktestEngine,
     _get_price_limit,
 )

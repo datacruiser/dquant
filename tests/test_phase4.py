@@ -106,8 +106,9 @@ class TestAlpha101:
 
 class TestMultiStrategyPortfolio:
     def test_add_and_remove(self):
-        from dquant.portfolio_optimizer import MultiStrategyPortfolio
         from unittest.mock import MagicMock
+
+        from dquant.portfolio_optimizer import MultiStrategyPortfolio
 
         msp = MultiStrategyPortfolio()
         s = MagicMock(spec=["generate_signals"])

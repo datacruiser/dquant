@@ -6,7 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dquant.ai.walk_forward import WalkForwardResult, WalkForwardSplit, WalkForwardValidator
+from dquant.ai.walk_forward import (
+    WalkForwardResult,
+    WalkForwardSplit,
+    WalkForwardValidator,
+)
 
 
 class TestWalkForwardSplit:
