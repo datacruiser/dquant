@@ -23,7 +23,6 @@ from dquant.backtest.engine import (
 )
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
-
 # ============================================================
 # 辅助策略
 # ============================================================

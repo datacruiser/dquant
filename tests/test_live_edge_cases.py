@@ -33,9 +33,13 @@ def test_live_network_disconnect():
     broker.is_connected = MagicMock(side_effect=[False, False, True, Exception("stop")])
     broker.connect = MagicMock(return_value=True)
 
-    with patch("dquant.calendar.is_trading_day", return_value=True), patch(
-        "dquant.broker.safety.TradingTimeChecker.is_trading_time", return_value=(True, "交易中")
-    ), patch("dquant.core.Engine._fetch_realtime_data", return_value=MagicMock()):
+    with (
+        patch("dquant.calendar.is_trading_day", return_value=True),
+        patch(
+            "dquant.broker.safety.TradingTimeChecker.is_trading_time", return_value=(True, "交易中")
+        ),
+        patch("dquant.core.Engine._fetch_realtime_data", return_value=MagicMock()),
+    ):
 
         # 即使断网，引擎也应该尝试重连而不是直接崩溃
         engine.live(interval=0.01, dry_run=True, max_consecutive_errors=2)

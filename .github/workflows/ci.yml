@@ -58,7 +58,7 @@ jobs:
 
     - name: Check formatting with black
       run: |
-        black --check dquant/ tests/
+        black --check --target-version py312 dquant/ tests/
 
     - name: Check imports with isort
       run: |
