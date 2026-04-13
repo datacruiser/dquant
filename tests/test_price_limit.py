@@ -312,8 +312,7 @@ class TestLimitUpEnforcement:
         # 涨停日的买入信号应被过滤
         if not result.trades.empty:
             limit_up_trades = result.trades[
-                (result.trades["symbol"] == "600000.SH")
-                & (result.trades["action"] == "BUY")
+                (result.trades["symbol"] == "600000.SH") & (result.trades["action"] == "BUY")
             ]
             for _, trade in limit_up_trades.iterrows():
                 assert trade["date"] != pd.Timestamp("2024-01-03")
@@ -433,8 +432,9 @@ class TestRebalanceBlockedSets:
 
         # 600000.SH 不应被卖出（blocked_sells 生效）
         assert "600000.SH" in portfolio.positions
-        assert portfolio.positions["600000.SH"].shares == shares_before, \
-            "跌停日的 rebalance 不应减少 600000.SH 持仓"
+        assert (
+            portfolio.positions["600000.SH"].shares == shares_before
+        ), "跌停日的 rebalance 不应减少 600000.SH 持仓"
 
     def test_rebalance_respects_blocked_buys(self):
         """rebalance 中新增买入受 blocked_buys 约束"""
@@ -453,8 +453,7 @@ class TestRebalanceBlockedSets:
         )
 
         # 600000.SH 不应被买入
-        assert "600000.SH" not in portfolio.positions, \
-            "涨停日的 rebalance 不应买入 600000.SH"
+        assert "600000.SH" not in portfolio.positions, "涨停日的 rebalance 不应买入 600000.SH"
 
     def test_rebalance_normal_flow(self):
         """正常情况（无 blocked sets）rebalance 正常执行"""
@@ -474,8 +473,7 @@ class TestRebalanceBlockedSets:
         )
 
         # 600000.SH 应被清仓
-        assert "600000.SH" not in portfolio.positions, \
-            "正常 rebalance 应卖出不在目标权重中的持仓"
+        assert "600000.SH" not in portfolio.positions, "正常 rebalance 应卖出不在目标权重中的持仓"
 
     def test_rebalance_blocked_sell_prevents_reduce(self):
         """rebalance 减仓也受 blocked_sells 约束"""
@@ -499,8 +497,9 @@ class TestRebalanceBlockedSets:
         )
 
         # 600000.SH 不应减仓（blocked_sells 阻止了卖出）
-        assert portfolio.positions["600000.SH"].shares == shares_before, \
-            "跌停日的 rebalance 不应减仓"
+        assert (
+            portfolio.positions["600000.SH"].shares == shares_before
+        ), "跌停日的 rebalance 不应减仓"
 
 
 # ============================================================
@@ -513,12 +512,8 @@ class TestPriceLimitToggle:
         """关闭涨跌停检查时，涨停日可以成交；开启时不可"""
         data = _make_limit_data()
 
-        engine_with = BacktestEngine(
-            data=data, strategy=_BuyAll(), enforce_price_limit=True
-        )
-        engine_without = BacktestEngine(
-            data=data, strategy=_BuyAll(), enforce_price_limit=False
-        )
+        engine_with = BacktestEngine(data=data, strategy=_BuyAll(), enforce_price_limit=True)
+        engine_without = BacktestEngine(data=data, strategy=_BuyAll(), enforce_price_limit=False)
 
         result_with = engine_with.run()
         result_without = engine_without.run()
@@ -746,8 +741,9 @@ class TestBoardSpecificLimits:
 
         # 创业板跌停股不应被隐式卖出
         assert "300001.SZ" in portfolio.positions
-        assert portfolio.positions["300001.SZ"].shares == shares_before, \
-            "创业板跌停日 rebalance 不应减少持仓"
+        assert (
+            portfolio.positions["300001.SZ"].shares == shares_before
+        ), "创业板跌停日 rebalance 不应减少持仓"
 
     def test_gem_limit_threshold(self):
         """创业板 ±20% 阈值正确 — 10% 波动不应触发"""
@@ -836,5 +832,6 @@ class TestBoardSpecificLimits:
         prices = {"000002.SZ": 5.0 * 1.05}  # +5%
         opens = prices
         limit_up, _ = engine._check_price_limits(prices, opens)  # names=None
-        assert "000002.SZ" not in limit_up, \
-            "无 symbol_name 时 ST +5% 不应触发涨停（退化为主板 ±10%）"
+        assert (
+            "000002.SZ" not in limit_up
+        ), "无 symbol_name 时 ST +5% 不应触发涨停（退化为主板 ±10%）"

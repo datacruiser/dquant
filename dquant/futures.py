@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 class FuturesType(Enum):
     """期货品种类型"""
+
     INDEX = "index"  # 股指期货 (IF/IC/IM/IH)
     COMMODITY = "commodity"  # 商品期货
     TREASURY = "treasury"  # 国债期货 (T/TF/TS)
@@ -23,6 +24,7 @@ class FuturesType(Enum):
 
 class MarginType(Enum):
     """保证金类型"""
+
     FIXED = "fixed"  # 固定比例
     TIERED = "tiered"  # 分级保证金
 
@@ -34,6 +36,7 @@ class FuturesContract:
 
     定义一个期货合约的基本属性。
     """
+
     symbol: str  # 合约代码, e.g., "IF2401"
     underlying: str  # 标的代码, e.g., "IF" (沪深300股指)
     futures_type: FuturesType = FuturesType.INDEX
@@ -77,6 +80,7 @@ class FuturesPosition:
 
     支持多空双向持仓。
     """
+
     contract: FuturesContract
     direction: str = "long"  # long / short
     quantity: int = 0  # 手数
@@ -102,30 +106,65 @@ class FuturesPosition:
 # A 股股指期货合约模板
 INDEX_FUTURES = {
     "IF": FuturesContract(
-        symbol="IF", underlying="IF", futures_type=FuturesType.INDEX,
-        multiplier=300.0, margin_rate=0.12, tick_size=0.2),
+        symbol="IF",
+        underlying="IF",
+        futures_type=FuturesType.INDEX,
+        multiplier=300.0,
+        margin_rate=0.12,
+        tick_size=0.2,
+    ),
     "IC": FuturesContract(
-        symbol="IC", underlying="IC", futures_type=FuturesType.INDEX,
-        multiplier=200.0, margin_rate=0.12, tick_size=0.2),
+        symbol="IC",
+        underlying="IC",
+        futures_type=FuturesType.INDEX,
+        multiplier=200.0,
+        margin_rate=0.12,
+        tick_size=0.2,
+    ),
     "IM": FuturesContract(
-        symbol="IM", underlying="IM", futures_type=FuturesType.INDEX,
-        multiplier=200.0, margin_rate=0.15, tick_size=0.2),
+        symbol="IM",
+        underlying="IM",
+        futures_type=FuturesType.INDEX,
+        multiplier=200.0,
+        margin_rate=0.15,
+        tick_size=0.2,
+    ),
     "IH": FuturesContract(
-        symbol="IH", underlying="IH", futures_type=FuturesType.INDEX,
-        multiplier=300.0, margin_rate=0.12, tick_size=0.2),
+        symbol="IH",
+        underlying="IH",
+        futures_type=FuturesType.INDEX,
+        multiplier=300.0,
+        margin_rate=0.12,
+        tick_size=0.2,
+    ),
 }
 
 # 商品期货合约模板（部分）
 COMMODITY_FUTURES = {
     "RB": FuturesContract(
-        symbol="RB", underlying="RB", futures_type=FuturesType.COMMODITY,
-        multiplier=10.0, margin_rate=0.10, tick_size=1.0),  # 螺纹钢
+        symbol="RB",
+        underlying="RB",
+        futures_type=FuturesType.COMMODITY,
+        multiplier=10.0,
+        margin_rate=0.10,
+        tick_size=1.0,
+    ),  # 螺纹钢
     "CU": FuturesContract(
-        symbol="CU", underlying="CU", futures_type=FuturesType.COMMODITY,
-        multiplier=5.0, margin_rate=0.10, tick_size=10.0),  # 沪铜
+        symbol="CU",
+        underlying="CU",
+        futures_type=FuturesType.COMMODITY,
+        multiplier=5.0,
+        margin_rate=0.10,
+        tick_size=10.0,
+    ),  # 沪铜
     "AU": FuturesContract(
-        symbol="AU", underlying="AU", futures_type=FuturesType.COMMODITY,
-        multiplier=1000.0, margin_rate=0.10, tick_size=0.02),  # 黄金
+        symbol="AU",
+        underlying="AU",
+        futures_type=FuturesType.COMMODITY,
+        multiplier=1000.0,
+        margin_rate=0.10,
+        tick_size=0.02,
+    ),  # 黄金
 }
 
 

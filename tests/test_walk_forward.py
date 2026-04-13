@@ -106,8 +106,20 @@ class TestWalkForwardValidate:
             std_score=0.02,
             sharpe_ratio=2.5,
             fold_results=[
-                {"train_start": 0, "train_end": 50, "test_start": 55, "test_end": 70, "score": 0.04},
-                {"train_start": 0, "train_end": 60, "test_start": 65, "test_end": 80, "score": 0.06},
+                {
+                    "train_start": 0,
+                    "train_end": 50,
+                    "test_start": 55,
+                    "test_end": 70,
+                    "score": 0.04,
+                },
+                {
+                    "train_start": 0,
+                    "train_end": 60,
+                    "test_start": 65,
+                    "test_end": 80,
+                    "score": 0.06,
+                },
             ],
         )
         summary = result.summary()

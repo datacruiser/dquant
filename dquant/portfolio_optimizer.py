@@ -220,8 +220,11 @@ class PortfolioOptimizer:
         weights = {s: w for s in self.symbols}
         ret, vol, sharpe = self._portfolio_metrics(np.full(self.n_assets, w))
         return OptimizationResult(
-            weights=weights, expected_return=ret,
-            expected_volatility=vol, sharpe_ratio=sharpe, method="equal_weight",
+            weights=weights,
+            expected_return=ret,
+            expected_volatility=vol,
+            sharpe_ratio=sharpe,
+            method="equal_weight",
         )
 
     def _risk_parity(self) -> OptimizationResult:
@@ -237,8 +240,11 @@ class PortfolioOptimizer:
         weights = dict(zip(self.symbols, weights_arr))
         ret, vol, sharpe = self._portfolio_metrics(weights_arr)
         return OptimizationResult(
-            weights=weights, expected_return=ret,
-            expected_volatility=vol, sharpe_ratio=sharpe, method="risk_parity",
+            weights=weights,
+            expected_return=ret,
+            expected_volatility=vol,
+            sharpe_ratio=sharpe,
+            method="risk_parity",
         )
 
     def _mean_variance(self, risk_free: float = 0.02) -> OptimizationResult:
@@ -265,8 +271,11 @@ class PortfolioOptimizer:
             weights = dict(zip(self.symbols, best_weights))
             ret, vol, sharpe = self._portfolio_metrics(best_weights)
             return OptimizationResult(
-                weights=weights, expected_return=ret,
-                expected_volatility=vol, sharpe_ratio=sharpe, method="mean_variance",
+                weights=weights,
+                expected_return=ret,
+                expected_volatility=vol,
+                sharpe_ratio=sharpe,
+                method="mean_variance",
             )
         else:
             # 大规模：退化为风险平价
@@ -295,8 +304,11 @@ class PortfolioOptimizer:
         weights = dict(zip(self.symbols, w))
         ret, vol, sharpe = self._portfolio_metrics(w)
         return OptimizationResult(
-            weights=weights, expected_return=ret,
-            expected_volatility=vol, sharpe_ratio=sharpe, method="min_variance",
+            weights=weights,
+            expected_return=ret,
+            expected_volatility=vol,
+            sharpe_ratio=sharpe,
+            method="min_variance",
         )
 
     def _black_litterman(
@@ -335,9 +347,7 @@ class PortfolioOptimizer:
             try:
                 tau_Sigma = tau * Sigma
                 tau_Sigma_P = tau_Sigma @ P
-                Omega_inv = (
-                    1.0 / Omega[0, 0] if Omega[0, 0] > 0 else 0
-                )
+                Omega_inv = 1.0 / Omega[0, 0] if Omega[0, 0] > 0 else 0
                 mu_bl = pi + tau_Sigma_P * Omega_inv * (Q[0] - P @ pi)
             except np.linalg.LinAlgError:
                 mu_bl = pi
@@ -356,6 +366,9 @@ class PortfolioOptimizer:
         weights = dict(zip(self.symbols, w))
         ret, vol, sharpe = self._portfolio_metrics(w)
         return OptimizationResult(
-            weights=weights, expected_return=ret,
-            expected_volatility=vol, sharpe_ratio=sharpe, method="black_litterman",
+            weights=weights,
+            expected_return=ret,
+            expected_volatility=vol,
+            sharpe_ratio=sharpe,
+            method="black_litterman",
         )

@@ -170,6 +170,7 @@ class WalkForwardValidator:
             return WalkForwardResult()
 
         if score_fn is None:
+
             def score_fn(y_true, y_pred):
                 if len(y_true) < 3:
                     return 0.0
@@ -180,8 +181,8 @@ class WalkForwardValidator:
         scores = []
 
         for i, split in enumerate(splits):
-            train_data = data.iloc[split.train_start: split.train_end]
-            test_data = data.iloc[split.test_start: split.test_end]
+            train_data = data.iloc[split.train_start : split.train_end]
+            test_data = data.iloc[split.test_start : split.test_end]
 
             if len(train_data) < 10 or len(test_data) < 1:
                 continue

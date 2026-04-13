@@ -88,7 +88,7 @@ class Alpha001(RuleFactor):
             ret = g["close"].pct_change()
             cond = g["close"].copy()
             cond[ret < 0] = ret.rolling(20).std()
-            signed_power = cond ** 2
+            signed_power = cond**2
             argmax = signed_power.rolling(5).apply(np.argmax, raw=True)
             score = argmax.rank(pct=True) - 0.5
             for date, val in score.items():
@@ -288,7 +288,9 @@ class Alpha014(RuleFactor):
         for sym, g in data.groupby("symbol"):
             g = g.sort_index()
             ret = g["close"].pct_change()
-            score = -_ts_corr(ret, (g["close"].shift(1) + g["close"].shift(2) + g["close"].shift(3)) / 3, 10)
+            score = -_ts_corr(
+                ret, (g["close"].shift(1) + g["close"].shift(2) + g["close"].shift(3)) / 3, 10
+            )
             for date, val in score.items():
                 if pd.notna(val):
                     results.append({"date": date, "symbol": sym, "score": val})
@@ -469,7 +471,7 @@ class Alpha032(RuleFactor):
         for sym, g in data.groupby("symbol"):
             g = g.sort_index()
             ma7 = _ts_mean(g["close"], 7)
-            part1 = (ma7 - g["close"])
+            part1 = ma7 - g["close"]
             corr = _ts_corr(g["close"], g["volume"], 5)
             score = part1 + 20 * corr
             for date, val in score.items():
@@ -684,7 +686,9 @@ def get_alpha(name: str) -> RuleFactor:
     """获取 Alpha101 因子实例"""
     cls = ALPHA101_REGISTRY.get(name)
     if cls is None:
-        raise ValueError(f"Unknown Alpha101 factor: {name}. Available: {list(ALPHA101_REGISTRY.keys())}")
+        raise ValueError(
+            f"Unknown Alpha101 factor: {name}. Available: {list(ALPHA101_REGISTRY.keys())}"
+        )
     return cls()
 
 

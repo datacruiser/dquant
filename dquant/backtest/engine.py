@@ -127,12 +127,18 @@ class BacktestEngine:
                 continue
 
             prices = dict(zip(daily_data["symbol"], daily_data["close"]))
-            opens = dict(zip(daily_data["symbol"], daily_data["open"])) \
-                if "open" in daily_data.columns else prices
+            opens = (
+                dict(zip(daily_data["symbol"], daily_data["open"]))
+                if "open" in daily_data.columns
+                else prices
+            )
 
             # 提取股票名称（用于 ST 判断）
-            names = dict(zip(daily_data["symbol"], daily_data["symbol_name"])) \
-                if "symbol_name" in daily_data.columns else None
+            names = (
+                dict(zip(daily_data["symbol"], daily_data["symbol_name"]))
+                if "symbol_name" in daily_data.columns
+                else None
+            )
 
             # 首次检测到无 symbol_name 列时发出一次性警告
             if names is None and not hasattr(self, "_warned_no_names"):
@@ -186,11 +192,8 @@ class BacktestEngine:
                 for s in buy_sigs:
                     pos = self.portfolio.positions.get(s.symbol)
                     bought = (
-                        pos is not None
-                        and pos.shares > pre_buy_positions.get(s.symbol, 0)
-                    ) or (
-                        s.symbol not in pre_buy_positions and pos is not None
-                    )
+                        pos is not None and pos.shares > pre_buy_positions.get(s.symbol, 0)
+                    ) or (s.symbol not in pre_buy_positions and pos is not None)
                     if bought:
                         self.trades.append(
                             {
