@@ -14,6 +14,7 @@ import pandas as pd
 
 from dquant.constants import BATCH_SIZE, normalize_symbol
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
 from dquant.data.rate_limiter import RateLimiter
 from dquant.logger import get_logger
 
@@ -98,7 +99,7 @@ class TushareLoader(DataSource):
                 )
 
         self._pro = ts.pro_api()
-        print("[Tushare] API initialized")
+        logger.info("[Tushare] API initialized")
 
     def _load_single_symbol(self, symbol):
         """加载单个股票数据"""
@@ -301,43 +302,30 @@ class TushareLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
+        # 通用因子：momentum 5/10/20/60, volatility 5/10/20, ma 5/10/20/60, bias 5/10/20/60,
+        # volume_ma_5, volume_ratio
+        df = calculate_common_factors(
+            df,
+            momentum_windows=[5, 10, 20, 60],
+            volatility_windows=[5, 10, 20],
+            ma_windows=[5, 10, 20, 60],
+        )
 
+        # Tushare 特有因子
         for symbol, group in df.groupby("symbol"):
             group = group.sort_index()
 
-            # 动量因子
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-            group["momentum_60"] = group["close"].pct_change(60)
-
-            # 波动率
-            returns = group["close"].pct_change()
-            group["volatility_5"] = returns.rolling(5).std()
-            group["volatility_10"] = returns.rolling(10).std()
-            group["volatility_20"] = returns.rolling(20).std()
-
-            # 均线
-            for window in [5, 10, 20, 60]:
-                group[f"ma_{window}"] = group["close"].rolling(window).mean()
-                group[f"bias_{window}"] = (group["close"] - group[f"ma_{window}"]) / group[
-                    f"ma_{window}"
-                ]
-
-            # 成交量因子
-            group["volume_ma_5"] = group["volume"].rolling(5).mean()
-            group["volume_ma_10"] = group["volume"].rolling(10).mean()
-            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(0, np.nan)
+            # 成交量 10 日均线
+            df.loc[group.index, "volume_ma_10"] = group["volume"].rolling(10).mean()
 
             # 价格位置
-            group["price_position_20"] = (group["close"] - group["low"].rolling(20).min()) / (
-                group["high"].rolling(20).max() - group["low"].rolling(20).min()
+            low_min = group["low"].rolling(20).min()
+            high_max = group["high"].rolling(20).max()
+            df.loc[group.index, "price_position_20"] = (group["close"] - low_min) / (
+                high_max - low_min
             )
 
-            results.append(group)
-
-        return pd.concat(results)
+        return df
 
     def _add_financial_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """添加财务数据"""

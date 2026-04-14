@@ -90,6 +90,7 @@ class RetryableBroker(BaseBroker):
                                 status=existing_order.status,
                             )
                     except Exception:
+                        logger.debug("[Retry] 查询订单状态失败")
                         pass  # 查询失败，继续重试
 
             try:

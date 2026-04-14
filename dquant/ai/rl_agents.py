@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 
 from dquant.constants import DEFAULT_COMMISSION, DEFAULT_INITIAL_CASH, MIN_SHARES
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -190,7 +193,7 @@ class TradingEnvironment:
     def render(self):
         """渲染环境"""
         total_value = self.cash + np.sum(self.position_values)
-        print(
+        logger.info(
             f"Step {self.current_step}: "
             f"Total={total_value:,.0f}, "
             f"Cash={self.cash:,.0f}, "
@@ -375,7 +378,7 @@ class DQNAgent(BaseRLAgent):
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         except Exception as e:
-            print(f"[DQN] Update error: {e}")
+            logger.error(f"[DQN] Update error: {e}")
 
     def update_target_model(self):
         """更新目标网络"""
@@ -385,7 +388,7 @@ class DQNAgent(BaseRLAgent):
 
 class PPOAgent(BaseRLAgent):
     """
-    PPO 交易代理
+    PPO 交易代理 (Stub - 待实现)
 
     使用 Proximal Policy Optimization 进行交易决策。
     """

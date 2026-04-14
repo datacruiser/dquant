@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
 from dquant.data.rate_limiter import RateLimiter
 from dquant.logger import get_logger
 
@@ -62,42 +63,6 @@ class AKShareLoader(DataSource):
         self.max_workers = max_workers
         self._rate_limiter = RateLimiter(max_calls=rate_limit, period=1.0)
 
-    def _load_single_symbol(self, symbol):
-        """加载单个股票数据"""
-        try:
-            import akshare as ak
-
-            df = ak.stock_zh_a_hist(
-                symbol=symbol,
-                period="daily",
-                start_date=self.start.replace("-", ""),
-                end_date=self.end.replace("-", ""),
-                adjust="" if not self.adjust else "qfq",
-            )
-
-            if df is None or len(df) == 0:
-                return None
-
-            df = df.rename(
-                columns={
-                    "日期": "date",
-                    "开盘": "open",
-                    "最高": "high",
-                    "最低": "low",
-                    "收盘": "close",
-                    "成交量": "volume",
-                }
-            )
-
-            df["symbol"] = symbol
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-            return df
-
-        except Exception:
-            return None
-
     def load(self) -> pd.DataFrame:
         """加载数据（并发）"""
         try:
@@ -130,7 +95,9 @@ class AKShareLoader(DataSource):
                     else:
                         failed.append(symbol)
                 except Exception:
-                    failed.append(futures[future])
+                    sym = futures[future]
+                    logger.warning(f"[AKShare] 并发加载 {sym} 失败")
+                    failed.append(sym)
 
                 if completed % 50 == 0:
                     logger.info(f"[AKShare] 已加载 {completed}/{len(symbol_list)} 只股票")
@@ -243,48 +210,22 @@ class AKShareLoader(DataSource):
             return df
 
         except Exception:
+            logger.warning(f"[AKShare] _get_stock_data 加载 {symbol} 失败")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
+        # 通用因子：momentum 5/10/20, volatility 5/10/20, ma 5/10/20, bias 5/10/20, volume_ma_5, volume_ratio
+        df = calculate_common_factors(df)
 
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
+        # AKShare 特有因子：换手率均线
+        if "turnover" in df.columns:
+            for symbol, group in df.groupby("symbol"):
+                group = group.sort_index()
+                df.loc[group.index, "turnover_ma_5"] = group["turnover"].rolling(5).mean()
+                df.loc[group.index, "turnover_ma_10"] = group["turnover"].rolling(10).mean()
 
-            # 动量因子
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-
-            # 波动率
-            returns = group["close"].pct_change()
-            group["volatility_5"] = returns.rolling(5).std()
-            group["volatility_10"] = returns.rolling(10).std()
-            group["volatility_20"] = returns.rolling(20).std()
-
-            # 均线
-            group["ma_5"] = group["close"].rolling(5).mean()
-            group["ma_10"] = group["close"].rolling(10).mean()
-            group["ma_20"] = group["close"].rolling(20).mean()
-
-            # 偏离均线
-            group["bias_5"] = (group["close"] - group["ma_5"]) / group["ma_5"]
-            group["bias_10"] = (group["close"] - group["ma_10"]) / group["ma_10"]
-            group["bias_20"] = (group["close"] - group["ma_20"]) / group["ma_20"]
-
-            # 换手率因子 (如果有)
-            if "turnover" in group.columns:
-                group["turnover_ma_5"] = group["turnover"].rolling(5).mean()
-                group["turnover_ma_10"] = group["turnover"].rolling(10).mean()
-
-            # 成交量因子
-            group["volume_ma_5"] = group["volume"].rolling(5).mean()
-            group["volume_ratio"] = group["volume"] / group["volume_ma_5"].replace(0, np.nan)
-
-            results.append(group)
-
-        return pd.concat(results)
+        return df
 
 
 class AKShareRealTime:

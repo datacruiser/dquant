@@ -232,6 +232,7 @@ class Engine:
                 while self._running.is_set():
                     loop_start = time.time()
 
+                    realtime_df = None
                     try:
                         now = datetime.now()
                         date_str = now.strftime("%Y-%m-%d")

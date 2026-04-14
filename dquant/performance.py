@@ -385,29 +385,31 @@ class PerformanceMonitor:
 
     def __init__(self):
         self.stats = {}
+        self._lock = threading.Lock()
 
     def record(self, name: str, elapsed: float, memory: Optional[float] = None):
         """记录性能数据"""
-        if name not in self.stats:
-            self.stats[name] = {
-                "calls": 0,
-                "total_time": 0.0,
-                "avg_time": 0.0,
-                "max_time": 0.0,
-                "min_time": float("inf"),
-            }
+        with self._lock:
+            if name not in self.stats:
+                self.stats[name] = {
+                    "calls": 0,
+                    "total_time": 0.0,
+                    "avg_time": 0.0,
+                    "max_time": 0.0,
+                    "min_time": float("inf"),
+                }
 
-        self.stats[name]["calls"] += 1
-        self.stats[name]["total_time"] += elapsed
-        self.stats[name]["avg_time"] = self.stats[name]["total_time"] / self.stats[name]["calls"]
-        self.stats[name]["max_time"] = max(self.stats[name]["max_time"], elapsed)
-        self.stats[name]["min_time"] = min(self.stats[name]["min_time"], elapsed)
+            self.stats[name]["calls"] += 1
+            self.stats[name]["total_time"] += elapsed
+            self.stats[name]["avg_time"] = self.stats[name]["total_time"] / self.stats[name]["calls"]
+            self.stats[name]["max_time"] = max(self.stats[name]["max_time"], elapsed)
+            self.stats[name]["min_time"] = min(self.stats[name]["min_time"], elapsed)
 
-        if memory is not None:
-            if "max_memory" not in self.stats[name]:
-                self.stats[name]["max_memory"] = memory
-            else:
-                self.stats[name]["max_memory"] = max(self.stats[name]["max_memory"], memory)
+            if memory is not None:
+                if "max_memory" not in self.stats[name]:
+                    self.stats[name]["max_memory"] = memory
+                else:
+                    self.stats[name]["max_memory"] = max(self.stats[name]["max_memory"], memory)
 
     def monitor(self, func: Callable) -> Callable:
         """监控装饰器"""
@@ -436,11 +438,13 @@ class PerformanceMonitor:
                         _, peak = tracemalloc.get_traced_memory()
                         memory = peak / 1024 / 1024  # MB
                     except Exception:
+                        logger.debug("[Performance] tracemalloc snapshot cleanup failed")
                         pass
                     finally:
                         try:
                             tracemalloc.stop()
                         except Exception:
+                            logger.debug("[Performance] tracemalloc stop failed")
                             pass
 
                 self.record(func.__name__, elapsed, memory)

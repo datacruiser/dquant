@@ -13,7 +13,7 @@ sys.path.insert(0, '/Users/datacruiser/github/dquant')
 from dquant import Engine
 from dquant.data.base import DataSource
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
-from dquant.ai.base import MomentumFactor
+from dquant.ai.builtin_factors import MomentumFactor
 
 
 class SimpleDataSource(DataSource):

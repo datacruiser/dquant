@@ -14,11 +14,8 @@ from typing import Dict
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_INITIAL_CASH,
-    DEFAULT_STAMP_DUTY,
-)
+from dquant.broker.simulator import Simulator
+from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -103,6 +100,26 @@ if qmt_path:
 
 func_name = os.environ.get('DQ_QMT_FUNC', '')
 params = json.loads(sys.stdin.read())
+
+# 白名单：仅允许调用的 xttrade 函数
+_ALLOWED = {
+    'download_history_data', 'get_stock_list_in_sector',
+    'get_instrument_detail', 'get_instruments',
+    'get_trading_dates', 'get_trading_calendar',
+    'get_market_data', 'get_market_data_ex',
+    'get_full_tick', 'get_l2_quote', 'get_l2_order_book', 'get_l2_order_queue',
+    'get_financial_data',
+    'subscribe_quote', 'unsubscribe_quote', 'subscribe_whole_quote',
+    'query_stock_orders', 'query_stock_trades',
+    'query_credit_detail', 'query_credit_orders', 'query_credit_trades',
+    'query_option_orders', 'query_option_trades',
+    'query_etf_orders', 'query_etf_trades',
+    'stock_order', 'stock_cancel',
+    'query_account', 'query_position', 'query_asset',
+}
+if func_name not in _ALLOWED:
+    print(json.dumps({'error': f'function not allowed: {func_name}'}))
+    sys.exit(0)
 
 from xtquant import xttrade
 
@@ -381,36 +398,50 @@ else:
 class QMTSimulator(QMTBroker):
     """
     QMT 模拟交易
+
+    通过组合 Simulator 实现，避免代码重复。
     """
 
     def __init__(self, initial_cash: float = DEFAULT_INITIAL_CASH, **kwargs):
         super().__init__(**kwargs)
         self.name = "QMTSimulator"
-        self.initial_cash = initial_cash
-        self.cash = initial_cash
-        self.positions: Dict[str, dict] = {}
-        self.orders: Dict[str, Order] = {}
+        # 组合：内部委托给 Simulator
+        self._sim = Simulator(
+            initial_cash=initial_cash,
+            order_id_prefix="SIM",
+            apply_slippage=False,
+            validate_orders=False,
+            adjust_lots=False,
+            strict_sell=True,
+        )
 
+    # ---------- 连接管理 ----------
     def connect(self, **kwargs) -> bool:
         logger.info(f"[{self.name}] Connected (simulated)")
         self._connected = True
+        self._sim.connect()
         return True
 
     def disconnect(self) -> bool:
         self._connected = False
         return True
 
+    # ---------- 账户 & 持仓 ----------
     def get_account(self) -> dict:
-        total_value = self.cash + sum(
-            p["quantity"] * p.get("price", 0) for p in self.positions.values()
+        total_value = self._sim.cash + sum(
+            p["quantity"] * p.get("price", 0) for p in self._sim.positions.values()
         )
         return {
-            "cash": self.cash,
+            "cash": self._sim.cash,
             "total_value": total_value,
-            "market_value": total_value - self.cash,
-            "available": self.cash,
+            "market_value": total_value - self._sim.cash,
+            "available": self._sim.cash,
         }
 
+    def get_positions(self) -> Dict[str, dict]:
+        return dict(self._sim.positions)
+
+    # ---------- 交易 ----------
     def place_order(self, order: Order) -> OrderResult:
         """模拟下单（不需要 xtquant）"""
         if not self._connected:
@@ -424,91 +455,43 @@ class QMTSimulator(QMTBroker):
                 timestamp=datetime.now(),
                 status="REJECTED",
             )
+        return self._sim.place_order(order)
 
-        # 模拟成交价格
-        fill_price = order.price or 10.0  # 市价单使用默认价格
+    def cancel_order(self, order_id: str) -> bool:
+        return self._sim.cancel_order(order_id)
 
-        if order.side.upper() == "BUY":
-            cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
-            if cost > self.cash:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            self.cash -= cost
-            if order.symbol in self.positions:
-                pos = self.positions[order.symbol]
-                total_qty = pos["quantity"] + order.quantity
-                pos["avg_cost"] = (
-                    pos["avg_cost"] * pos["quantity"] + fill_price * order.quantity
-                ) / total_qty
-                pos["quantity"] = total_qty
-                pos["price"] = fill_price
-            else:
-                self.positions[order.symbol] = {
-                    "quantity": order.quantity,
-                    "avg_cost": fill_price,
-                    "price": fill_price,
-                }
+    def get_order_status(self, order_id: str) -> Order:
+        return self._sim.get_order_status(order_id)
 
-        elif order.side.upper() == "SELL":
-            if order.symbol not in self.positions:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            pos = self.positions[order.symbol]
-            if order.quantity > pos["quantity"]:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            revenue = fill_price * order.quantity
-            self.cash += revenue * (1 - DEFAULT_COMMISSION - DEFAULT_STAMP_DUTY)
-            pos["quantity"] -= order.quantity
-            pos["price"] = fill_price
-            if pos["quantity"] <= 0:
-                del self.positions[order.symbol]
+    # ---------- 行情 ----------
+    def get_market_data(self, symbol: str) -> dict:
+        return self._sim.get_market_data(symbol)
 
-        order_id = f"SIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{id(order)}"
-        order.order_id = order_id
-        order.status = "FILLED"
-        order.filled_quantity = order.quantity
-        self.orders[order_id] = order
+    # ---------- 属性代理（保持兼容） ----------
+    @property
+    def initial_cash(self) -> float:
+        return self._sim.initial_cash
 
-        # 卖出佣金包含印花税
-        commission_rate = (
-            (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
-            if order.side.upper() == "SELL"
-            else DEFAULT_COMMISSION
-        )
-        commission = fill_price * order.quantity * commission_rate
+    @property
+    def cash(self) -> float:
+        return self._sim.cash
 
-        return OrderResult(
-            order_id=order_id,
-            symbol=order.symbol,
-            side=order.side,
-            filled_quantity=order.quantity,
-            filled_price=fill_price,
-            commission=commission,
-            timestamp=datetime.now(),
-            status="FILLED",
-        )
+    @cash.setter
+    def cash(self, value: float):
+        self._sim.cash = value
+
+    @property
+    def positions(self) -> Dict[str, dict]:
+        return self._sim.positions
+
+    @positions.setter
+    def positions(self, value: Dict[str, dict]):
+        self._sim.positions = value
+
+    @property
+    def orders(self) -> Dict[str, Order]:
+        return self._sim.orders
+
+    @orders.setter
+    def orders(self, value: Dict[str, Order]):
+        self._sim.orders = value

@@ -5,12 +5,15 @@
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 
 from dquant.ai.base import BaseFactor
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -114,6 +117,7 @@ class FactorCombiner:
                     try:
                         target_day = target.loc[date]
                     except Exception:
+                        logger.debug("[FactorCombiner] 计算 IC 权重失败")
                         continue
 
                 if len(factor_day) == 0 or len(target_day) == 0:
@@ -132,6 +136,7 @@ class FactorCombiner:
 
             return np.mean(ics) if ics else 0.0
         except Exception:
+            logger.debug("[FactorCombiner] 计算 IC 权重失败")
             return 0.0
 
     def _calculate_ir(self, factor_data: pd.DataFrame, target: pd.Series) -> float:
@@ -148,6 +153,7 @@ class FactorCombiner:
                     try:
                         target_day = target.loc[date]
                     except Exception:
+                        logger.debug("[FactorCombiner] 计算 PCA 失败")
                         continue
 
                 if len(factor_day) == 0 or len(target_day) == 0:
@@ -168,6 +174,7 @@ class FactorCombiner:
 
             return ic_mean / ic_std if ic_std > 0 else 0.0
         except Exception:
+            logger.debug("[FactorCombiner] 计算 IR 权重失败")
             return 0.0
 
     def combine(
@@ -407,32 +414,3 @@ class CombinedFactor(BaseFactor):
         if self._combiner is None:
             return pd.DataFrame()
         return self._combiner.get_weights_summary()
-
-
-# ============================================================
-# 因子注册表
-# ============================================================
-
-FACTOR_REGISTRY: Dict[str, type] = {}
-
-
-def register_factor(name: str):
-    """注册因子装饰器"""
-
-    def decorator(cls):
-        FACTOR_REGISTRY[name] = cls
-        return cls
-
-    return decorator
-
-
-def get_factor(name: str, **kwargs) -> BaseFactor:
-    """获取因子实例"""
-    if name not in FACTOR_REGISTRY:
-        raise ValueError(f"Unknown factor: {name}. Available: {list(FACTOR_REGISTRY.keys())}")
-    return FACTOR_REGISTRY[name](**kwargs)
-
-
-def list_factors() -> List[str]:
-    """列出所有已注册因子"""
-    return list(FACTOR_REGISTRY.keys())

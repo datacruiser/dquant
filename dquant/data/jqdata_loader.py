@@ -5,6 +5,7 @@
 需要注册账号: https://www.joinquant.com/
 """
 
+import logging
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -12,6 +13,8 @@ import pandas as pd
 
 from dquant.constants import normalize_symbol
 from dquant.data.base import DataSource
+
+logger = logging.getLogger(__name__)
 
 
 class JQDataLoader(DataSource):
@@ -147,6 +150,7 @@ class JQDataLoader(DataSource):
             df = self._jq.get_index_stocks(index_code, date=self.end)
             return df["code"].tolist()
         except Exception:
+            logger.warning("[JQData] 获取指数成分股失败")
             return self._get_all_stocks()[:50]
 
     def _get_all_stocks(self) -> List[str]:
@@ -185,6 +189,7 @@ class JQDataLoader(DataSource):
             return df
 
         except Exception:
+            logger.warning("[JQData] 加载数据失败")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -225,6 +230,7 @@ class JQDataLoader(DataSource):
             )
             return df
         except Exception:
+            logger.warning("[JQData] 加载数据失败")
             return pd.DataFrame()
 
 

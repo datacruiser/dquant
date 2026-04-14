@@ -4,6 +4,7 @@
 直接读取通达信本地数据文件，无需网络请求。
 """
 
+import logging
 import struct
 from pathlib import Path
 from typing import List, Optional
@@ -11,6 +12,8 @@ from typing import List, Optional
 import pandas as pd
 
 from dquant.data.base import DataSource
+
+logger = logging.getLogger(__name__)
 
 
 class TDXLoader(DataSource):
@@ -157,6 +160,7 @@ class TDXLoader(DataSource):
                 try:
                     date = pd.Timestamp(year=year, month=month, day=day)
                 except Exception:
+                    logger.debug(f"[TDX] 解析股票数据失败: {symbol}")
                     continue
 
                 records.append(
@@ -179,6 +183,7 @@ class TDXLoader(DataSource):
             return df
 
         except Exception:
+            logger.warning("[TDX] 加载数据失败")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:

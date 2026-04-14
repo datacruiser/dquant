@@ -10,6 +10,12 @@ from typing import List, Optional, Union
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import (
+    calculate_bollinger,
+    calculate_common_factors,
+    calculate_macd,
+    calculate_rsi,
+)
 
 
 class YahooLoader(DataSource):
@@ -165,72 +171,24 @@ class YahooLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
+        df = calculate_common_factors(
+            df, volatility_windows=[10, 20, 60], ma_windows=[5, 10, 20, 50, 200]
+        )
 
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
-
-            # 动量
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-
-            # 波动率
-            returns = group["close"].pct_change()
-            group["volatility_10"] = returns.rolling(10).std()
-            group["volatility_20"] = returns.rolling(20).std()
-            group["volatility_60"] = returns.rolling(60).std()
-
-            # 均线
-            for window in [5, 10, 20, 50, 200]:
-                group[f"ma_{window}"] = group["close"].rolling(window).mean()
-
-            # RSI
-            group["rsi_14"] = self._calculate_rsi(group["close"], 14)
-
-            # MACD
-            macd, signal, hist = self._calculate_macd(group["close"])
+        # Yahoo 特有因子：RSI / MACD / Bollinger
+        def _add_yahoo_factors(group: pd.DataFrame) -> pd.DataFrame:
+            group["rsi_14"] = calculate_rsi(group["close"], 14)
+            macd, signal, hist = calculate_macd(group["close"])
             group["macd"] = macd
             group["macd_signal"] = signal
             group["macd_hist"] = hist
-
-            # 布林带
-            upper, middle, lower = self._calculate_bollinger(group["close"])
+            upper, middle, lower = calculate_bollinger(group["close"])
             group["bollinger_upper"] = upper
             group["bollinger_middle"] = middle
             group["bollinger_lower"] = lower
+            return group
 
-            results.append(group)
-
-        return pd.concat(results)
-
-    @staticmethod
-    def _calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-        """计算 RSI"""
-        delta = series.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
-        return 100 - (100 / (1 + rs))
-
-    @staticmethod
-    def _calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
-        """计算 MACD"""
-        ema_fast = series.ewm(span=fast, adjust=False).mean()
-        ema_slow = series.ewm(span=slow, adjust=False).mean()
-        macd = ema_fast - ema_slow
-        signal_line = macd.ewm(span=signal, adjust=False).mean()
-        histogram = macd - signal_line
-        return macd, signal_line, histogram
-
-    @staticmethod
-    def _calculate_bollinger(series: pd.Series, period: int = 20, std_dev: float = 2):
-        """计算布林带"""
-        middle = series.rolling(window=period).mean()
-        std = series.rolling(window=period).std()
-        upper = middle + std_dev * std
-        lower = middle - std_dev * std
-        return upper, middle, lower
+        return df.groupby("symbol", group_keys=False).apply(_add_yahoo_factors)
 
 
 class YahooRealTime:

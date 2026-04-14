@@ -54,10 +54,10 @@ class TestCacheKey:
 
 class TestValidateAfterLoad:
 
-    def test_validate_default_off(self):
-        """默认不启用验证"""
+    def test_validate_default_on(self):
+        """默认启用验证"""
         dm = DataManager(cache_dir=None)
-        assert not dm.validate_after_load
+        assert dm.validate_after_load
 
     def test_validate_can_be_enabled(self):
         """可以启用验证"""

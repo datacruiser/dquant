@@ -304,7 +304,8 @@ class RealtimeServer:
         # 向所有客户端发送
         for client in self.clients:
             try:
-                asyncio.create_task(client.send(message))
+                task = asyncio.create_task(client.send(message))
+                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
             except Exception as e:
                 logger.warning(f"Failed to send message to client: {e}")
 

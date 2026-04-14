@@ -79,7 +79,7 @@ class BaseBroker(ABC):
         pass
 
     @abstractmethod
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         """查询订单状态"""
         pass
 

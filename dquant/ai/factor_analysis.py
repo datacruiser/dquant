@@ -9,6 +9,10 @@ from typing import Dict, Optional
 
 import pandas as pd
 
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class FactorAnalysisResult:
@@ -118,7 +122,8 @@ class FactorAnalyzer:
             else:
                 try:
                     day_returns = forward_returns.loc[date]
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"[FactorAnalysis] 计算因子 IC 失败: {e}")
                     continue
 
             if len(day_factors) == 0 or len(day_returns) == 0:
@@ -174,6 +179,7 @@ class FactorAnalyzer:
         try:
             return forward_returns.loc[date]
         except Exception:
+            logger.debug("[FactorAnalysis] 计算因子相关性失败")
             return None
 
     def _calculate_group_avg_return(self, day_factors, day_returns, group_id):
