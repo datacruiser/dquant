@@ -5,7 +5,6 @@ XTP 券商接口 (中泰证券极速交易接口)
 """
 
 import os
-import queue
 import threading
 from copy import deepcopy
 from datetime import datetime
@@ -86,7 +85,6 @@ class XTPBroker(BaseBroker):
 
         self._api = None
         self._connected = False
-        self._callback_queue = queue.Queue()
         self._orders: Dict[str, dict] = {}
         self._lock = threading.Lock()
 
@@ -168,8 +166,15 @@ class XTPBroker(BaseBroker):
             status = self._map_order_status(event.order_status)
             logger.info(f"[XTP] Order {order_id} status: {status}")
 
+            filled_qty = self._extract_filled_quantity(event)
+
             with self._lock:
                 cached = self._orders.setdefault(order_id, {"filled": 0})
+                if filled_qty is not None:
+                    total_quantity = cached.get("quantity")
+                    if total_quantity:
+                        filled_qty = min(filled_qty, total_quantity)
+                    cached["filled"] = filled_qty
                 cached["status"] = status
 
         except Exception as e:
@@ -184,8 +189,8 @@ class XTPBroker(BaseBroker):
 
             order_id = str(event.order_xt_id)
             symbol = event.stock_code
-            quantity = int(event.traded_quantity)
-            price = event.traded_price
+            quantity = int(getattr(event, "quantity", getattr(event, "traded_quantity", 0)))
+            price = float(getattr(event, "price", getattr(event, "traded_price", 0.0)))
 
             logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
 
@@ -195,22 +200,33 @@ class XTPBroker(BaseBroker):
                     {
                         "symbol": symbol,
                         "filled": 0,
-                        "filled_price": 0,
+                        "filled_price": 0.0,
                         "status": "PENDING",
                     },
                 )
                 total_quantity = cached.get("quantity")
-                filled = cached.get("filled", 0) + quantity
+                prev_filled = cached.get("filled", 0)
+                prev_price = cached.get("filled_price", 0.0)
+
+                new_filled = prev_filled + quantity
                 if total_quantity:
-                    filled = min(filled, total_quantity)
+                    new_filled = min(new_filled, total_quantity)
+                
+                # 计算加权成交均价 (VWAP)
+                effective_quantity = new_filled - prev_filled
+                if new_filled > 0 and effective_quantity > 0:
+                    total_cost = (prev_filled * prev_price) + (effective_quantity * price)
+                    new_vwap = total_cost / new_filled
+                else:
+                    new_vwap = prev_price
 
                 cached["symbol"] = symbol
-                cached["filled"] = filled
-                cached["filled_price"] = price
+                cached["filled"] = new_filled
+                cached["filled_price"] = new_vwap
 
-                if total_quantity and filled >= total_quantity:
+                if total_quantity and new_filled >= total_quantity:
                     cached["status"] = "FILLED"
-                elif filled > 0 and cached.get("status") == "PENDING":
+                elif new_filled > 0 and cached.get("status") == "PENDING":
                     cached["status"] = "PARTIAL_FILLED"
 
         except Exception as e:
@@ -223,6 +239,110 @@ class XTPBroker(BaseBroker):
             _ = quote.last_price
         except Exception as e:
             logger.error(f"[XTP] Quote callback error: {e}")
+
+    def _get_cached_order(self, order_id: str) -> Optional[dict]:
+        """获取本地缓存的订单快照。"""
+        with self._lock:
+            cached = self._orders.get(order_id)
+            return deepcopy(cached) if cached is not None else None
+
+    def _extract_filled_quantity(self, event) -> Optional[int]:
+        """从订单/成交事件中提取累计成交量。"""
+        # 收紧到 XTP 官方 SDK 常见的累计成交量字段
+        for attr in (
+            "qty_traded",       # XTPOrderInfo 官方字段
+            "traded_volume",    # 常见 Python 封装衍生字段
+        ):
+            value = getattr(event, attr, None)
+            if value is not None:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def _resolve_order_side(self, side_value, cached: dict) -> str:
+        """解析订单方向；未知值优先沿用本地缓存，避免误判成 SELL。"""
+        if side_value == 1:
+            return "BUY"
+        if side_value == 2:
+            return "SELL"
+
+        cached_side = cached.get("side")
+        if cached_side in {"BUY", "SELL"}:
+            return cached_side
+        return "UNKNOWN"
+
+    def _build_order_from_cache(self, order_id: str, cached: Optional[dict]) -> Optional[Order]:
+        """将本地缓存转换为 Order。"""
+        if cached is None:
+            return None
+
+        return Order(
+            symbol=cached.get("symbol", ""),
+            side=cached.get("side", "BUY"),
+            quantity=cached.get("quantity", 0),
+            price=cached.get("price"),
+            order_id=order_id,
+            filled_quantity=cached.get("filled", 0),
+            filled_price=cached.get("filled_price", 0.0),
+            status=cached.get("status", "PENDING"),
+        )
+
+    def _refresh_cached_order_from_api(self, order_id: str) -> Optional[Order]:
+        """通过 API 刷新本地订单缓存。"""
+        if self._api is None:
+            return None
+
+        orders = self._api.query_orders()
+        for order_info in orders:
+            api_order_id = getattr(
+                order_info,
+                "order_id",
+                getattr(order_info, "order_xt_id", None),
+            )
+            if str(api_order_id) != order_id:
+                continue
+
+            filled_qty = getattr(order_info, "traded_volume", 0)
+            status_value = getattr(
+                order_info,
+                "status",
+                getattr(order_info, "order_status", None),
+            )
+            status = (
+                self._map_order_status(status_value)
+                if isinstance(status_value, int)
+                else status_value or "UNKNOWN"
+            )
+
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                side_value = getattr(order_info, "side", getattr(order_info, "order_side", 0))
+                side = self._resolve_order_side(side_value, cached)
+                cached.update(
+                    {
+                        "symbol": getattr(
+                            order_info,
+                            "ticker",
+                            getattr(order_info, "stock_code", cached.get("symbol", "")),
+                        ),
+                        "side": side,
+                        "quantity": getattr(
+                            order_info,
+                            "quantity",
+                            getattr(order_info, "order_volume", cached.get("quantity", 0)),
+                        ),
+                        "price": getattr(order_info, "price", cached.get("price")),
+                        "filled": filled_qty,
+                        "status": status,
+                    }
+                )
+                refreshed = deepcopy(cached)
+
+            return self._build_order_from_cache(order_id, refreshed)
+
+        return None
 
     def disconnect(self) -> bool:
         """断开连接"""
@@ -367,6 +487,7 @@ class XTPBroker(BaseBroker):
                     "symbol": order.symbol,
                     "side": order.side,
                     "quantity": order.quantity,
+                    "price": order.price,
                     "filled": 0,
                     "filled_price": 0,
                     "status": "PENDING",
@@ -403,6 +524,10 @@ class XTPBroker(BaseBroker):
 
         try:
             self._api.cancel_order(int(order_id))
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                if cached.get("status") != "FILLED":
+                    cached["status"] = "CANCELLED"
             return True
         except Exception as e:
             logger.error(f"[XTP] Cancel order error: {e}")
@@ -413,24 +538,14 @@ class XTPBroker(BaseBroker):
         if not self._connected:
             return None
 
+        cached_order = self._build_order_from_cache(order_id, self._get_cached_order(order_id))
+
         try:
-            orders = self._api.query_orders()
-            for o in orders:
-                if str(o.order_id) == order_id:
-                    filled_qty = getattr(o, "traded_volume", 0)
-                    return Order(
-                        symbol=o.ticker,
-                        side="BUY" if o.side == 1 else "SELL",
-                        quantity=o.quantity,
-                        price=o.price,
-                        order_id=str(o.order_id),
-                        filled_quantity=filled_qty,
-                        status=self._map_order_status(o.status),
-                    )
-            return None
+            refreshed_order = self._refresh_cached_order_from_api(order_id)
+            return refreshed_order or cached_order
         except Exception as e:
             logger.error(f"[XTP] Query order error: {e}")
-            return None
+            return cached_order
 
     def get_market_data(self, symbol: str) -> dict:
         """获取实时行情"""

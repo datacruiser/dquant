@@ -21,6 +21,7 @@ class Order:
     order_id: Optional[str] = None
     status: str = "PENDING"  # PENDING, FILLED, CANCELLED, REJECTED
     filled_quantity: int = 0  # 已成交数量
+    filled_price: float = 0.0  # 已成交均价
 
 
 @dataclass
