@@ -220,10 +220,10 @@ class AKShareLoader(DataSource):
 
         # AKShare 特有因子：换手率均线
         if "turnover" in df.columns:
-            for symbol, group in df.groupby("symbol"):
-                group = group.sort_index()
-                df.loc[group.index, "turnover_ma_5"] = group["turnover"].rolling(5).mean()
-                df.loc[group.index, "turnover_ma_10"] = group["turnover"].rolling(10).mean()
+            for symbol, grp in df.groupby("symbol"):
+                grp = grp.sort_index()
+                df.loc[grp.index, "turnover_ma_5"] = grp["turnover"].rolling(5).mean()
+                df.loc[grp.index, "turnover_ma_10"] = grp["turnover"].rolling(10).mean()
 
         return df
 

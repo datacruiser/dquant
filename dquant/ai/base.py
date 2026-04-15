@@ -57,6 +57,8 @@ class RuleFactor(BaseFactor):
     规则因子 (基类)
 
     简单的技术指标因子，不需要训练。
+    子类只需实现 _compute_score(group) 方法，predict() 模板会自动处理
+    groupby/sort/dropna/DataFrame 构建。
     """
 
     def __init__(self, name: str = "RuleFactor"):
@@ -67,9 +69,37 @@ class RuleFactor(BaseFactor):
         self._is_fitted = True
         return self
 
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """
+        计算单个 symbol 的因子得分序列。
+
+        Args:
+            group: 已按时间排序的单个 symbol 的 DataFrame
+
+        Returns:
+            与 group 索引对齐的 score Series（可含 NaN）
+        """
+        raise NotImplementedError("子类必须实现 _compute_score 或 predict")
+
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """计算因子值"""
-        # 子类实现
-        raise NotImplementedError
+        """计算因子值（向量化模板）"""
+        parts = []
+        for symbol, grp in data.groupby("symbol"):
+            grp = grp.sort_index()
+            score = self._compute_score(grp)
+            if score is not None and len(score) > 0:
+                valid = score.dropna()
+                if len(valid) > 0:
+                    df = pd.DataFrame({
+                        "symbol": symbol,
+                        "score": valid.values,
+                    }, index=valid.index)
+                    parts.append(df)
+
+        if not parts:
+            return pd.DataFrame(columns=["symbol", "score"])
+        result = pd.concat(parts)
+        result.index.name = "date"
+        return result
 
 

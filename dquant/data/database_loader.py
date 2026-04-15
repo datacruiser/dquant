@@ -124,12 +124,7 @@ class DatabaseLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        return calculate_common_factors(
-            df,
-            symbol_col=self.symbol_col,
-            volatility_windows=[20],
-            ma_windows=[5, 10, 20],
-        )
+        return calculate_common_factors(df, symbol_col=self.symbol_col)
 
 
 class MongoLoader(DataSource):
@@ -223,8 +218,4 @@ class MongoLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        return calculate_common_factors(
-            df,
-            volatility_windows=[20],
-            ma_windows=[5, 10, 20],
-        )
+        return calculate_common_factors(df)

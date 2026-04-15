@@ -190,21 +190,21 @@ class TDXLoader(DataSource):
         """计算技术因子"""
         results = []
 
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
+        for symbol, grp in df.groupby("symbol"):
+            grp = grp.sort_index()
 
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
+            grp["momentum_5"] = grp["close"].pct_change(5)
+            grp["momentum_10"] = grp["close"].pct_change(10)
+            grp["momentum_20"] = grp["close"].pct_change(20)
 
-            returns = group["close"].pct_change()
-            group["volatility_20"] = returns.rolling(20).std()
+            returns = grp["close"].pct_change()
+            grp["volatility_20"] = returns.rolling(20).std()
 
-            group["ma_5"] = group["close"].rolling(5).mean()
-            group["ma_10"] = group["close"].rolling(10).mean()
-            group["ma_20"] = group["close"].rolling(20).mean()
+            grp["ma_5"] = grp["close"].rolling(5).mean()
+            grp["ma_10"] = grp["close"].rolling(10).mean()
+            grp["ma_20"] = grp["close"].rolling(20).mean()
 
-            results.append(group)
+            results.append(grp)
 
         return pd.concat(results)
 

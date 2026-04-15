@@ -13,6 +13,7 @@ import pandas as pd
 
 from dquant.constants import normalize_symbol
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
 
 logger = logging.getLogger(__name__)
 
@@ -194,28 +195,7 @@ class JQDataLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
-
-            # 动量
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-
-            # 波动率
-            returns = group["close"].pct_change()
-            group["volatility_20"] = returns.rolling(20).std()
-
-            # 均线
-            group["ma_5"] = group["close"].rolling(5).mean()
-            group["ma_10"] = group["close"].rolling(10).mean()
-            group["ma_20"] = group["close"].rolling(20).mean()
-
-            results.append(group)
-
-        return pd.concat(results)
+        return calculate_common_factors(df)
 
     def get_factor(self, symbol: str, factor_name: str) -> pd.DataFrame:
         """获取聚宽因子"""

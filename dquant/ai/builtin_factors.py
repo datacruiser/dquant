@@ -12,7 +12,7 @@ from typing import List, Optional
 import numpy as np
 import pandas as pd
 
-from dquant.ai.base import BaseFactor
+from dquant.ai.base import BaseFactor, RuleFactor
 
 # RSI/ADX/KDJ/Williams 等技术指标公式中的常量 100 直接使用字面值，
 # 避免与 A 股最小交易单位 MIN_SHARES 混淆
@@ -23,87 +23,39 @@ from dquant.ai.base import BaseFactor
 # ============================================================
 
 
-class MomentumFactor(BaseFactor):
+class MomentumFactor(RuleFactor):
     """动量因子 - 过去 N 天的收益率"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Momentum_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            momentum = group["close"].pct_change(self.window, fill_method=None)
-            for date, value in momentum.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        return group["close"].pct_change(self.window, fill_method=None)
 
 
-class ReversalFactor(BaseFactor):
+class ReversalFactor(RuleFactor):
     """反转因子 - 短期反转"""
 
     def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"Reversal_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ret = group["close"].pct_change(self.window)
-            reversal = -ret  # 反转
-            for date, value in reversal.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ret = group["close"].pct_change(self.window)
+        return -ret  # 反转
 
 
-class AccMomentumFactor(BaseFactor):
+class AccMomentumFactor(RuleFactor):
     """累积动量因子 - 累积收益率"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"AccMomentum_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ret = group["close"].pct_change()
-            acc_ret = (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
-            for date, value in acc_ret.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ret = group["close"].pct_change()
+        return (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
 
 
 # ============================================================
@@ -111,7 +63,7 @@ class AccMomentumFactor(BaseFactor):
 # ============================================================
 
 
-class VolatilityFactor(BaseFactor):
+class VolatilityFactor(RuleFactor):
     """波动率因子 - 收益率标准差"""
 
     def __init__(self, window: int = 20, prefer_low: bool = True, name: Optional[str] = None):
@@ -119,145 +71,68 @@ class VolatilityFactor(BaseFactor):
         self.window = window
         self.prefer_low = prefer_low
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            returns = group["close"].pct_change()
-            volatility = returns.rolling(self.window).std()
-            if self.prefer_low:
-                volatility = -volatility
-            for date, value in volatility.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        returns = group["close"].pct_change()
+        volatility = returns.rolling(self.window).std()
+        if self.prefer_low:
+            volatility = -volatility
+        return volatility
 
 
-class ATRFactor(BaseFactor):
+class ATRFactor(RuleFactor):
     """ATR 因子 - Average True Range"""
 
     def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"ATR_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            high, low, close = group["high"], group["low"], group["close"]
-            tr1 = high - low
-            tr2 = abs(high - close.shift(1))
-            tr3 = abs(low - close.shift(1))
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            atr = tr.rolling(self.window).mean()
-            atr_ratio = atr / close
-            for date, value in atr_ratio.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        high, low, close = group["high"], group["low"], group["close"]
+        tr1 = high - low
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr = tr.rolling(self.window).mean()
+        atr_ratio = atr / close
+        return -atr_ratio
 
 
-class SkewnessFactor(BaseFactor):
+class SkewnessFactor(RuleFactor):
     """偏度因子 - 收益率偏度"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Skewness_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            returns = group["close"].pct_change()
-            skewness = returns.rolling(self.window).skew()
-            for date, value in skewness.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})  # 负偏度偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        returns = group["close"].pct_change()
+        return -returns.rolling(self.window).skew()  # 负偏度偏好
 
 
-class KurtosisFactor(BaseFactor):
+class KurtosisFactor(RuleFactor):
     """峰度因子 - 收益率峰度"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Kurtosis_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            returns = group["close"].pct_change()
-            kurtosis = returns.rolling(self.window).kurt()
-            for date, value in kurtosis.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})  # 低峰度偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        returns = group["close"].pct_change()
+        return -returns.rolling(self.window).kurt()  # 低峰度偏好
 
 
-class MaxDrawdownFactor(BaseFactor):
+class MaxDrawdownFactor(RuleFactor):
     """最大回撤因子"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"MaxDrawdown_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            cummax = group["close"].rolling(self.window).max()
-            drawdown = (group["close"] - cummax) / cummax
-            max_dd = drawdown.rolling(self.window).min()
-            for date, value in max_dd.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})  # 小回撤偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        cummax = group["close"].rolling(self.window).max()
+        drawdown = (group["close"] - cummax) / cummax
+        max_dd = drawdown.rolling(self.window).min()
+        return -max_dd  # 小回撤偏好
 
 
 # ============================================================
@@ -265,39 +140,23 @@ class MaxDrawdownFactor(BaseFactor):
 # ============================================================
 
 
-class RSIFactor(BaseFactor):
+class RSIFactor(RuleFactor):
     """RSI 因子 - 相对强弱指标"""
 
     def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"RSI_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            delta = group["close"].diff()
-            gain = delta.where(delta > 0, 0).ewm(alpha=1 / self.window, adjust=False).mean()
-            loss = (-delta.where(delta < 0, 0)).ewm(alpha=1 / self.window, adjust=False).mean()
-            rs = gain / loss.replace(0, float("nan"))
-            rsi = 100 - (100 / (1 + rs))
-            factor = 50 - rsi  # RSI 越低分数越高
-            for date, value in factor.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        delta = group["close"].diff()
+        gain = delta.where(delta > 0, 0).ewm(alpha=1 / self.window, adjust=False).mean()
+        loss = (-delta.where(delta < 0, 0)).ewm(alpha=1 / self.window, adjust=False).mean()
+        rs = gain / loss.replace(0, float("nan"))
+        rsi = 100 - (100 / (1 + rs))
+        return 50 - rsi  # RSI 越低分数越高
 
 
-class MACDFactor(BaseFactor):
+class MACDFactor(RuleFactor):
     """MACD 因子"""
 
     def __init__(
@@ -312,31 +171,15 @@ class MACDFactor(BaseFactor):
         self.slow = slow
         self.signal = signal
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ema_fast = group["close"].ewm(span=self.fast, adjust=False).mean()
-            ema_slow = group["close"].ewm(span=self.slow, adjust=False).mean()
-            macd = ema_fast - ema_slow
-            signal_line = macd.ewm(span=self.signal, adjust=False).mean()
-            histogram = macd - signal_line
-            for date, value in histogram.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ema_fast = group["close"].ewm(span=self.fast, adjust=False).mean()
+        ema_slow = group["close"].ewm(span=self.slow, adjust=False).mean()
+        macd = ema_fast - ema_slow
+        signal_line = macd.ewm(span=self.signal, adjust=False).mean()
+        return macd - signal_line
 
 
-class BollingerPositionFactor(BaseFactor):
+class BollingerPositionFactor(RuleFactor):
     """布林带位置因子"""
 
     def __init__(self, window: int = 20, num_std: float = 2.0, name: Optional[str] = None):
@@ -344,76 +187,43 @@ class BollingerPositionFactor(BaseFactor):
         self.window = window
         self.num_std = num_std
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            middle = group["close"].rolling(self.window).mean()
-            std = group["close"].rolling(self.window).std()
-            upper = middle + self.num_std * std
-            lower = middle - self.num_std * std
-            band_width = upper - lower
-            position = (group["close"] - lower) / band_width.replace(0, float("nan"))
-            factor = 0.5 - position  # 越接近下轨分数越高
-            for date, value in factor.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        middle = group["close"].rolling(self.window).mean()
+        std = group["close"].rolling(self.window).std()
+        upper = middle + self.num_std * std
+        lower = middle - self.num_std * std
+        band_width = upper - lower
+        position = (group["close"] - lower) / band_width.replace(0, float("nan"))
+        return 0.5 - position  # 越接近下轨分数越高
 
 
-class TrendStrengthFactor(BaseFactor):
+class TrendStrengthFactor(RuleFactor):
     """趋势强度因子 - ADX"""
 
     def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"TrendStrength_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        high, low, close = group["high"], group["low"], group["close"]
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            high, low, close = group["high"], group["low"], group["close"]
+        plus_dm = high.diff()
+        minus_dm = -low.diff()
+        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
 
-            plus_dm = high.diff()
-            minus_dm = -low.diff()
-            plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-            minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
-
-            tr = pd.concat(
-                [high - low, abs(high - close.shift(1)), abs(low - close.shift(1))],
-                axis=1,
-            ).max(axis=1)
-            atr = tr.rolling(self.window).mean()
-            plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
-            minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
-            di_sum = plus_di + minus_di
-            dx = 100 * abs(plus_di - minus_di) / di_sum.replace(0, float("nan"))
-
-            for date, value in dx.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        tr = pd.concat(
+            [high - low, abs(high - close.shift(1)), abs(low - close.shift(1))],
+            axis=1,
+        ).max(axis=1)
+        atr = tr.rolling(self.window).mean()
+        plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
+        minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr.replace(0, float("nan")))
+        di_sum = plus_di + minus_di
+        return 100 * abs(plus_di - minus_di) / di_sum.replace(0, float("nan"))
 
 
-class KDJFactor(BaseFactor):
+class KDJFactor(RuleFactor):
     """KDJ 因子"""
 
     def __init__(self, n: int = 9, m1: int = 3, m2: int = 3, name: Optional[str] = None):
@@ -422,104 +232,48 @@ class KDJFactor(BaseFactor):
         self.m1 = m1
         self.m2 = m2
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        low_n = group["low"].rolling(self.n).min()
+        high_n = group["high"].rolling(self.n).max()
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        price_range = high_n - low_n
+        rsv = (group["close"] - low_n) / price_range.replace(0, float("nan")) * 100
+        k = rsv.ewm(alpha=1 / self.m1, adjust=False).mean()
+        d = k.ewm(alpha=1 / self.m2, adjust=False).mean()
+        j = 3 * k - 2 * d
 
-            low_n = group["low"].rolling(self.n).min()
-            high_n = group["high"].rolling(self.n).max()
-
-            price_range = high_n - low_n
-            rsv = (group["close"] - low_n) / price_range.replace(0, float("nan")) * 100
-            k = rsv.ewm(alpha=1 / self.m1, adjust=False).mean()
-            d = k.ewm(alpha=1 / self.m2, adjust=False).mean()
-            j = 3 * k - 2 * d
-
-            # J 值作为因子
-            for date, value in j.items():
-                if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": 50 - value}
-                    )  # J < 50 偏多
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        return 50 - j  # J < 50 偏多
 
 
-class CCIFactor(BaseFactor):
+class CCIFactor(RuleFactor):
     """CCI 因子 - 顺势指标"""
 
     def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"CCI_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            tp = (group["high"] + group["low"] + group["close"]) / 3
-            ma = tp.rolling(self.window).mean()
-            md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean())
-
-            cci = (tp - ma) / (0.015 * md.replace(0, float("nan")))
-
-            # CCI 反转
-            for date, value in cci.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        tp = (group["high"] + group["low"] + group["close"]) / 3
+        ma = tp.rolling(self.window).mean()
+        md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean())
+        cci = (tp - ma) / (0.015 * md.replace(0, float("nan")))
+        return -cci  # CCI 反转
 
 
-class WilliamsRFactor(BaseFactor):
+class WilliamsRFactor(RuleFactor):
     """威廉指标因子"""
 
     def __init__(self, window: int = 14, name: Optional[str] = None):
         super().__init__(name=name or f"WilliamsR_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        high_n = group["high"].rolling(self.window).max()
+        low_n = group["low"].rolling(self.window).min()
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            high_n = group["high"].rolling(self.window).max()
-            low_n = group["low"].rolling(self.window).min()
-
-            price_range = high_n - low_n
-            wr = (high_n - group["close"]) / price_range.replace(0, float("nan")) * -100
-
-            # WR 反转
-            for date, value in wr.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        price_range = high_n - low_n
+        wr = (high_n - group["close"]) / price_range.replace(0, float("nan")) * -100
+        return -wr  # WR 反转
 
 
 # ============================================================
@@ -527,142 +281,69 @@ class WilliamsRFactor(BaseFactor):
 # ============================================================
 
 
-class VolumeRatioFactor(BaseFactor):
+class VolumeRatioFactor(RuleFactor):
     """量比因子"""
 
     def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"VolumeRatio_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            vol_ma = group["volume"].rolling(self.window).mean()
-            vol_ratio = group["volume"] / vol_ma
-            for date, value in vol_ratio.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        vol_ma = group["volume"].rolling(self.window).mean()
+        return group["volume"] / vol_ma
 
 
-class TurnoverRateFactor(BaseFactor):
+class TurnoverRateFactor(RuleFactor):
     """换手率因子"""
 
     def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"TurnoverRate_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        # 假设有 turnover 字段
+        if "turnover" in group.columns:
+            turnover = group["turnover"]
+        else:
+            # 用成交量近似
+            turnover = group["volume"] / group["volume"].rolling(self.window).mean()
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            # 假设有 turnover 字段
-            if "turnover" in group.columns:
-                turnover = group["turnover"]
-            else:
-                # 用成交量近似
-                turnover = group["volume"] / group["volume"].rolling(self.window).mean()
-
-            avg_turnover = turnover.rolling(self.window).mean()
-
-            for date, value in avg_turnover.items():
-                if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 低换手率偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        avg_turnover = turnover.rolling(self.window).mean()
+        return -avg_turnover  # 低换手率偏好
 
 
-class OBVFactor(BaseFactor):
+class OBVFactor(RuleFactor):
     """OBV 因子 - 能量潮"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"OBV_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            direction = np.sign(group["close"].diff())
-            obv = (direction * group["volume"]).cumsum()
-            obv_ma = obv.rolling(self.window).mean()
-
-            # OBV 与价格背离
-            obv_trend = obv - obv_ma
-
-            for date, value in obv_trend.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        direction = np.sign(group["close"].diff())
+        obv = (direction * group["volume"]).cumsum()
+        obv_ma = obv.rolling(self.window).mean()
+        return obv - obv_ma
 
 
-class VWAPFactor(BaseFactor):
+class VWAPFactor(RuleFactor):
     """VWAP 因子 - 成交量加权均价"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"VWAP_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        # 简化 VWAP
+        typical_price = (group["high"] + group["low"] + group["close"]) / 3
+        vol_sum = group["volume"].rolling(self.window).sum()
+        vwap = (typical_price * group["volume"]).rolling(self.window).sum() / vol_sum.replace(
+            0, float("nan")
+        )
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            # 简化 VWAP
-            typical_price = (group["high"] + group["low"] + group["close"]) / 3
-            vol_sum = group["volume"].rolling(self.window).sum()
-            vwap = (typical_price * group["volume"]).rolling(self.window).sum() / vol_sum.replace(
-                0, float("nan")
-            )
-
-            # 价格与 VWAP 的偏离
-            deviation = (group["close"] - vwap) / vwap.replace(0, float("nan"))
-
-            for date, value in deviation.items():
-                if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 低于 VWAP 偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        # 价格与 VWAP 的偏离
+        deviation = (group["close"] - vwap) / vwap.replace(0, float("nan"))
+        return -deviation  # 低于 VWAP 偏好
 
 
 # ============================================================
@@ -670,113 +351,51 @@ class VWAPFactor(BaseFactor):
 # ============================================================
 
 
-class PricePositionFactor(BaseFactor):
+class PricePositionFactor(RuleFactor):
     """价格位置因子"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"PricePosition_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            rolling_high = group["high"].rolling(self.window).max()
-            rolling_low = group["low"].rolling(self.window).min()
-            position = (group["close"] - rolling_low) / (rolling_high - rolling_low)
-            factor = 1 - position
-            for date, value in factor.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        rolling_high = group["high"].rolling(self.window).max()
+        rolling_low = group["low"].rolling(self.window).min()
+        position = (group["close"] - rolling_low) / (rolling_high - rolling_low)
+        return 1 - position
 
 
-class GapFactor(BaseFactor):
+class GapFactor(RuleFactor):
     """跳空因子"""
 
     def __init__(self, name: str = "Gap"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            gap = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
-            for date, value in gap.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -abs(value)})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        gap = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
+        return -abs(gap)
 
 
-class IntradayReturnFactor(BaseFactor):
+class IntradayReturnFactor(RuleFactor):
     """日内收益因子"""
 
     def __init__(self, name: str = "IntradayReturn"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            intraday = (group["close"] - group["open"]) / group["open"]
-            factor = -intraday
-            for date, value in factor.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        intraday = (group["close"] - group["open"]) / group["open"]
+        return -intraday
 
 
-class OvernightReturnFactor(BaseFactor):
+class OvernightReturnFactor(RuleFactor):
     """隔夜收益因子"""
 
     def __init__(self, name: str = "OvernightReturn"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            overnight = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
-            for date, value in overnight.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": -value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        overnight = (group["open"] - group["close"].shift(1)) / group["close"].shift(1)
+        return -overnight
 
 
 # ============================================================
@@ -784,7 +403,7 @@ class OvernightReturnFactor(BaseFactor):
 # ============================================================
 
 
-class MASlopeFactor(BaseFactor):
+class MASlopeFactor(RuleFactor):
     """均线斜率因子"""
 
     def __init__(self, window: int = 20, slope_window: int = 5, name: Optional[str] = None):
@@ -792,28 +411,12 @@ class MASlopeFactor(BaseFactor):
         self.window = window
         self.slope_window = slope_window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ma = group["close"].rolling(self.window).mean()
-            slope = (ma - ma.shift(self.slope_window)) / ma.shift(self.slope_window)
-            for date, value in slope.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ma = group["close"].rolling(self.window).mean()
+        return (ma - ma.shift(self.slope_window)) / ma.shift(self.slope_window)
 
 
-class MACrossFactor(BaseFactor):
+class MACrossFactor(RuleFactor):
     """均线交叉因子"""
 
     def __init__(self, short: int = 5, long: int = 20, name: Optional[str] = None):
@@ -821,55 +424,23 @@ class MACrossFactor(BaseFactor):
         self.short = short
         self.long = long
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ma_short = group["close"].rolling(self.short).mean()
-            ma_long = group["close"].rolling(self.long).mean()
-            cross = (ma_short - ma_long) / ma_long
-            for date, value in cross.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ma_short = group["close"].rolling(self.short).mean()
+        ma_long = group["close"].rolling(self.long).mean()
+        return (ma_short - ma_long) / ma_long
 
 
-class BiasFactor(BaseFactor):
+class BiasFactor(RuleFactor):
     """乖离率因子"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Bias_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            ma = group["close"].rolling(self.window).mean()
-            bias = (group["close"] - ma) / ma
-            factor = -bias
-            for date, value in factor.items():
-                if pd.notna(value):
-                    results.append({"date": date, "symbol": symbol, "score": value})
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ma = group["close"].rolling(self.window).mean()
+        bias = (group["close"] - ma) / ma
+        return -bias
 
 
 # ============================================================
@@ -877,15 +448,11 @@ class BiasFactor(BaseFactor):
 # ============================================================
 
 
-class PERatioFactor(BaseFactor):
+class PERatioFactor(RuleFactor):
     """PE 因子 - 市盈率（低 PE 偏好）"""
 
     def __init__(self, name: str = "PE"):
         super().__init__(name=name)
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "pe" not in data.columns:
@@ -898,15 +465,11 @@ class PERatioFactor(BaseFactor):
         return df.set_index("date")
 
 
-class PBRatioFactor(BaseFactor):
+class PBRatioFactor(RuleFactor):
     """PB 因子 - 市净率（低 PB 偏好）"""
 
     def __init__(self, name: str = "PB"):
         super().__init__(name=name)
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "pb" not in data.columns:
@@ -919,15 +482,11 @@ class PBRatioFactor(BaseFactor):
         return df.set_index("date")
 
 
-class ROEFactor(BaseFactor):
+class ROEFactor(RuleFactor):
     """ROE 因子 - 净资产收益率（高 ROE 偏好）"""
 
     def __init__(self, name: str = "ROE"):
         super().__init__(name=name)
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "roe" not in data.columns:
@@ -940,75 +499,73 @@ class ROEFactor(BaseFactor):
         return df.set_index("date")
 
 
-class RevenueGrowthFactor(BaseFactor):
+class RevenueGrowthFactor(RuleFactor):
     """营收增长率因子（需 revenue 列，计算 4 期同比）"""
 
     def __init__(self, name: str = "RevenueGrowth"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        return group["revenue"].pct_change(4)
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "revenue" not in data.columns:
             return pd.DataFrame(columns=["symbol", "score"])
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            growth = group["revenue"].pct_change(4)
-            valid = growth.notna()
-            if valid.any():
-                sub = group.loc[valid].copy()
-                sub["score"] = growth[valid].values
-                results.append(sub[["symbol", "score"]])
-        if not results:
+        parts = []
+        for symbol, grp in data.groupby("symbol"):
+            grp = grp.sort_index()
+            score = self._compute_score(grp)
+            if score is not None and len(score) > 0:
+                valid = score.dropna()
+                if len(valid) > 0:
+                    df = pd.DataFrame({
+                        "symbol": symbol,
+                        "score": valid.values,
+                    }, index=valid.index)
+                    parts.append(df)
+        if not parts:
             return pd.DataFrame(columns=["symbol", "score"])
-        df = pd.concat(results)
-        df["date"] = df.index
-        df["date"] = pd.to_datetime(df["date"])
-        return df.set_index("date")
+        result = pd.concat(parts)
+        result.index.name = "date"
+        return result
 
 
-class ProfitGrowthFactor(BaseFactor):
+class ProfitGrowthFactor(RuleFactor):
     """利润增长率因子（需 profit 列，计算 4 期同比）"""
 
     def __init__(self, name: str = "ProfitGrowth"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        return group["profit"].pct_change(4)
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "profit" not in data.columns:
             return pd.DataFrame(columns=["symbol", "score"])
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            growth = group["profit"].pct_change(4)
-            valid = growth.notna()
-            if valid.any():
-                sub = group.loc[valid].copy()
-                sub["score"] = growth[valid].values
-                results.append(sub[["symbol", "score"]])
-        if not results:
+        parts = []
+        for symbol, grp in data.groupby("symbol"):
+            grp = grp.sort_index()
+            score = self._compute_score(grp)
+            if score is not None and len(score) > 0:
+                valid = score.dropna()
+                if len(valid) > 0:
+                    df = pd.DataFrame({
+                        "symbol": symbol,
+                        "score": valid.values,
+                    }, index=valid.index)
+                    parts.append(df)
+        if not parts:
             return pd.DataFrame(columns=["symbol", "score"])
-        df = pd.concat(results)
-        df["date"] = df.index
-        df["date"] = pd.to_datetime(df["date"])
-        return df.set_index("date")
+        result = pd.concat(parts)
+        result.index.name = "date"
+        return result
 
 
-class MarketCapFactor(BaseFactor):
+class MarketCapFactor(RuleFactor):
     """市值因子（小市值偏好，需 market_cap 列）"""
 
     def __init__(self, name: str = "MarketCap"):
         super().__init__(name=name)
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "market_cap" not in data.columns:
@@ -1026,81 +583,63 @@ class MarketCapFactor(BaseFactor):
 # ============================================================
 
 
-class MoneyFlowFactor(BaseFactor):
+class MoneyFlowFactor(RuleFactor):
     """资金流向因子"""
 
     def __init__(self, window: int = 5, name: Optional[str] = None):
         super().__init__(name=name or f"MoneyFlow_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-
+        """计算因子值"""
         # 需要有 net_inflow 字段
         if "net_inflow" in data.columns:
-            for symbol, group in data.groupby("symbol"):
+            def _compute(group):
                 group = group.sort_index()
-                flow = group["net_inflow"].rolling(self.window).mean()
-                for date, value in flow.items():
-                    if pd.notna(value):
-                        results.append({"date": date, "symbol": symbol, "score": value})
+                return group["net_inflow"].rolling(self.window).mean()
         else:
             # 用成交量变化近似
-            for symbol, group in data.groupby("symbol"):
+            def _compute(group):
                 group = group.sort_index()
                 vol_change = group["volume"].pct_change()
                 price_change = group["close"].pct_change()
                 flow = vol_change * price_change  # 量价配合
-                flow_ma = flow.rolling(self.window).mean()
-                for date, value in flow_ma.items():
-                    if pd.notna(value):
-                        results.append({"date": date, "symbol": symbol, "score": value})
+                return flow.rolling(self.window).mean()
 
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        parts = []
+        for symbol, grp in data.groupby("symbol"):
+            grp = grp.sort_index()
+            score = _compute(grp)
+            if score is not None and len(score) > 0:
+                valid = score.dropna()
+                if len(valid) > 0:
+                    df = pd.DataFrame({
+                        "symbol": symbol,
+                        "score": valid.values,
+                    }, index=valid.index)
+                    parts.append(df)
+
+        if not parts:
+            return pd.DataFrame(columns=["symbol", "score"])
+        result = pd.concat(parts)
+        result.index.name = "date"
+        return result
 
 
-class AmihudIlliquidityFactor(BaseFactor):
+class AmihudIlliquidityFactor(RuleFactor):
     """Amihud 非流动性因子"""
 
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"Amihud_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        ret = abs(group["close"].pct_change())
+        volume = group["volume"]
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        results = []
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            ret = abs(group["close"].pct_change())
-            volume = group["volume"]
-
-            # Amihud = |ret| / volume
-            illiq = ret / (volume + 1)
-            illiq_ma = illiq.rolling(self.window).mean()
-
-            for date, value in illiq_ma.items():
-                if pd.notna(value):
-                    results.append(
-                        {"date": date, "symbol": symbol, "score": -value}
-                    )  # 高流动性偏好
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        # Amihud = |ret| / volume
+        illiq = ret / (volume + 1)
+        return -illiq.rolling(self.window).mean()  # 高流动性偏好
 
 
 # ============================================================

@@ -321,9 +321,9 @@ class QlibDataHandler:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # 按股票拆分
-        for symbol, group in df.groupby("symbol"):
+        for symbol, grp in df.groupby("symbol"):
             # Qlib 格式: 日期为索引
-            stock_df = group.copy()
+            stock_df = grp.copy()
             stock_df = stock_df.reset_index()
 
             if "date" in stock_df.columns:

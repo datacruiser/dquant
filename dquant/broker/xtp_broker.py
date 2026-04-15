@@ -8,11 +8,12 @@ import os
 import queue
 import threading
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
 from dquant.broker.simulator import Simulator
+from dquant.config import XTPBrokerConfig
 from dquant.constants import (
     DEFAULT_COMMISSION,
     DEFAULT_INITIAL_CASH,
@@ -55,6 +56,9 @@ class XTPBroker(BaseBroker):
 
     def __init__(
         self,
+        config: Optional["XTPBrokerConfig"] = None,
+        /,
+        # Backward-compatible individual params
         server: str = "120.27.164.138",  # XTP 服务器地址
         port: int = 6001,
         account: str = "",
@@ -65,6 +69,16 @@ class XTPBroker(BaseBroker):
         **kwargs,
     ):
         super().__init__(name="XTP")
+
+        if config is not None:
+            server = config.server
+            port = config.port
+            account = config.account
+            password = config.password
+            password_env = config.password_env
+            client_id = config.client_id
+            timeout = config.timeout
+
         self.server = server
         self.port = port
         self.account = account

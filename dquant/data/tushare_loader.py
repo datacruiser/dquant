@@ -302,26 +302,30 @@ class TushareLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        # 通用因子：momentum 5/10/20/60, volatility 5/10/20, ma 5/10/20/60, bias 5/10/20/60,
+        # 通用因子：momentum 5/10/20, volatility 5/10/20, ma 5/10/20, bias 5/10/20,
         # volume_ma_5, volume_ratio
-        df = calculate_common_factors(
-            df,
-            momentum_windows=[5, 10, 20, 60],
-            volatility_windows=[5, 10, 20],
-            ma_windows=[5, 10, 20, 60],
-        )
+        df = calculate_common_factors(df)
 
-        # Tushare 特有因子
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
+        # Tushare 扩展因子：额外的窗口 + 特有因子
+        for symbol, grp in df.groupby("symbol"):
+            grp = grp.sort_index()
+
+            # 扩展动量窗口
+            df.loc[grp.index, "momentum_60"] = grp["close"].pct_change(60)
+
+            # 扩展均线窗口
+            df.loc[grp.index, "ma_60"] = grp["close"].rolling(60).mean()
+            df.loc[grp.index, "bias_60"] = (
+                grp["close"] - df.loc[grp.index, "ma_60"]
+            ) / df.loc[grp.index, "ma_60"]
 
             # 成交量 10 日均线
-            df.loc[group.index, "volume_ma_10"] = group["volume"].rolling(10).mean()
+            df.loc[grp.index, "volume_ma_10"] = grp["volume"].rolling(10).mean()
 
             # 价格位置
-            low_min = group["low"].rolling(20).min()
-            high_max = group["high"].rolling(20).max()
-            df.loc[group.index, "price_position_20"] = (group["close"] - low_min) / (
+            low_min = grp["low"].rolling(20).min()
+            high_max = grp["high"].rolling(20).max()
+            df.loc[grp.index, "price_position_20"] = (grp["close"] - low_min) / (
                 high_max - low_min
             )
 

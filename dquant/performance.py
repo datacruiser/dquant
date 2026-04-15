@@ -213,7 +213,7 @@ class ParallelProcessor:
             groupby: 分组列名
         """
         if groupby:
-            groups = [group for _, group in df.groupby(groupby)]
+            groups = [grp for _, grp in df.groupby(groupby)]
             results = self.map(func, groups)
             return pd.concat(results)
         else:
@@ -289,8 +289,8 @@ class VectorizedOperations:
         """
         result = pd.Series(index=df.index, dtype=float)
 
-        for name, group in df.groupby(group_col):
-            result.loc[group.index] = func(group[value_col])
+        for name, grp in df.groupby(group_col):
+            result.loc[grp.index] = func(grp[value_col])
 
         return result
 

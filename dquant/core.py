@@ -19,6 +19,7 @@ from dquant.broker.safety import TradingTimeChecker
 from dquant.broker.simulator import Simulator
 from dquant.broker.trade_journal import TradeJournal
 from dquant.calendar import is_trading_day
+from dquant.config import LiveTradingConfig
 from dquant.constants import (
     BROKER_MAX_RECONNECT,
     BROKER_RECONNECT_BACKOFF,
@@ -170,6 +171,9 @@ class Engine:
 
     def live(
         self,
+        config: Optional[LiveTradingConfig] = None,
+        /,
+        # Backward-compatible individual params
         dry_run: bool = True,
         interval: int = 60,
         symbols: Optional[List[str]] = None,
@@ -184,6 +188,7 @@ class Engine:
         启动实盘交易
 
         Args:
+            config: LiveTradingConfig 实例 (提供时覆盖下方各参数)
             dry_run: 是否模拟运行 (不实际下单)
             interval: 循环间隔（秒），默认 60
             symbols: 交易标的列表 (None 则从 strategy 获取)
@@ -193,6 +198,14 @@ class Engine:
             max_consecutive_errors: 连续错误上限 (超过则停止)
             notifier: 通知器 (None 则用 LogNotifier)
         """
+        if config is not None:
+            dry_run = config.dry_run
+            interval = config.interval
+            symbols = config.symbols
+            strategy_name = config.strategy_name
+            max_drawdown = config.max_drawdown
+            max_daily_loss = config.max_daily_loss
+            max_consecutive_errors = config.max_consecutive_errors
         # ---- 初始化 ----
         if dry_run:
             logger.info("[LIVE] Running in dry-run mode (模拟运行)")

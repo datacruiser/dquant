@@ -171,18 +171,31 @@ class YahooLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        df = calculate_common_factors(
-            df, volatility_windows=[10, 20, 60], ma_windows=[5, 10, 20, 50, 200]
-        )
+        # 通用因子：momentum 5/10/20, volatility 5/10/20, ma 5/10/20, bias 5/10/20,
+        # volume_ma_5, volume_ratio
+        df = calculate_common_factors(df)
 
-        # Yahoo 特有因子：RSI / MACD / Bollinger
+        # Yahoo 扩展因子：额外的窗口 + RSI / MACD / Bollinger
         def _add_yahoo_factors(group: pd.DataFrame) -> pd.DataFrame:
-            group["rsi_14"] = calculate_rsi(group["close"], 14)
-            macd, signal, hist = calculate_macd(group["close"])
+            group = group.sort_index()
+            close = group["close"]
+            returns = close.pct_change()
+
+            # 扩展波动率窗口
+            group["volatility_60"] = returns.rolling(60).std()
+
+            # 扩展均线窗口
+            for w in [50, 200]:
+                group[f"ma_{w}"] = close.rolling(w).mean()
+                group[f"bias_{w}"] = (close - group[f"ma_{w}"]) / group[f"ma_{w}"]
+
+            # RSI / MACD / Bollinger
+            group["rsi_14"] = calculate_rsi(close, 14)
+            macd, signal, hist = calculate_macd(close)
             group["macd"] = macd
             group["macd_signal"] = signal
             group["macd_hist"] = hist
-            upper, middle, lower = calculate_bollinger(group["close"])
+            upper, middle, lower = calculate_bollinger(close)
             group["bollinger_upper"] = upper
             group["bollinger_middle"] = middle
             group["bollinger_lower"] = lower

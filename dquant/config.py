@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from dquant.constants import (
     DEFAULT_COMMISSION,
@@ -133,6 +133,32 @@ class LiveConfig:
 
     # 审计
     journal_dir: str = "./trade_journal"
+
+
+@dataclass
+class LiveTradingConfig:
+    """实盘交易运行时配置 (用于 Engine.live())"""
+
+    dry_run: bool = True
+    interval: int = 60  # 轮询间隔 (秒)
+    symbols: Optional[List[str]] = None
+    strategy_name: str = ""
+    max_drawdown: float = 0.15  # 最大回撤
+    max_daily_loss: float = 0.03  # 单日最大亏损
+    max_consecutive_errors: int = 10  # 连续错误上限
+
+
+@dataclass
+class XTPBrokerConfig:
+    """XTP 券商连接配置"""
+
+    server: str = "120.27.164.138"
+    port: int = 6001
+    account: str = ""
+    password: str = ""
+    password_env: str = ""  # 环境变量名，优先使用
+    client_id: int = 1
+    timeout: int = 30
 
 
 @dataclass

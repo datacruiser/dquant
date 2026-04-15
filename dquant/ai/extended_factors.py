@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from dquant.ai.base import BaseFactor
+from dquant.ai.base import RuleFactor
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 # ============================================================
 
 
-class ADXFactor(BaseFactor):
+class ADXFactor(RuleFactor):
     """
     ADX (Average Directional Index)
 
@@ -31,64 +31,38 @@ class ADXFactor(BaseFactor):
         super().__init__(name=name or f"ADX_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 ADX"""
-        results = []
+        high = group["high"]
+        low = group["low"]
+        close = group["close"]
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        # 计算 +DM 和 -DM (Wilder's mutual exclusion rule)
+        plus_dm = high.diff()
+        minus_dm = -low.diff()
+        # Wilder's rule: only keep the larger directional movement
+        plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+        minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
 
-            high = group["high"]
-            low = group["low"]
-            close = group["close"]
+        # 计算 TR
+        tr1 = high - low
+        tr2 = abs(high - close.shift())
+        tr3 = abs(low - close.shift())
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
-            # 计算 +DM 和 -DM (Wilder's mutual exclusion rule)
-            plus_dm = high.diff()
-            minus_dm = -low.diff()
-            # Wilder's rule: only keep the larger directional movement
-            plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-            minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+        # 平滑
+        atr = tr.rolling(self.window).mean()
+        plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr)
+        minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr)
 
-            # 计算 TR
-            tr1 = high - low
-            tr2 = abs(high - close.shift())
-            tr3 = abs(low - close.shift())
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        # DX
+        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
 
-            # 平滑
-            atr = tr.rolling(self.window).mean()
-            plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr)
-            minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr)
-
-            # DX
-            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-
-            # ADX
-            adx = dx.rolling(self.window).mean()
-
-            for date, value in adx.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # ADX
+        return dx.rolling(self.window).mean()
 
 
-class AroonFactor(BaseFactor):
+class AroonFactor(RuleFactor):
     """
     Aroon Indicator
 
@@ -99,59 +73,33 @@ class AroonFactor(BaseFactor):
         super().__init__(name=name or f"Aroon_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 Aroon"""
-        results = []
-
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            # Aroon Up
-            aroon_up = (
-                group["high"]
-                .rolling(self.window)
-                .apply(
-                    lambda x: (self.window - (self.window - 1 - np.argmax(x))) / self.window * 100,
-                    raw=False,
-                )
+        # Aroon Up
+        aroon_up = (
+            group["high"]
+            .rolling(self.window)
+            .apply(
+                lambda x: (self.window - (self.window - 1 - np.argmax(x))) / self.window * 100,
+                raw=False,
             )
+        )
 
-            # Aroon Down
-            aroon_down = (
-                group["low"]
-                .rolling(self.window)
-                .apply(
-                    lambda x: (self.window - (self.window - 1 - np.argmin(x))) / self.window * 100,
-                    raw=False,
-                )
+        # Aroon Down
+        aroon_down = (
+            group["low"]
+            .rolling(self.window)
+            .apply(
+                lambda x: (self.window - (self.window - 1 - np.argmin(x))) / self.window * 100,
+                raw=False,
             )
+        )
 
-            # Aroon Oscillator
-            aroon = aroon_up - aroon_down
-
-            for date, value in aroon.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # Aroon Oscillator
+        return aroon_up - aroon_down
 
 
-class StochasticFactor(BaseFactor):
+class StochasticFactor(RuleFactor):
     """
     Stochastic Oscillator
 
@@ -163,45 +111,19 @@ class StochasticFactor(BaseFactor):
         self.k_window = k_window
         self.d_window = d_window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 Stochastic"""
-        results = []
+        low_min = group["low"].rolling(self.k_window).min()
+        high_max = group["high"].rolling(self.k_window).max()
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        # %K
+        k = 100 * (group["close"] - low_min) / (high_max - low_min)
 
-            low_min = group["low"].rolling(self.k_window).min()
-            high_max = group["high"].rolling(self.k_window).max()
-
-            # %K
-            k = 100 * (group["close"] - low_min) / (high_max - low_min)
-
-            # %D
-            d = k.rolling(self.d_window).mean()
-
-            for date, value in d.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # %D
+        return k.rolling(self.d_window).mean()
 
 
-class ROCFactor(BaseFactor):
+class ROCFactor(RuleFactor):
     """
     Rate of Change
 
@@ -212,41 +134,16 @@ class ROCFactor(BaseFactor):
         super().__init__(name=name or f"ROC_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 ROC"""
-        results = []
-
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            roc = (
-                (group["close"] - group["close"].shift(self.window))
-                / group["close"].shift(self.window)
-                * 100
-            )
-
-            for date, value in roc.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        return (
+            (group["close"] - group["close"].shift(self.window))
+            / group["close"].shift(self.window)
+            * 100
+        )
 
 
-class CMOFactor(BaseFactor):
+class CMOFactor(RuleFactor):
     """
     Chande Momentum Oscillator
 
@@ -257,43 +154,17 @@ class CMOFactor(BaseFactor):
         super().__init__(name=name or f"CMO_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 CMO"""
-        results = []
+        diff = group["close"].diff()
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        sum_up = diff.where(diff > 0, 0).rolling(self.window).sum()
+        sum_down = abs(diff.where(diff < 0, 0).rolling(self.window).sum())
 
-            diff = group["close"].diff()
-
-            sum_up = diff.where(diff > 0, 0).rolling(self.window).sum()
-            sum_down = abs(diff.where(diff < 0, 0).rolling(self.window).sum())
-
-            cmo = 100 * (sum_up - sum_down) / (sum_up + sum_down)
-
-            for date, value in cmo.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        return 100 * (sum_up - sum_down) / (sum_up + sum_down)
 
 
-class MFIFactor(BaseFactor):
+class MFIFactor(RuleFactor):
     """
     Money Flow Index
 
@@ -304,48 +175,22 @@ class MFIFactor(BaseFactor):
         super().__init__(name=name or f"MFI_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 MFI"""
-        results = []
+        # Typical Price
+        tp = (group["high"] + group["low"] + group["close"]) / 3
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        # Money Flow
+        mf = tp * group["volume"]
 
-            # Typical Price
-            tp = (group["high"] + group["low"] + group["close"]) / 3
+        # Positive/Negative Money Flow
+        diff = tp.diff()
 
-            # Money Flow
-            mf = tp * group["volume"]
+        pmf = mf.where(diff > 0, 0).rolling(self.window).sum()
+        nmf = mf.where(diff < 0, 0).rolling(self.window).sum()
 
-            # Positive/Negative Money Flow
-            diff = tp.diff()
-
-            pmf = mf.where(diff > 0, 0).rolling(self.window).sum()
-            nmf = mf.where(diff < 0, 0).rolling(self.window).sum()
-
-            # MFI
-            mfi = 100 - 100 / (1 + pmf / nmf)
-
-            for date, value in mfi.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # MFI
+        return 100 - 100 / (1 + pmf / nmf)
 
 
 # ============================================================
@@ -353,7 +198,7 @@ class MFIFactor(BaseFactor):
 # ============================================================
 
 
-class ADLineFactor(BaseFactor):
+class ADLineFactor(RuleFactor):
     """
     Accumulation/Distribution Line
 
@@ -363,49 +208,23 @@ class ADLineFactor(BaseFactor):
     def __init__(self, name: str = "ADLine"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 A/D Line"""
-        results = []
+        # CLV (Close Location Value)
+        clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
+            group["high"] - group["low"]
+        )
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        clv = clv.fillna(0)
 
-            # CLV (Close Location Value)
-            clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
-                group["high"] - group["low"]
-            )
+        # A/D Line
+        ad = (clv * group["volume"]).cumsum()
 
-            clv = clv.fillna(0)
-
-            # A/D Line
-            ad = (clv * group["volume"]).cumsum()
-
-            # 使用变化率作为因子
-            ad_change = ad.pct_change()
-
-            for date, value in ad_change.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # 使用变化率作为因子
+        return ad.pct_change()
 
 
-class ChaikinOscillatorFactor(BaseFactor):
+class ChaikinOscillatorFactor(RuleFactor):
     """
     Chaikin Oscillator
 
@@ -417,48 +236,22 @@ class ChaikinOscillatorFactor(BaseFactor):
         self.fast = fast
         self.slow = slow
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 Chaikin Oscillator"""
-        results = []
+        # CLV
+        clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
+            group["high"] - group["low"]
+        )
+        clv = clv.fillna(0)
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        # AD
+        ad = (clv * group["volume"]).cumsum()
 
-            # CLV
-            clv = ((group["close"] - group["low"]) - (group["high"] - group["close"])) / (
-                group["high"] - group["low"]
-            )
-            clv = clv.fillna(0)
-
-            # AD
-            ad = (clv * group["volume"]).cumsum()
-
-            # Chaikin Oscillator
-            co = ad.ewm(span=self.fast).mean() - ad.ewm(span=self.slow).mean()
-
-            for date, value in co.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # Chaikin Oscillator
+        return ad.ewm(span=self.fast).mean() - ad.ewm(span=self.slow).mean()
 
 
-class EaseOfMovementFactor(BaseFactor):
+class EaseOfMovementFactor(RuleFactor):
     """
     Ease of Movement
 
@@ -469,48 +262,22 @@ class EaseOfMovementFactor(BaseFactor):
         super().__init__(name=name or f"EOM_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 EOM"""
-        results = []
+        # Distance Moved
+        dm = (group["high"] + group["low"]) / 2 - (
+            group["high"].shift() + group["low"].shift()
+        ) / 2
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
+        # Box Ratio
+        br = (group["volume"] / 100000000) / (group["high"] - group["low"])
 
-            # Distance Moved
-            dm = (group["high"] + group["low"]) / 2 - (
-                group["high"].shift() + group["low"].shift()
-            ) / 2
-
-            # Box Ratio
-            br = (group["volume"] / 100000000) / (group["high"] - group["low"])
-
-            # EOM
-            eom = dm / br
-            eom_ma = eom.rolling(self.window).mean()
-
-            for date, value in eom_ma.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # EOM
+        eom = dm / br
+        return eom.rolling(self.window).mean()
 
 
-class ForceIndexFactor(BaseFactor):
+class ForceIndexFactor(RuleFactor):
     """
     Force Index
 
@@ -521,42 +288,16 @@ class ForceIndexFactor(BaseFactor):
         super().__init__(name=name or f"ForceIndex_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 Force Index"""
-        results = []
+        # Force Index
+        fi = group["close"].diff() * group["volume"]
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            # Force Index
-            fi = group["close"].diff() * group["volume"]
-
-            # Smoothed
-            fi_ma = fi.ewm(span=self.window).mean()
-
-            for date, value in fi_ma.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # Smoothed
+        return fi.ewm(span=self.window).mean()
 
 
-class VPTFactor(BaseFactor):
+class VPTFactor(RuleFactor):
     """
     Volume Price Trend
 
@@ -566,39 +307,13 @@ class VPTFactor(BaseFactor):
     def __init__(self, name: str = "VPT"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 VPT"""
-        results = []
+        # VPT
+        vpt = (group["volume"] * group["close"].pct_change()).cumsum()
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-
-            # VPT
-            vpt = (group["volume"] * group["close"].pct_change()).cumsum()
-
-            # 使用变化率
-            vpt_change = vpt.pct_change()
-
-            for date, value in vpt_change.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        # 使用变化率
+        return vpt.pct_change()
 
 
 # ============================================================
@@ -606,7 +321,7 @@ class VPTFactor(BaseFactor):
 # ============================================================
 
 
-class HurstExponentFactor(BaseFactor):
+class HurstExponentFactor(RuleFactor):
     """
     Hurst Exponent
 
@@ -616,10 +331,6 @@ class HurstExponentFactor(BaseFactor):
     def __init__(self, window: int = 100, name: Optional[str] = None):
         super().__init__(name=name or f"Hurst_{window}")
         self.window = window
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """计算 Hurst Exponent"""
@@ -665,7 +376,7 @@ class HurstExponentFactor(BaseFactor):
         return df
 
 
-class AutocorrelationFactor(BaseFactor):
+class AutocorrelationFactor(RuleFactor):
     """
     Autocorrelation
 
@@ -677,41 +388,16 @@ class AutocorrelationFactor(BaseFactor):
         self.window = window
         self.lag = lag
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算自相关系数"""
-        results = []
+        returns = group["close"].pct_change()
 
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            returns = group["close"].pct_change()
-
-            autocorr = returns.rolling(self.window).apply(
-                lambda x: x.autocorr(self.lag) if len(x) > self.lag else np.nan
-            )
-
-            for date, value in autocorr.items():
-                if pd.notna(value):
-                    results.append(
-                        {
-                            "date": date,
-                            "symbol": symbol,
-                            "score": value,
-                        }
-                    )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        return returns.rolling(self.window).apply(
+            lambda x: x.autocorr(self.lag) if len(x) > self.lag else np.nan
+        )
 
 
-class VarianceRatioFactor(BaseFactor):
+class VarianceRatioFactor(RuleFactor):
     """
     Variance Ratio
 
@@ -721,10 +407,6 @@ class VarianceRatioFactor(BaseFactor):
     def __init__(self, window: int = 20, name: Optional[str] = None):
         super().__init__(name=name or f"VR_{window}")
         self.window = window
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """计算方差比率"""
@@ -765,7 +447,7 @@ class VarianceRatioFactor(BaseFactor):
         return df
 
 
-class BetaFactor(BaseFactor):
+class BetaFactor(RuleFactor):
     """
     Beta
 
@@ -775,10 +457,6 @@ class BetaFactor(BaseFactor):
     def __init__(self, window: int = 60, name: Optional[str] = None):
         super().__init__(name=name or f"Beta_{window}")
         self.window = window
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """计算 Beta"""
@@ -824,7 +502,7 @@ class BetaFactor(BaseFactor):
         return df
 
 
-class AlphaFactor(BaseFactor):
+class AlphaFactor(RuleFactor):
     """
     Alpha
 
@@ -834,10 +512,6 @@ class AlphaFactor(BaseFactor):
     def __init__(self, window: int = 60, name: Optional[str] = None):
         super().__init__(name=name or f"Alpha_{window}")
         self.window = window
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """计算 Alpha"""

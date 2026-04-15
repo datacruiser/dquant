@@ -50,7 +50,7 @@ class MLFactorStrategy(BaseStrategy):
         predictions = self.factor.predict(data)
 
         # 按日期分组
-        for date, group in predictions.groupby(predictions.index):
+        for date, grp in predictions.groupby(predictions.index):
             # 只在调仓日生成信号
             if not self.should_rebalance(date):
                 continue
@@ -59,7 +59,7 @@ class MLFactorStrategy(BaseStrategy):
             self._last_rebalance = date
 
             # 排序选取 TopK
-            top_stocks = group.nlargest(self.top_k, "score")
+            top_stocks = grp.nlargest(self.top_k, "score")
 
             for _, row in top_stocks.iterrows():
                 signal = Signal(
@@ -119,10 +119,10 @@ class TopKStrategy(BaseStrategy):
             raise ValueError(f"Factor '{self.factor_name}' not found in data")
 
         # 按日期分组
-        for date, group in data.groupby(data.index):
+        for date, grp in data.groupby(data.index):
             # 排序选 TopK
-            sorted_group = group.sort_values(self.factor_name, ascending=self.ascending)
-            top_stocks = sorted_group.head(self.top_k)
+            sorted_grp = grp.sort_values(self.factor_name, ascending=self.ascending)
+            top_stocks = sorted_grp.head(self.top_k)
 
             for _, row in top_stocks.iterrows():
                 signal = Signal(
