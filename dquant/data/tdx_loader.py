@@ -4,7 +4,6 @@
 直接读取通达信本地数据文件，无需网络请求。
 """
 
-import logging
 import struct
 from pathlib import Path
 from typing import List, Optional
@@ -12,8 +11,10 @@ from typing import List, Optional
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
+from dquant.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TDXLoader(DataSource):
@@ -188,25 +189,7 @@ class TDXLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, grp in df.groupby("symbol"):
-            grp = grp.sort_index()
-
-            grp["momentum_5"] = grp["close"].pct_change(5)
-            grp["momentum_10"] = grp["close"].pct_change(10)
-            grp["momentum_20"] = grp["close"].pct_change(20)
-
-            returns = grp["close"].pct_change()
-            grp["volatility_20"] = returns.rolling(20).std()
-
-            grp["ma_5"] = grp["close"].rolling(5).mean()
-            grp["ma_10"] = grp["close"].rolling(10).mean()
-            grp["ma_20"] = grp["close"].rolling(20).mean()
-
-            results.append(grp)
-
-        return pd.concat(results)
+        return calculate_common_factors(df)
 
 
 class TDXBlockLoader:

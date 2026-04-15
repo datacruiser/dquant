@@ -73,8 +73,14 @@ class Portfolio:
         """净值"""
         return self.total_value / self.initial_cash
 
-    def update_prices(self, prices: Dict[str, float], timestamp: datetime = None):
-        """更新持仓价格，并释放 T+1 冻结持仓"""
+    def update_prices(
+        self,
+        prices: Dict[str, float],
+        timestamp: datetime = None,
+        *,
+        record_nav: bool = True,
+    ):
+        """更新持仓价格，并按需记录净值快照"""
         # 如果日期变更，释放昨日冻结的持仓 (T+1)
         # 注意：如果是第一天，直接放行，但通常第一天不会有冻结需要释放
         if timestamp:
@@ -86,15 +92,18 @@ class Portfolio:
                 for pos in self.positions.values():
                     pos.locked_shares = 0.0
 
-        # 防止同一日期重复追加 NAV
-        if self.timestamp_history and self.timestamp_history[-1] == timestamp:
-            return
-
         for symbol, price in prices.items():
             if symbol in self.positions:
                 self.positions[symbol].current_price = price
 
+        if not record_nav:
+            return
+
         # 记录净值
+        if self.timestamp_history and self.timestamp_history[-1] == timestamp:
+            self.nav_history[-1] = self.nav
+            return
+
         self.nav_history.append(self.nav)
         self.timestamp_history.append(timestamp)
 

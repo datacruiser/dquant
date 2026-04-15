@@ -4,8 +4,6 @@
 包含情感因子、新闻因子、资金流向因子等。
 """
 
-from typing import Optional
-
 import pandas as pd
 
 from dquant.ai.base import RuleFactor

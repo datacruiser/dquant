@@ -4,8 +4,6 @@
 基于资金流数据的交易因子
 """
 
-from typing import Optional
-
 import pandas as pd
 
 from dquant.ai.base import RuleFactor

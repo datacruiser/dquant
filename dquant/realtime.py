@@ -301,11 +301,15 @@ class RealtimeServer:
             }
         )
 
+        def _handle_send_result(t):
+            if not t.cancelled() and t.exception():
+                logger.warning(f"WS send failed: {t.exception()}")
+
         # 向所有客户端发送
         for client in self.clients:
             try:
                 task = asyncio.create_task(client.send(message))
-                task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                task.add_done_callback(_handle_send_result)
             except Exception as e:
                 logger.warning(f"Failed to send message to client: {e}")
 

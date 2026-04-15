@@ -7,6 +7,7 @@ XTP 券商接口 (中泰证券极速交易接口)
 import os
 import queue
 import threading
+from copy import deepcopy
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -14,11 +15,7 @@ from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
 from dquant.broker.simulator import Simulator
 from dquant.config import XTPBrokerConfig
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_INITIAL_CASH,
-    DEFAULT_STAMP_DUTY,
-)
+from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -144,62 +141,14 @@ class XTPBroker(BaseBroker):
         if self._api is None:
             return
 
-        # 定义回调处理函数
-        def on_order_event(event, error):
-            """订单事件回调"""
-            try:
-                if error:
-                    logger.error(f"[XTP] Order error: {error}")
-                else:
-                    order_id = event.order_xt_id
-                    status = event.order_status
-                    logger.info(f"[XTP] Order {order_id} status: {status}")
-
-                    # 更新订单状态（线程安全）
-                    with self._lock:
-                        if order_id in self._orders:
-                            self._orders[order_id]["status"] = status
-
-            except Exception as e:
-                logger.error(f"[XTP] Order callback error: {e}")
-
-        def on_trade_event(event, error):
-            """成交事件回调"""
-            try:
-                if error:
-                    logger.error(f"[XTP] Trade error: {error}")
-                else:
-                    order_id = event.order_xt_id
-                    symbol = event.stock_code
-                    quantity = event.traded_quantity
-                    price = event.traded_price
-
-                    logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
-
-                    # 记录成交（线程安全）
-                    with self._lock:
-                        if order_id in self._orders:
-                            self._orders[order_id]["filled"] = quantity
-
-            except Exception as e:
-                logger.error(f"[XTP] Trade callback error: {e}")
-
-        def on_quote_event(quote):
-            """行情推送回调"""
-            try:
-                _ = quote.stock_code
-                _ = quote.last_price
-            except Exception as e:
-                logger.error(f"[XTP] Quote callback error: {e}")
-
         # 注册回调 (实际 API 调用可能不同)
         try:
             # XTP API 回调注册
             if hasattr(self._api, "register_callback"):
                 self._api.register_callback(
-                    on_order=on_order_event,
-                    on_trade=on_trade_event,
-                    on_quote=on_quote_event,
+                    on_order=self._handle_order_event,
+                    on_trade=self._handle_trade_event,
+                    on_quote=self._handle_quote_event,
                 )
             else:
                 logger.warning("[XTP] Callback registration not supported by API")
@@ -207,6 +156,73 @@ class XTPBroker(BaseBroker):
         except Exception as e:
             logger.error(f"[XTP] Failed to setup callbacks: {e}")
             logger.warning("[XTP] Continuing without callbacks...")
+
+    def _handle_order_event(self, event, error):
+        """订单事件回调"""
+        try:
+            if error:
+                logger.error(f"[XTP] Order error: {error}")
+                return
+
+            order_id = str(event.order_xt_id)
+            status = self._map_order_status(event.order_status)
+            logger.info(f"[XTP] Order {order_id} status: {status}")
+
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                cached["status"] = status
+
+        except Exception as e:
+            logger.error(f"[XTP] Order callback error: {e}")
+
+    def _handle_trade_event(self, event, error):
+        """成交事件回调"""
+        try:
+            if error:
+                logger.error(f"[XTP] Trade error: {error}")
+                return
+
+            order_id = str(event.order_xt_id)
+            symbol = event.stock_code
+            quantity = int(event.traded_quantity)
+            price = event.traded_price
+
+            logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
+
+            with self._lock:
+                cached = self._orders.setdefault(
+                    order_id,
+                    {
+                        "symbol": symbol,
+                        "filled": 0,
+                        "filled_price": 0,
+                        "status": "PENDING",
+                    },
+                )
+                total_quantity = cached.get("quantity")
+                filled = cached.get("filled", 0) + quantity
+                if total_quantity:
+                    filled = min(filled, total_quantity)
+
+                cached["symbol"] = symbol
+                cached["filled"] = filled
+                cached["filled_price"] = price
+
+                if total_quantity and filled >= total_quantity:
+                    cached["status"] = "FILLED"
+                elif filled > 0 and cached.get("status") == "PENDING":
+                    cached["status"] = "PARTIAL_FILLED"
+
+        except Exception as e:
+            logger.error(f"[XTP] Trade callback error: {e}")
+
+    def _handle_quote_event(self, quote):
+        """行情推送回调"""
+        try:
+            _ = quote.stock_code
+            _ = quote.last_price
+        except Exception as e:
+            logger.error(f"[XTP] Quote callback error: {e}")
 
     def disconnect(self) -> bool:
         """断开连接"""
@@ -346,6 +362,15 @@ class XTPBroker(BaseBroker):
 
             order.order_id = str(api_result.order_id)
             order.status = "PENDING"
+            with self._lock:
+                self._orders[order.order_id] = {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "filled": 0,
+                    "filled_price": 0,
+                    "status": "PENDING",
+                }
 
             return OrderResult(
                 order_id=order.order_id,
@@ -383,7 +408,7 @@ class XTPBroker(BaseBroker):
             logger.error(f"[XTP] Cancel order error: {e}")
             return False
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         """查询订单状态"""
         if not self._connected:
             return None
@@ -484,7 +509,7 @@ class XTPSimulator(XTPBroker):
         }
 
     def get_positions(self) -> Dict[str, dict]:
-        return dict(self._sim.positions)
+        return deepcopy(self._sim.positions)
 
     # ---------- 交易 ----------
     def place_order(self, order: Order) -> OrderResult:
@@ -504,7 +529,7 @@ class XTPSimulator(XTPBroker):
     def cancel_order(self, order_id: str) -> bool:
         return self._sim.cancel_order(order_id)
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         return self._sim.get_order_status(order_id)
 
     # ---------- 行情 ----------

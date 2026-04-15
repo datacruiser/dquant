@@ -9,8 +9,9 @@ import os
 import re
 import subprocess
 import sys
+from copy import deepcopy
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
@@ -342,7 +343,7 @@ else:
             logger.error(f"[QMT] Cancel order error: {e}")
             return False
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         """查询订单状态"""
         if not self._connected:
             return None
@@ -439,7 +440,7 @@ class QMTSimulator(QMTBroker):
         }
 
     def get_positions(self) -> Dict[str, dict]:
-        return dict(self._sim.positions)
+        return deepcopy(self._sim.positions)
 
     # ---------- 交易 ----------
     def place_order(self, order: Order) -> OrderResult:
@@ -460,7 +461,7 @@ class QMTSimulator(QMTBroker):
     def cancel_order(self, order_id: str) -> bool:
         return self._sim.cancel_order(order_id)
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         return self._sim.get_order_status(order_id)
 
     # ---------- 行情 ----------

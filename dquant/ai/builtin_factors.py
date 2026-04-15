@@ -42,7 +42,7 @@ class ReversalFactor(RuleFactor):
         self.window = window
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        ret = group["close"].pct_change(self.window)
+        ret = group["close"].pct_change(self.window, fill_method=None)
         return -ret  # 反转
 
 
@@ -54,7 +54,7 @@ class AccMomentumFactor(RuleFactor):
         self.window = window
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        ret = group["close"].pct_change()
+        ret = group["close"].pct_change(fill_method=None)
         return (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
 
 
@@ -72,7 +72,7 @@ class VolatilityFactor(RuleFactor):
         self.prefer_low = prefer_low
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        returns = group["close"].pct_change()
+        returns = group["close"].pct_change(fill_method=None)
         volatility = returns.rolling(self.window).std()
         if self.prefer_low:
             volatility = -volatility
@@ -105,7 +105,7 @@ class SkewnessFactor(RuleFactor):
         self.window = window
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        returns = group["close"].pct_change()
+        returns = group["close"].pct_change(fill_method=None)
         return -returns.rolling(self.window).skew()  # 负偏度偏好
 
 
@@ -117,7 +117,7 @@ class KurtosisFactor(RuleFactor):
         self.window = window
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        returns = group["close"].pct_change()
+        returns = group["close"].pct_change(fill_method=None)
         return -returns.rolling(self.window).kurt()  # 低峰度偏好
 
 
@@ -506,28 +506,12 @@ class RevenueGrowthFactor(RuleFactor):
         super().__init__(name=name)
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        return group["revenue"].pct_change(4)
+        return group["revenue"].pct_change(4, fill_method=None)
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "revenue" not in data.columns:
             return pd.DataFrame(columns=["symbol", "score"])
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-            score = self._compute_score(grp)
-            if score is not None and len(score) > 0:
-                valid = score.dropna()
-                if len(valid) > 0:
-                    df = pd.DataFrame({
-                        "symbol": symbol,
-                        "score": valid.values,
-                    }, index=valid.index)
-                    parts.append(df)
-        if not parts:
-            return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+        return super().predict(data)
 
 
 class ProfitGrowthFactor(RuleFactor):
@@ -537,28 +521,12 @@ class ProfitGrowthFactor(RuleFactor):
         super().__init__(name=name)
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        return group["profit"].pct_change(4)
+        return group["profit"].pct_change(4, fill_method=None)
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         if "profit" not in data.columns:
             return pd.DataFrame(columns=["symbol", "score"])
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-            score = self._compute_score(grp)
-            if score is not None and len(score) > 0:
-                valid = score.dropna()
-                if len(valid) > 0:
-                    df = pd.DataFrame({
-                        "symbol": symbol,
-                        "score": valid.values,
-                    }, index=valid.index)
-                    parts.append(df)
-        if not parts:
-            return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+        return super().predict(data)
 
 
 class MarketCapFactor(RuleFactor):
@@ -601,8 +569,8 @@ class MoneyFlowFactor(RuleFactor):
             # 用成交量变化近似
             def _compute(group):
                 group = group.sort_index()
-                vol_change = group["volume"].pct_change()
-                price_change = group["close"].pct_change()
+                vol_change = group["volume"].pct_change(fill_method=None)
+                price_change = group["close"].pct_change(fill_method=None)
                 flow = vol_change * price_change  # 量价配合
                 return flow.rolling(self.window).mean()
 
@@ -634,7 +602,7 @@ class AmihudIlliquidityFactor(RuleFactor):
         self.window = window
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
-        ret = abs(group["close"].pct_change())
+        ret = abs(group["close"].pct_change(fill_method=None))
         volume = group["volume"]
 
         # Amihud = |ret| / volume

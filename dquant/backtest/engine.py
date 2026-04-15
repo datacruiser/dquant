@@ -161,8 +161,8 @@ class BacktestEngine:
             if self.enforce_price_limit:
                 limit_up, limit_down = self._check_price_limits(prices, opens, names)
 
-            # 更新持仓价格 (在执行交易前记录 NAV)
-            self.portfolio.update_prices(prices, date)
+            # 先更新持仓价格，供交易执行与仓位估值使用；NAV 在交易后记录
+            self.portfolio.update_prices(prices, date, record_nav=False)
 
             # 取当日应执行的信号
             date_key = pd.Timestamp(date).normalize()
@@ -171,39 +171,6 @@ class BacktestEngine:
             # 过滤涨跌停信号：涨停日不可买入，跌停日不可卖出
             buy_sigs = [s for s in day_signals if s.is_buy and s.symbol not in limit_up]
             sell_sigs = [s for s in day_signals if s.is_sell and s.symbol not in limit_down]
-
-            # 执行买入（rebalance 也受涨跌停约束）
-            if buy_sigs:
-                target_weights = {s.symbol: s.strength for s in buy_sigs}
-
-                # 记录买入前持仓，用于判断实际成交
-                pre_buy_positions = {
-                    sym: pos.shares for sym, pos in self.portfolio.positions.items()
-                }
-                self.portfolio.rebalance(
-                    target_weights,
-                    buy_trade_prices,
-                    self.commission,
-                    blocked_buys=limit_up,
-                    blocked_sells=limit_down,
-                )
-
-                # 仅记录实际发生了变化的买入
-                for s in buy_sigs:
-                    pos = self.portfolio.positions.get(s.symbol)
-                    bought = (
-                        pos is not None and pos.shares > pre_buy_positions.get(s.symbol, 0)
-                    ) or (s.symbol not in pre_buy_positions and pos is not None)
-                    if bought:
-                        self.trades.append(
-                            {
-                                "date": date,
-                                "symbol": s.symbol,
-                                "action": "BUY",
-                                "price": prices.get(s.symbol, 0),
-                                "score": s.metadata.get("score", 0) if s.metadata else 0,
-                            }
-                        )
 
             # 执行卖出（双层保护：信号层已过滤 limit_down，此处执行层冗余校验）
             for s in sell_sigs:
@@ -230,6 +197,49 @@ class BacktestEngine:
                                 "score": s.metadata.get("score", 0) if s.metadata else 0,
                             }
                         )
+
+            # 执行买入：BUY 只表示增量买入信号，不应隐式清空未发 SELL 的旧仓
+            if buy_sigs:
+                target_weights = self.strategy.get_positions(daily_data, buy_sigs)
+                available_cash = self.portfolio.cash
+                pre_buy_positions = {
+                    sym: pos.shares for sym, pos in self.portfolio.positions.items()
+                }
+
+                for symbol, weight in target_weights.items():
+                    if symbol in limit_up or symbol not in buy_trade_prices:
+                        continue
+                    if weight <= 0 or available_cash <= 0:
+                        continue
+
+                    budget = available_cash * weight
+                    shares = budget / buy_trade_prices[symbol]
+                    self.portfolio.buy(
+                        symbol,
+                        shares,
+                        buy_trade_prices[symbol],
+                        self.commission,
+                    )
+
+                # 仅记录实际发生了变化的买入
+                for s in buy_sigs:
+                    pos = self.portfolio.positions.get(s.symbol)
+                    bought = (
+                        pos is not None and pos.shares > pre_buy_positions.get(s.symbol, 0)
+                    ) or (s.symbol not in pre_buy_positions and pos is not None)
+                    if bought:
+                        self.trades.append(
+                            {
+                                "date": date,
+                                "symbol": s.symbol,
+                                "action": "BUY",
+                                "price": prices.get(s.symbol, 0),
+                                "score": s.metadata.get("score", 0) if s.metadata else 0,
+                            }
+                        )
+
+            # 在交易完成后记录当日 NAV，反映手续费/滑点等执行结果
+            self.portfolio.update_prices(prices, date, record_nav=True)
 
             # 保存当日收盘价供下日涨跌停判断
             self._prev_close = dict(prices)

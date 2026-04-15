@@ -5,7 +5,6 @@
 需要注册账号: https://www.joinquant.com/
 """
 
-import logging
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -14,8 +13,9 @@ import pandas as pd
 from dquant.constants import normalize_symbol
 from dquant.data.base import DataSource
 from dquant.data.factors_utils import calculate_common_factors
+from dquant.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class JQDataLoader(DataSource):
