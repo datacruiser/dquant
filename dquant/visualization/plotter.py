@@ -7,6 +7,9 @@ from typing import Optional
 import pandas as pd
 
 from dquant.backtest.result import BacktestResult
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BacktestPlotter:
@@ -58,7 +61,7 @@ class BacktestPlotter:
             import matplotlib.dates as mdates
             import matplotlib.pyplot as plt
         except ImportError:
-            print("[Plotter] matplotlib not installed. Run: pip install matplotlib")
+            logger.warning("[Plotter] matplotlib not installed. Run: pip install matplotlib")
             return
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -116,7 +119,7 @@ class BacktestPlotter:
 
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches="tight")
-            print(f"[Plotter] Saved to {save_path}")
+            logger.info(f"[Plotter] Saved to {save_path}")
 
         plt.show()
 
@@ -130,7 +133,7 @@ class BacktestPlotter:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            print("[Plotter] matplotlib not installed")
+            logger.warning("[Plotter] matplotlib not installed")
             return
 
         # 计算回撤
@@ -176,7 +179,7 @@ class BacktestPlotter:
             import matplotlib.pyplot as plt
             import seaborn as sns
         except ImportError:
-            print("[Plotter] matplotlib/seaborn not installed")
+            logger.warning("[Plotter] matplotlib/seaborn not installed")
             return
 
         # 计算月度收益
@@ -240,7 +243,7 @@ class BacktestPlotter:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            print("[Plotter] matplotlib not installed")
+            logger.warning("[Plotter] matplotlib not installed")
             return
 
         # 计算年度收益
@@ -288,11 +291,11 @@ class BacktestPlotter:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            print("[Plotter] matplotlib not installed")
+            logger.warning("[Plotter] matplotlib not installed")
             return
 
         if not self.portfolio.positions:
-            print("[Plotter] No positions")
+            logger.warning("[Plotter] No positions")
             return
 
         positions = self.portfolio.positions

@@ -167,7 +167,7 @@ class PortfolioOptimizer:
     Usage:
         optimizer = PortfolioOptimizer(returns_df)
         result = optimizer.optimize(method='risk_parity')
-        print(result.weights)
+        logger.info(result.weights)
     """
 
     def __init__(self, returns: pd.DataFrame):

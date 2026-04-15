@@ -100,7 +100,9 @@ def is_trading_day(
         try:
             return cal.is_session(ts)
         except Exception:
-            pass
+            logger.debug(
+                f"exchange_calendars is_session failed for {ts}, falling back to weekday check"
+            )
 
     # 退化为周一至周五
     return ts.weekday() < 5
@@ -131,7 +133,9 @@ def get_trading_days(
             sessions = cal.sessions_in_range(start_ts, end_ts)
             return sessions.tolist()
         except Exception:
-            pass
+            logger.debug(
+                f"exchange_calendars sessions_in_range failed for {start_ts}-{end_ts}, returning empty list"
+            )
 
     # 退化为工作日
     return pd.date_range(start_ts, end_ts, freq="B").tolist()
@@ -166,7 +170,7 @@ def get_previous_trading_day(
             if len(sessions) >= n:
                 return sessions.iloc[-n].to_pydatetime()
         except Exception:
-            pass
+            logger.debug(f"exchange_calendars get_previous_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天回退
     result = ts
@@ -206,7 +210,7 @@ def get_next_trading_day(
             if len(sessions) >= n:
                 return sessions.iloc[n - 1].to_pydatetime()
         except Exception:
-            pass
+            logger.debug(f"exchange_calendars get_next_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天前进
     result = ts

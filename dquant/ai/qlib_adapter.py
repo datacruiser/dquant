@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 
 from dquant.ai.base import BaseFactor
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class QlibModelAdapter(BaseFactor):
@@ -88,7 +91,7 @@ class QlibModelAdapter(BaseFactor):
             qlib.init(provider_uri="~/.qlib/qlib_data/cn_data", region=REG_CN)
 
         self._qlib_initialized = True
-        print("[QlibAdapter] Qlib initialized")
+        logger.info("[QlibAdapter] Qlib initialized")
 
     def fit(
         self,
@@ -119,14 +122,14 @@ class QlibModelAdapter(BaseFactor):
         self._model = self._create_model()
 
         # 训练
-        print(f"[QlibAdapter] Training {self.model_name} model...")
+        logger.info(f"[QlibAdapter] Training {self.model_name} model...")
 
         try:
             # 准备训练数据
             if self._dataset is not None:
                 # 使用 Qlib 数据集训练
                 self._model.fit(self._dataset)
-                print("[QlibAdapter] Training completed with Qlib dataset")
+                logger.info("[QlibAdapter] Training completed with Qlib dataset")
             else:
                 # 使用传入的 DataFrame 训练
                 if data is None or len(data) == 0:
@@ -141,10 +144,12 @@ class QlibModelAdapter(BaseFactor):
 
                 # 注意: 实际 Qlib 模型需要特定格式的数据
                 # 这里只是示例，真实场景需要按照 Qlib 文档准备数据
-                print(f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features")
+                logger.info(
+                    f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features"
+                )
 
         except Exception as e:
-            print(f"[QlibAdapter] Training error: {e}")
+            logger.error(f"[QlibAdapter] Training error: {e}")
             # 回退到简化训练
             pass
 
@@ -243,7 +248,7 @@ class QlibModelAdapter(BaseFactor):
         adapter._init_qlib()
 
         # TODO: 实现 Qlib 模型加载
-        print(f"[QlibAdapter] Loading model from {path}")
+        logger.info(f"[QlibAdapter] Loading model from {path}")
 
         adapter._is_fitted = True
         return adapter
@@ -252,7 +257,7 @@ class QlibModelAdapter(BaseFactor):
         """保存模型"""
         if self._model is not None:
             # TODO: 实现 Qlib 模型保存
-            print(f"[QlibAdapter] Saving model to {path}")
+            logger.info(f"[QlibAdapter] Saving model to {path}")
 
 
 class QlibFactorConverter:
@@ -290,6 +295,7 @@ class QlibFactorConverter:
             try:
                 return data.eval(expr)
             except Exception:
+                logger.warning("[QlibAdapter] 预测失败，返回零值")
                 return pd.Series(0, index=data.index)
 
         return calculator
@@ -317,9 +323,9 @@ class QlibDataHandler:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # 按股票拆分
-        for symbol, group in df.groupby("symbol"):
+        for symbol, grp in df.groupby("symbol"):
             # Qlib 格式: 日期为索引
-            stock_df = group.copy()
+            stock_df = grp.copy()
             stock_df = stock_df.reset_index()
 
             if "date" in stock_df.columns:
@@ -330,7 +336,7 @@ class QlibDataHandler:
             csv_path = output_path / f"{symbol}.csv"
             stock_df.to_csv(csv_path)
 
-        print(f"[QlibDataHandler] Saved to {output_dir}")
+        logger.info(f"[QlibDataHandler] Saved to {output_dir}")
 
 
 # 添加到 ai/__init__.py

@@ -19,6 +19,7 @@ from dquant.broker.safety import TradingTimeChecker
 from dquant.broker.simulator import Simulator
 from dquant.broker.trade_journal import TradeJournal
 from dquant.calendar import is_trading_day
+from dquant.config import LiveTradingConfig
 from dquant.constants import (
     BROKER_MAX_RECONNECT,
     BROKER_RECONNECT_BACKOFF,
@@ -170,6 +171,9 @@ class Engine:
 
     def live(
         self,
+        config: Optional[LiveTradingConfig] = None,
+        /,
+        # Backward-compatible individual params
         dry_run: bool = True,
         interval: int = 60,
         symbols: Optional[List[str]] = None,
@@ -184,6 +188,7 @@ class Engine:
         启动实盘交易
 
         Args:
+            config: LiveTradingConfig 实例 (提供时覆盖下方各参数)
             dry_run: 是否模拟运行 (不实际下单)
             interval: 循环间隔（秒），默认 60
             symbols: 交易标的列表 (None 则从 strategy 获取)
@@ -193,6 +198,14 @@ class Engine:
             max_consecutive_errors: 连续错误上限 (超过则停止)
             notifier: 通知器 (None 则用 LogNotifier)
         """
+        if config is not None:
+            dry_run = config.dry_run
+            interval = config.interval
+            symbols = config.symbols
+            strategy_name = config.strategy_name
+            max_drawdown = config.max_drawdown
+            max_daily_loss = config.max_daily_loss
+            max_consecutive_errors = config.max_consecutive_errors
         # ---- 初始化 ----
         if dry_run:
             logger.info("[LIVE] Running in dry-run mode (模拟运行)")
@@ -232,6 +245,7 @@ class Engine:
                 while self._running.is_set():
                     loop_start = time.time()
 
+                    realtime_df = None
                     try:
                         now = datetime.now()
                         date_str = now.strftime("%Y-%m-%d")
@@ -353,8 +367,14 @@ class Engine:
 
                     # 9. (已移至上方与拉取行情并发)
 
+                    # 9.5 卖出后刷新账户现金，避免换仓时系统性低配
+                    if sell_signals and not dry_run:
+                        account = self.broker.get_account()
+                        available_cash = account.get("cash", available_cash)
+
                     # 10. 执行买入信号 (等权仓位)
                     if buy_signals:
+                        latest_prices = self._build_price_lookup(realtime_df)
                         self._execute_buys(
                             buy_signals,
                             available_cash,
@@ -362,6 +382,7 @@ class Engine:
                             journal,
                             strategy_name,
                             tracker,
+                            latest_prices,
                         )
 
                     # 11. 更新持仓价格
@@ -529,6 +550,7 @@ class Engine:
         journal: TradeJournal,
         strategy_name: str,
         tracker: OrderTracker,
+        latest_prices: Optional[Dict[str, float]] = None,
     ) -> None:
         """执行买入信号 (等权仓位分配，动态扣减可用资金)"""
         if not buy_signals:
@@ -543,8 +565,9 @@ class Engine:
             if per_stock_budget <= 0:
                 break
 
-            price = sig.price or 10.0  # 需要价格计算股数
+            price = self._resolve_signal_price(sig, latest_prices)
             if price <= 0:
+                logger.warning(f"[LIVE] 缺少有效价格，跳过买入: {sig.symbol}")
                 continue
 
             # 计算买入数量 (整手)
@@ -563,7 +586,7 @@ class Engine:
 
             if dry_run:
                 logger.info(f"[LIVE][DRY-RUN] 买入: {sig.symbol} x {quantity}")
-                remaining_cash -= quantity * price
+                remaining_cash -= quantity * price * (1 + DEFAULT_COMMISSION)
                 continue
 
             result = self.broker.place_order(order)
@@ -589,8 +612,54 @@ class Engine:
 
             if result.status != "REJECTED":
                 unit_price = result.filled_price if result.filled_price > 0 else price
-                reserved_cost = quantity * unit_price
+                reserved_cost = quantity * unit_price * (1 + DEFAULT_COMMISSION)
                 remaining_cash = max(0, remaining_cash - reserved_cost)
+
+    def _build_price_lookup(self, realtime_df: pd.DataFrame) -> Dict[str, float]:
+        """从实时行情构建 symbol -> 最新价格映射。"""
+        if realtime_df is None or realtime_df.empty:
+            return {}
+
+        price_column = None
+        for candidate in ("price", "close", "last"):
+            if candidate in realtime_df.columns:
+                price_column = candidate
+                break
+        if price_column is None:
+            return {}
+
+        if "symbol" in realtime_df.columns:
+            return {
+                str(row["symbol"]): float(row[price_column])
+                for _, row in realtime_df.iterrows()
+                if pd.notna(row[price_column])
+            }
+
+        return {
+            str(symbol): float(value)
+            for symbol, value in realtime_df[price_column].items()
+            if pd.notna(value)
+        }
+
+    def _resolve_signal_price(
+        self, sig: Signal, latest_prices: Optional[Dict[str, float]] = None
+    ) -> float:
+        """优先使用信号价，其次使用本轮实时行情，再回退到 broker 行情。"""
+        if sig.price and sig.price > 0:
+            return float(sig.price)
+
+        if latest_prices and sig.symbol in latest_prices and latest_prices[sig.symbol] > 0:
+            return float(latest_prices[sig.symbol])
+
+        try:
+            quote = self.broker.get_market_data(sig.symbol)
+        except Exception as exc:
+            logger.debug(f"[LIVE] 获取 {sig.symbol} 实时报价失败: {exc}")
+            return 0.0
+
+        if quote and quote.get("price", 0) > 0:
+            return float(quote["price"])
+        return 0.0
 
     def _try_reconnect(self, **kwargs) -> bool:
         """
@@ -722,6 +791,8 @@ class Engine:
         }
         actual_metric = metric_aliases.get(metric, metric)
 
+        minimize_metrics = {"max_drawdown", "volatility"}
+
         for values in product(*param_values):
             params = dict(zip(param_names, values))
 
@@ -737,8 +808,10 @@ class Engine:
                 # 获取评分
                 score = getattr(result.metrics, actual_metric, 0)
 
-                if score > best_score:
-                    best_score = score
+                comparison_score = -score if actual_metric in minimize_metrics else score
+
+                if comparison_score > best_score:
+                    best_score = comparison_score
                     best_params = params
                     best_result = result
             except Exception as e:
@@ -759,6 +832,10 @@ class Engine:
 
         return {
             "best_params": best_params,
-            "best_score": best_score,
+            "best_score": (
+                getattr(best_result.metrics, actual_metric, best_score)
+                if best_result is not None
+                else best_score
+            ),
             "best_result": best_result,
         }

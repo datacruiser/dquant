@@ -5,18 +5,16 @@ XTP 券商接口 (中泰证券极速交易接口)
 """
 
 import os
-import queue
 import threading
+from copy import deepcopy
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
-from dquant.constants import (
-    DEFAULT_COMMISSION,
-    DEFAULT_INITIAL_CASH,
-    DEFAULT_STAMP_DUTY,
-)
+from dquant.broker.simulator import Simulator
+from dquant.config import XTPBrokerConfig
+from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,6 +52,9 @@ class XTPBroker(BaseBroker):
 
     def __init__(
         self,
+        config: Optional["XTPBrokerConfig"] = None,
+        /,
+        # Backward-compatible individual params
         server: str = "120.27.164.138",  # XTP 服务器地址
         port: int = 6001,
         account: str = "",
@@ -64,6 +65,16 @@ class XTPBroker(BaseBroker):
         **kwargs,
     ):
         super().__init__(name="XTP")
+
+        if config is not None:
+            server = config.server
+            port = config.port
+            account = config.account
+            password = config.password
+            password_env = config.password_env
+            client_id = config.client_id
+            timeout = config.timeout
+
         self.server = server
         self.port = port
         self.account = account
@@ -74,7 +85,6 @@ class XTPBroker(BaseBroker):
 
         self._api = None
         self._connected = False
-        self._callback_queue = queue.Queue()
         self._orders: Dict[str, dict] = {}
         self._lock = threading.Lock()
 
@@ -129,62 +139,14 @@ class XTPBroker(BaseBroker):
         if self._api is None:
             return
 
-        # 定义回调处理函数
-        def on_order_event(event, error):
-            """订单事件回调"""
-            try:
-                if error:
-                    logger.error(f"[XTP] Order error: {error}")
-                else:
-                    order_id = event.order_xt_id
-                    status = event.order_status
-                    logger.info(f"[XTP] Order {order_id} status: {status}")
-
-                    # 更新订单状态（线程安全）
-                    with self._lock:
-                        if order_id in self._orders:
-                            self._orders[order_id]["status"] = status
-
-            except Exception as e:
-                logger.error(f"[XTP] Order callback error: {e}")
-
-        def on_trade_event(event, error):
-            """成交事件回调"""
-            try:
-                if error:
-                    logger.error(f"[XTP] Trade error: {error}")
-                else:
-                    order_id = event.order_xt_id
-                    symbol = event.stock_code
-                    quantity = event.traded_quantity
-                    price = event.traded_price
-
-                    logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
-
-                    # 记录成交（线程安全）
-                    with self._lock:
-                        if order_id in self._orders:
-                            self._orders[order_id]["filled"] = quantity
-
-            except Exception as e:
-                logger.error(f"[XTP] Trade callback error: {e}")
-
-        def on_quote_event(quote):
-            """行情推送回调"""
-            try:
-                _ = quote.stock_code
-                _ = quote.last_price
-            except Exception as e:
-                logger.error(f"[XTP] Quote callback error: {e}")
-
         # 注册回调 (实际 API 调用可能不同)
         try:
             # XTP API 回调注册
             if hasattr(self._api, "register_callback"):
                 self._api.register_callback(
-                    on_order=on_order_event,
-                    on_trade=on_trade_event,
-                    on_quote=on_quote_event,
+                    on_order=self._handle_order_event,
+                    on_trade=self._handle_trade_event,
+                    on_quote=self._handle_quote_event,
                 )
             else:
                 logger.warning("[XTP] Callback registration not supported by API")
@@ -192,6 +154,195 @@ class XTPBroker(BaseBroker):
         except Exception as e:
             logger.error(f"[XTP] Failed to setup callbacks: {e}")
             logger.warning("[XTP] Continuing without callbacks...")
+
+    def _handle_order_event(self, event, error):
+        """订单事件回调"""
+        try:
+            if error:
+                logger.error(f"[XTP] Order error: {error}")
+                return
+
+            order_id = str(event.order_xt_id)
+            status = self._map_order_status(event.order_status)
+            logger.info(f"[XTP] Order {order_id} status: {status}")
+
+            filled_qty = self._extract_filled_quantity(event)
+
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                if filled_qty is not None:
+                    total_quantity = cached.get("quantity")
+                    if total_quantity:
+                        filled_qty = min(filled_qty, total_quantity)
+                    cached["filled"] = filled_qty
+                cached["status"] = status
+
+        except Exception as e:
+            logger.error(f"[XTP] Order callback error: {e}")
+
+    def _handle_trade_event(self, event, error):
+        """成交事件回调"""
+        try:
+            if error:
+                logger.error(f"[XTP] Trade error: {error}")
+                return
+
+            order_id = str(event.order_xt_id)
+            symbol = event.stock_code
+            quantity = int(getattr(event, "quantity", getattr(event, "traded_quantity", 0)))
+            price = float(getattr(event, "price", getattr(event, "traded_price", 0.0)))
+
+            logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
+
+            with self._lock:
+                cached = self._orders.setdefault(
+                    order_id,
+                    {
+                        "symbol": symbol,
+                        "filled": 0,
+                        "filled_price": 0.0,
+                        "status": "PENDING",
+                    },
+                )
+                total_quantity = cached.get("quantity")
+                prev_filled = cached.get("filled", 0)
+                prev_price = cached.get("filled_price", 0.0)
+
+                new_filled = prev_filled + quantity
+                if total_quantity:
+                    new_filled = min(new_filled, total_quantity)
+
+                # 计算加权成交均价 (VWAP)
+                effective_quantity = new_filled - prev_filled
+                if new_filled > 0 and effective_quantity > 0:
+                    total_cost = (prev_filled * prev_price) + (effective_quantity * price)
+                    new_vwap = total_cost / new_filled
+                else:
+                    new_vwap = prev_price
+
+                cached["symbol"] = symbol
+                cached["filled"] = new_filled
+                cached["filled_price"] = new_vwap
+
+                if total_quantity and new_filled >= total_quantity:
+                    cached["status"] = "FILLED"
+                elif new_filled > 0 and cached.get("status") == "PENDING":
+                    cached["status"] = "PARTIAL_FILLED"
+
+        except Exception as e:
+            logger.error(f"[XTP] Trade callback error: {e}")
+
+    def _handle_quote_event(self, quote):
+        """行情推送回调"""
+        try:
+            _ = quote.stock_code
+            _ = quote.last_price
+        except Exception as e:
+            logger.error(f"[XTP] Quote callback error: {e}")
+
+    def _get_cached_order(self, order_id: str) -> Optional[dict]:
+        """获取本地缓存的订单快照。"""
+        with self._lock:
+            cached = self._orders.get(order_id)
+            return deepcopy(cached) if cached is not None else None
+
+    def _extract_filled_quantity(self, event) -> Optional[int]:
+        """从订单/成交事件中提取累计成交量。"""
+        # 收紧到 XTP 官方 SDK 常见的累计成交量字段
+        for attr in (
+            "qty_traded",  # XTPOrderInfo 官方字段
+            "traded_volume",  # 常见 Python 封装衍生字段
+        ):
+            value = getattr(event, attr, None)
+            if value is not None:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def _resolve_order_side(self, side_value, cached: dict) -> str:
+        """解析订单方向；未知值优先沿用本地缓存，避免误判成 SELL。"""
+        if side_value == 1:
+            return "BUY"
+        if side_value == 2:
+            return "SELL"
+
+        cached_side = cached.get("side")
+        if cached_side in {"BUY", "SELL"}:
+            return cached_side
+        return "UNKNOWN"
+
+    def _build_order_from_cache(self, order_id: str, cached: Optional[dict]) -> Optional[Order]:
+        """将本地缓存转换为 Order。"""
+        if cached is None:
+            return None
+
+        return Order(
+            symbol=cached.get("symbol", ""),
+            side=cached.get("side", "BUY"),
+            quantity=cached.get("quantity", 0),
+            price=cached.get("price"),
+            order_id=order_id,
+            filled_quantity=cached.get("filled", 0),
+            filled_price=cached.get("filled_price", 0.0),
+            status=cached.get("status", "PENDING"),
+        )
+
+    def _refresh_cached_order_from_api(self, order_id: str) -> Optional[Order]:
+        """通过 API 刷新本地订单缓存。"""
+        if self._api is None:
+            return None
+
+        orders = self._api.query_orders()
+        for order_info in orders:
+            api_order_id = getattr(
+                order_info,
+                "order_id",
+                getattr(order_info, "order_xt_id", None),
+            )
+            if str(api_order_id) != order_id:
+                continue
+
+            filled_qty = getattr(order_info, "traded_volume", 0)
+            status_value = getattr(
+                order_info,
+                "status",
+                getattr(order_info, "order_status", None),
+            )
+            status = (
+                self._map_order_status(status_value)
+                if isinstance(status_value, int)
+                else status_value or "UNKNOWN"
+            )
+
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                side_value = getattr(order_info, "side", getattr(order_info, "order_side", 0))
+                side = self._resolve_order_side(side_value, cached)
+                cached.update(
+                    {
+                        "symbol": getattr(
+                            order_info,
+                            "ticker",
+                            getattr(order_info, "stock_code", cached.get("symbol", "")),
+                        ),
+                        "side": side,
+                        "quantity": getattr(
+                            order_info,
+                            "quantity",
+                            getattr(order_info, "order_volume", cached.get("quantity", 0)),
+                        ),
+                        "price": getattr(order_info, "price", cached.get("price")),
+                        "filled": filled_qty,
+                        "status": status,
+                    }
+                )
+                refreshed = deepcopy(cached)
+
+            return self._build_order_from_cache(order_id, refreshed)
+
+        return None
 
     def disconnect(self) -> bool:
         """断开连接"""
@@ -331,6 +482,16 @@ class XTPBroker(BaseBroker):
 
             order.order_id = str(api_result.order_id)
             order.status = "PENDING"
+            with self._lock:
+                self._orders[order.order_id] = {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "price": order.price,
+                    "filled": 0,
+                    "filled_price": 0,
+                    "status": "PENDING",
+                }
 
             return OrderResult(
                 order_id=order.order_id,
@@ -363,34 +524,28 @@ class XTPBroker(BaseBroker):
 
         try:
             self._api.cancel_order(int(order_id))
+            with self._lock:
+                cached = self._orders.setdefault(order_id, {"filled": 0})
+                if cached.get("status") != "FILLED":
+                    cached["status"] = "CANCELLED"
             return True
         except Exception as e:
             logger.error(f"[XTP] Cancel order error: {e}")
             return False
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         """查询订单状态"""
         if not self._connected:
             return None
 
+        cached_order = self._build_order_from_cache(order_id, self._get_cached_order(order_id))
+
         try:
-            orders = self._api.query_orders()
-            for o in orders:
-                if str(o.order_id) == order_id:
-                    filled_qty = getattr(o, "traded_volume", 0)
-                    return Order(
-                        symbol=o.ticker,
-                        side="BUY" if o.side == 1 else "SELL",
-                        quantity=o.quantity,
-                        price=o.price,
-                        order_id=str(o.order_id),
-                        filled_quantity=filled_qty,
-                        status=self._map_order_status(o.status),
-                    )
-            return None
+            refreshed_order = self._refresh_cached_order_from_api(order_id)
+            return refreshed_order or cached_order
         except Exception as e:
             logger.error(f"[XTP] Query order error: {e}")
-            return None
+            return cached_order
 
     def get_market_data(self, symbol: str) -> dict:
         """获取实时行情"""
@@ -428,42 +583,51 @@ class XTPSimulator(XTPBroker):
     XTP 模拟交易
 
     在没有 XTP 接口权限时使用模拟交易。
+    通过组合 Simulator 实现，避免代码重复。
     """
 
     def __init__(self, initial_cash: float = DEFAULT_INITIAL_CASH, **kwargs):
-        # 忽略连接参数
+        # 忽略连接参数，不调用 XTPBroker.__init__
         super().__init__(**kwargs)
         self.name = "XTPSimulator"
-        self.initial_cash = initial_cash
-        self.cash = initial_cash
-        self.positions: Dict[str, dict] = {}
-        self.orders: Dict[str, Order] = {}
+        # 组合：内部委托给 Simulator
+        self._sim = Simulator(
+            initial_cash=initial_cash,
+            order_id_prefix="XTPSIM",
+            apply_slippage=False,
+            validate_orders=False,
+            adjust_lots=False,
+            strict_sell=True,
+        )
 
+    # ---------- 连接管理 ----------
     def connect(self, **kwargs) -> bool:
         logger.info(f"[{self.name}] Connected (simulated)")
         self._connected = True
+        self._sim.connect()
         return True
 
     def disconnect(self) -> bool:
         self._connected = False
         return True
 
+    # ---------- 账户 & 持仓 ----------
     def get_account(self) -> dict:
-        total_value = self.cash + sum(
-            p["quantity"] * p.get("price", 0) for p in self.positions.values()
+        total_value = self._sim.cash + sum(
+            p["quantity"] * p.get("price", 0) for p in self._sim.positions.values()
         )
         return {
-            "cash": self.cash,
+            "cash": self._sim.cash,
             "total_value": total_value,
-            "market_value": total_value - self.cash,
-            "available": self.cash,
+            "market_value": total_value - self._sim.cash,
+            "available": self._sim.cash,
         }
 
     def get_positions(self) -> Dict[str, dict]:
-        return dict(self.positions)
+        return deepcopy(self._sim.positions)
 
+    # ---------- 交易 ----------
     def place_order(self, order: Order) -> OrderResult:
-        """模拟下单"""
         if not self._connected:
             return OrderResult(
                 order_id="",
@@ -475,100 +639,43 @@ class XTPSimulator(XTPBroker):
                 timestamp=datetime.now(),
                 status="REJECTED",
             )
-
-        fill_price = order.price or 10.0
-
-        if order.side.upper() == "BUY":
-            cost = fill_price * order.quantity * (1 + DEFAULT_COMMISSION)
-            if cost > self.cash:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            self.cash -= cost
-            if order.symbol in self.positions:
-                pos = self.positions[order.symbol]
-                total_qty = pos["quantity"] + order.quantity
-                pos["avg_cost"] = (
-                    pos["avg_cost"] * pos["quantity"] + fill_price * order.quantity
-                ) / total_qty
-                pos["quantity"] = total_qty
-                pos["price"] = fill_price
-            else:
-                self.positions[order.symbol] = {
-                    "quantity": order.quantity,
-                    "avg_cost": fill_price,
-                    "price": fill_price,
-                }
-
-        elif order.side.upper() == "SELL":
-            if order.symbol not in self.positions:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            pos = self.positions[order.symbol]
-            if order.quantity > pos["quantity"]:
-                return OrderResult(
-                    order_id="",
-                    symbol=order.symbol,
-                    side=order.side,
-                    filled_quantity=0,
-                    filled_price=0,
-                    commission=0,
-                    timestamp=datetime.now(),
-                    status="REJECTED",
-                )
-            revenue = fill_price * order.quantity
-            total_cost = revenue * (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
-            self.cash += revenue - total_cost
-            pos["quantity"] -= order.quantity
-            pos["price"] = fill_price
-            if pos["quantity"] <= 0:
-                del self.positions[order.symbol]
-
-        order_id = f"XTPSIM_{order.symbol}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{id(order)}"
-        order.order_id = order_id
-        order.status = "FILLED"
-        order.filled_quantity = order.quantity
-        self.orders[order_id] = order
-
-        # 卖出佣金包含印花税
-        commission_rate = (
-            (DEFAULT_COMMISSION + DEFAULT_STAMP_DUTY)
-            if order.side.upper() == "SELL"
-            else DEFAULT_COMMISSION
-        )
-        commission = fill_price * order.quantity * commission_rate
-
-        return OrderResult(
-            order_id=order_id,
-            symbol=order.symbol,
-            side=order.side,
-            filled_quantity=order.quantity,
-            filled_price=fill_price,
-            commission=commission,
-            timestamp=datetime.now(),
-            status="FILLED",
-        )
+        return self._sim.place_order(order)
 
     def cancel_order(self, order_id: str) -> bool:
-        if order_id in self.orders:
-            self.orders[order_id].status = "CANCELLED"
-            return True
-        return False
+        return self._sim.cancel_order(order_id)
 
-    def get_order_status(self, order_id: str) -> Order:
-        return self.orders.get(order_id)
+    def get_order_status(self, order_id: str) -> Optional[Order]:
+        return self._sim.get_order_status(order_id)
+
+    # ---------- 行情 ----------
+    def get_market_data(self, symbol: str) -> dict:
+        return self._sim.get_market_data(symbol)
+
+    # ---------- 属性代理（保持兼容） ----------
+    @property
+    def initial_cash(self) -> float:
+        return self._sim.initial_cash
+
+    @property
+    def cash(self) -> float:
+        return self._sim.cash
+
+    @cash.setter
+    def cash(self, value: float):
+        self._sim.cash = value
+
+    @property
+    def positions(self) -> Dict[str, dict]:
+        return self._sim.positions
+
+    @positions.setter
+    def positions(self, value: Dict[str, dict]):
+        self._sim.positions = value
+
+    @property
+    def orders(self) -> Dict[str, Order]:
+        return self._sim.orders
+
+    @orders.setter
+    def orders(self, value: Dict[str, Order]):
+        self._sim.orders = value

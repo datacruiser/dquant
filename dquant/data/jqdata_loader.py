@@ -12,6 +12,10 @@ import pandas as pd
 
 from dquant.constants import normalize_symbol
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class JQDataLoader(DataSource):
@@ -81,7 +85,7 @@ class JQDataLoader(DataSource):
 
         jq.auth(account, password)
         self._jq = jq
-        print("[JQData] Authenticated")
+        logger.info("[JQData] Authenticated")
 
     def load(self) -> pd.DataFrame:
         """加载数据"""
@@ -100,13 +104,13 @@ class JQDataLoader(DataSource):
                     all_data.append(df)
 
                 if (i + 1) % 50 == 0:
-                    print(f"  [JQData] 已加载 {i + 1}/{len(symbol_list)} 只股票")
+                    logger.info(f"  [JQData] 已加载 {i + 1}/{len(symbol_list)} 只股票")
 
             except Exception as e:
                 failed.append((symbol, str(e)))
 
         if failed:
-            print(f"  [JQData] 加载失败: {len(failed)} 只")
+            logger.warning(f"  [JQData] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")
@@ -147,6 +151,7 @@ class JQDataLoader(DataSource):
             df = self._jq.get_index_stocks(index_code, date=self.end)
             return df["code"].tolist()
         except Exception:
+            logger.warning("[JQData] 获取指数成分股失败")
             return self._get_all_stocks()[:50]
 
     def _get_all_stocks(self) -> List[str]:
@@ -185,32 +190,12 @@ class JQDataLoader(DataSource):
             return df
 
         except Exception:
+            logger.warning("[JQData] 加载数据失败")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
-
-            # 动量
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-
-            # 波动率
-            returns = group["close"].pct_change()
-            group["volatility_20"] = returns.rolling(20).std()
-
-            # 均线
-            group["ma_5"] = group["close"].rolling(5).mean()
-            group["ma_10"] = group["close"].rolling(10).mean()
-            group["ma_20"] = group["close"].rolling(20).mean()
-
-            results.append(group)
-
-        return pd.concat(results)
+        return calculate_common_factors(df)
 
     def get_factor(self, symbol: str, factor_name: str) -> pd.DataFrame:
         """获取聚宽因子"""
@@ -225,6 +210,7 @@ class JQDataLoader(DataSource):
             )
             return df
         except Exception:
+            logger.warning("[JQData] 加载数据失败")
             return pd.DataFrame()
 
 

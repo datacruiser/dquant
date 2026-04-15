@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.constants import ORDER_MAX_RETRIES, ORDER_RETRY_BACKOFF, ORDER_RETRY_DELAY
@@ -90,6 +90,7 @@ class RetryableBroker(BaseBroker):
                                 status=existing_order.status,
                             )
                     except Exception:
+                        logger.debug("[Retry] 查询订单状态失败")
                         pass  # 查询失败，继续重试
 
             try:
@@ -147,7 +148,7 @@ class RetryableBroker(BaseBroker):
     def cancel_order(self, order_id: str) -> bool:
         return self._broker.cancel_order(order_id)
 
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         return self._broker.get_order_status(order_id)
 
     def get_market_data(self, symbol: str) -> dict:

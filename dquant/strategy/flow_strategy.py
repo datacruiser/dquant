@@ -63,9 +63,9 @@ class MoneyFlowStrategy(BaseStrategy):
                 raise ValueError(f"数据缺少 '{col}' 列")
 
         # 按日期分组
-        for date, group in data.groupby(data.index):
+        for date, grp in data.groupby(data.index):
             # 筛选条件
-            candidates = group.copy()
+            candidates = grp.copy()
 
             # 1. 中单净流入 >= 阈值
             if self.min_medium_flow > 0:
@@ -148,19 +148,19 @@ class SmartFlowStrategy(BaseStrategy):
                 raise ValueError(f"数据缺少 '{col}' 列")
 
         # 按日期分组
-        for date, group in data.groupby(data.index):
+        for date, grp in data.groupby(data.index):
             # 综合得分
             score = (
-                self.main_weight * group["main_net_inflow"]
-                + self.medium_weight * group["medium_net_inflow"]
-                - self.retail_weight * group["small_net_inflow"]  # 散户反向
+                self.main_weight * grp["main_net_inflow"]
+                + self.medium_weight * grp["medium_net_inflow"]
+                - self.retail_weight * grp["small_net_inflow"]  # 散户反向
             )
 
             # 使用 reset_index 安全选取 TopK（避免重复日期索引导致 loc 返回多行）
-            group_reset = group.reset_index(drop=True)
+            grp_reset = grp.reset_index(drop=True)
             score_reset = score.reset_index(drop=True)
             top_k_indices = score_reset.nlargest(self.top_k).index
-            top_stocks = group_reset.iloc[top_k_indices]
+            top_stocks = grp_reset.iloc[top_k_indices]
 
             for pos_idx, row in top_stocks.iterrows():
                 signal = Signal(
@@ -221,13 +221,13 @@ class FlowDivergenceStrategy(BaseStrategy):
         )
 
         # 按日期分组
-        for date, group in data_with_change.groupby(data_with_change.index):
+        for date, grp in data_with_change.groupby(data_with_change.index):
             # 底背离: 价格下跌但主力流入 → 买入
-            bottom_divergence = (group["price_change"] < -0.05) & (  # 价格下跌 > 5%
-                group["main_net_inflow"] > 0
+            bottom_divergence = (grp["price_change"] < -0.05) & (  # 价格下跌 > 5%
+                grp["main_net_inflow"] > 0
             )  # 主力流入
 
-            candidates = group[bottom_divergence]
+            candidates = grp[bottom_divergence]
             if len(candidates) > 0:
                 top_stocks = candidates.nlargest(
                     min(self.top_k, len(candidates)), "main_net_inflow"
@@ -247,11 +247,11 @@ class FlowDivergenceStrategy(BaseStrategy):
                     )
 
             # 顶背离: 价格上涨但主力流出 → 卖出
-            top_divergence = (group["price_change"] > 0.05) & (  # 价格上涨 > 5%
-                group["main_net_inflow"] < 0
+            top_divergence = (grp["price_change"] > 0.05) & (  # 价格上涨 > 5%
+                grp["main_net_inflow"] < 0
             )  # 主力流出
 
-            sell_candidates = group[top_divergence]
+            sell_candidates = grp[top_divergence]
             if len(sell_candidates) > 0:
                 sell_stocks = sell_candidates.nsmallest(
                     min(self.top_k, len(sell_candidates)),

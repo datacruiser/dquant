@@ -11,6 +11,10 @@ from typing import List, Optional
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
+from dquant.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class TDXLoader(DataSource):
@@ -106,7 +110,7 @@ class TDXLoader(DataSource):
                 failed.append((symbol, str(e)))
 
         if failed:
-            print(f"  [TDX] 加载失败: {len(failed)} 只")
+            logger.warning(f"  [TDX] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")
@@ -157,6 +161,7 @@ class TDXLoader(DataSource):
                 try:
                     date = pd.Timestamp(year=year, month=month, day=day)
                 except Exception:
+                    logger.debug(f"[TDX] 解析股票数据失败: {symbol}")
                     continue
 
                 records.append(
@@ -179,29 +184,12 @@ class TDXLoader(DataSource):
             return df
 
         except Exception:
+            logger.warning("[TDX] 加载数据失败")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
-
-            group["momentum_5"] = group["close"].pct_change(5)
-            group["momentum_10"] = group["close"].pct_change(10)
-            group["momentum_20"] = group["close"].pct_change(20)
-
-            returns = group["close"].pct_change()
-            group["volatility_20"] = returns.rolling(20).std()
-
-            group["ma_5"] = group["close"].rolling(5).mean()
-            group["ma_10"] = group["close"].rolling(10).mean()
-            group["ma_20"] = group["close"].rolling(20).mean()
-
-            results.append(group)
-
-        return pd.concat(results)
+        return calculate_common_factors(df)
 
 
 class TDXBlockLoader:

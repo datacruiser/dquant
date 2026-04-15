@@ -25,6 +25,14 @@ class DataSourceRegistry:
     """
 
     _sources: Dict[str, Type[DataSource]] = {}
+    _initialized: bool = False
+
+    @classmethod
+    def _ensure_initialized(cls):
+        """Lazy initialization: register built-in sources on first access."""
+        if not cls._initialized:
+            cls._initialized = True
+            _register_builtin_sources()
 
     @classmethod
     def register(cls, name: str, source_class: Type[DataSource]):
@@ -36,11 +44,13 @@ class DataSourceRegistry:
     @classmethod
     def get(cls, name: str) -> Optional[Type[DataSource]]:
         """获取数据源类"""
+        cls._ensure_initialized()
         return cls._sources.get(name)
 
     @classmethod
     def list_sources(cls) -> List[str]:
         """列出所有数据源"""
+        cls._ensure_initialized()
         return list(cls._sources.keys())
 
     @classmethod
@@ -113,9 +123,6 @@ def _register_builtin_sources():
         logger.debug(f"DatabaseLoader not available: {e}")
 
 
-_register_builtin_sources()
-
-
 class DataManager:
     """
     数据管理器
@@ -151,7 +158,7 @@ class DataManager:
         cache_dir: Optional[str] = None,
         cache_expire: int = 24,  # 缓存过期时间(小时)
         default_source: str = "akshare",
-        validate_after_load: bool = False,
+        validate_after_load: bool = True,
     ):
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.cache_expire = cache_expire
@@ -337,6 +344,7 @@ class DataManager:
         try:
             return pd.read_parquet(cache_file)
         except Exception:
+            logger.warning("[DataManager] 数据获取失败")
             return None
 
     def _save_cache(self, cache_key: str, df: pd.DataFrame):

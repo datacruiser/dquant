@@ -57,6 +57,8 @@ class RuleFactor(BaseFactor):
     规则因子 (基类)
 
     简单的技术指标因子，不需要训练。
+    子类只需实现 _compute_score(group) 方法，predict() 模板会自动处理
+    groupby/sort/dropna/DataFrame 构建。
     """
 
     def __init__(self, name: str = "RuleFactor"):
@@ -67,72 +69,38 @@ class RuleFactor(BaseFactor):
         self._is_fitted = True
         return self
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """计算因子值"""
-        # 子类实现
-        raise NotImplementedError
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """
+        计算单个 symbol 的因子得分序列。
 
+        Args:
+            group: 已按时间排序的单个 symbol 的 DataFrame
 
-class MomentumFactor(RuleFactor):
-    """动量因子"""
-
-    def __init__(self, window: int = 20):
-        super().__init__(name=f"Momentum_{window}")
-        self.window = window
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """计算动量"""
-        results = []
-
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            momentum = group["close"].pct_change(self.window)
-
-            valid = momentum.dropna()
-            for date, value in valid.items():
-                results.append(
-                    {
-                        "date": date,
-                        "symbol": symbol,
-                        "score": value,
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
-
-
-class VolatilityFactor(RuleFactor):
-    """波动率因子"""
-
-    def __init__(self, window: int = 20):
-        super().__init__(name=f"Volatility_{window}")
-        self.window = window
+        Returns:
+            与 group 索引对齐的 score Series（可含 NaN）
+        """
+        raise NotImplementedError("子类必须实现 _compute_score 或 predict")
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """计算波动率 (取负，低波动率得分高)"""
-        results = []
-
-        for symbol, group in data.groupby("symbol"):
-            group = group.sort_index()
-            returns = group["close"].pct_change()
-            volatility = returns.rolling(self.window).std()
-
-            for date, value in volatility.items():
-                if pd.notna(value):
-                    results.append(
+        """计算因子值（向量化模板）"""
+        parts = []
+        for symbol, grp in data.groupby("symbol"):
+            grp = grp.sort_index()
+            score = self._compute_score(grp)
+            if score is not None and len(score) > 0:
+                valid = score.dropna()
+                if len(valid) > 0:
+                    df = pd.DataFrame(
                         {
-                            "date": date,
                             "symbol": symbol,
-                            "score": -value,  # 负值，低波动率得分高
-                        }
+                            "score": valid.values,
+                        },
+                        index=valid.index,
                     )
+                    parts.append(df)
 
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        return df
+        if not parts:
+            return pd.DataFrame(columns=["symbol", "score"])
+        result = pd.concat(parts)
+        result.index.name = "date"
+        return result

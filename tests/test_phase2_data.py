@@ -54,15 +54,43 @@ class TestCacheKey:
 
 class TestValidateAfterLoad:
 
-    def test_validate_default_off(self):
-        """默认不启用验证"""
+    def test_validate_default_on(self):
+        """默认启用验证"""
         dm = DataManager(cache_dir=None)
-        assert not dm.validate_after_load
+        assert dm.validate_after_load
 
     def test_validate_can_be_enabled(self):
         """可以启用验证"""
         dm = DataManager(cache_dir=None, validate_after_load=True)
         assert dm.validate_after_load
+
+
+def test_live_trading_config_defaults():
+    """LiveTradingConfig has expected default values."""
+    from dquant.config import LiveTradingConfig
+
+    cfg = LiveTradingConfig()
+    assert cfg.dry_run is True
+    assert cfg.interval == 60
+    assert cfg.symbols is None
+    assert cfg.strategy_name == ""
+    assert cfg.max_drawdown == 0.15
+    assert cfg.max_daily_loss == 0.03
+    assert cfg.max_consecutive_errors == 10
+
+
+def test_xtp_broker_config_defaults():
+    """XTPBrokerConfig has expected default values."""
+    from dquant.config import XTPBrokerConfig
+
+    cfg = XTPBrokerConfig()
+    assert cfg.server == "120.27.164.138"
+    assert cfg.port == 6001
+    assert cfg.account == ""
+    assert cfg.password == ""
+    assert cfg.password_env == ""
+    assert cfg.client_id == 1
+    assert cfg.timeout == 30
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from typing import List, Optional
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.data.factors_utils import calculate_common_factors
 
 # SQL 标识符白名单校验
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -123,26 +124,7 @@ class DatabaseLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, group in df.groupby(self.symbol_col):
-            group = group.sort_index()
-
-            if "close" in group.columns:
-                group["momentum_5"] = group["close"].pct_change(5)
-                group["momentum_10"] = group["close"].pct_change(10)
-                group["momentum_20"] = group["close"].pct_change(20)
-
-                returns = group["close"].pct_change()
-                group["volatility_20"] = returns.rolling(20).std()
-
-                group["ma_5"] = group["close"].rolling(5).mean()
-                group["ma_10"] = group["close"].rolling(10).mean()
-                group["ma_20"] = group["close"].rolling(20).mean()
-
-            results.append(group)
-
-        return pd.concat(results)
+        return calculate_common_factors(df, symbol_col=self.symbol_col)
 
 
 class MongoLoader(DataSource):
@@ -236,23 +218,4 @@ class MongoLoader(DataSource):
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
         """计算技术因子"""
-        results = []
-
-        for symbol, group in df.groupby("symbol"):
-            group = group.sort_index()
-
-            if "close" in group.columns:
-                group["momentum_5"] = group["close"].pct_change(5)
-                group["momentum_10"] = group["close"].pct_change(10)
-                group["momentum_20"] = group["close"].pct_change(20)
-
-                returns = group["close"].pct_change()
-                group["volatility_20"] = returns.rolling(20).std()
-
-                group["ma_5"] = group["close"].rolling(5).mean()
-                group["ma_10"] = group["close"].rolling(10).mean()
-                group["ma_20"] = group["close"].rolling(20).mean()
-
-            results.append(group)
-
-        return pd.concat(results)
+        return calculate_common_factors(df)

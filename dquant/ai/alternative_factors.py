@@ -4,18 +4,16 @@
 包含情感因子、新闻因子、资金流向因子等。
 """
 
-from typing import Optional
-
 import pandas as pd
 
-from dquant.ai.base import BaseFactor
+from dquant.ai.base import RuleFactor
 
 # ============================================================
 # 情感因子
 # ============================================================
 
 
-class SentimentFactor(BaseFactor):
+class SentimentFactor(RuleFactor):
     """
     市场情感因子
 
@@ -29,10 +27,6 @@ class SentimentFactor(BaseFactor):
     ):
         super().__init__(name=name or f"Sentiment_{window}")
         self.window = window
-
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
 
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
@@ -71,7 +65,7 @@ class SentimentFactor(BaseFactor):
         return df
 
 
-class NewsSentimentFactor(BaseFactor):
+class NewsSentimentFactor(RuleFactor):
     """
     新闻情感因子
 
@@ -83,37 +77,23 @@ class NewsSentimentFactor(BaseFactor):
     def __init__(self, name: str = "NewsSentiment"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         计算新闻情感
 
         需要数据中包含 'news_sentiment' 列。
         """
-        results = []
+        if "news_sentiment" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "news_sentiment" in data.columns:
-            for idx, row in data.iterrows():
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": row["news_sentiment"],
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = data["news_sentiment"].values
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
-class SocialMediaFactor(BaseFactor):
+class SocialMediaFactor(RuleFactor):
     """
     社交媒体因子
 
@@ -125,41 +105,11 @@ class SocialMediaFactor(BaseFactor):
     def __init__(self, name: str = "SocialMedia"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算社交媒体因子
-
-        需要数据中包含 'social_mention_count' 或类似列。
-        """
-        results = []
-
-        if "social_mention_count" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-
-                # 讨论热度变化
-                mention_change = group["social_mention_count"].pct_change()
-
-                for date, value in mention_change.items():
-                    if pd.notna(value):
-                        results.append(
-                            {
-                                "date": date,
-                                "symbol": symbol,
-                                "score": value,
-                            }
-                        )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算社交媒体因子"""
+        if "social_mention_count" in group.columns:
+            return group["social_mention_count"].pct_change()
+        return pd.Series(dtype=float)
 
 
 # ============================================================
@@ -167,7 +117,7 @@ class SocialMediaFactor(BaseFactor):
 # ============================================================
 
 
-class NorthboundFlowFactor(BaseFactor):
+class NorthboundFlowFactor(RuleFactor):
     """
     北向资金因子
 
@@ -178,44 +128,14 @@ class NorthboundFlowFactor(BaseFactor):
         super().__init__(name=name or f"NorthboundFlow_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算北向资金因子
-
-        需要数据中包含 'northbound_flow' 列。
-        """
-        results = []
-
-        if "northbound_flow" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-
-                # 累计流入
-                flow = group["northbound_flow"].rolling(self.window).sum()
-
-                for date, value in flow.items():
-                    if pd.notna(value):
-                        results.append(
-                            {
-                                "date": date,
-                                "symbol": symbol,
-                                "score": value,
-                            }
-                        )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算北向资金因子"""
+        if "northbound_flow" in group.columns:
+            return group["northbound_flow"].rolling(self.window).sum()
+        return pd.Series(dtype=float)
 
 
-class MarginTradingFactor(BaseFactor):
+class MarginTradingFactor(RuleFactor):
     """
     融资融券因子
 
@@ -226,44 +146,14 @@ class MarginTradingFactor(BaseFactor):
         super().__init__(name=name or f"MarginTrading_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算融资融券因子
-
-        需要数据中包含 'margin_balance' 列。
-        """
-        results = []
-
-        if "margin_balance" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-
-                # 融资余额变化率
-                margin_change = group["margin_balance"].pct_change(self.window)
-
-                for date, value in margin_change.items():
-                    if pd.notna(value):
-                        results.append(
-                            {
-                                "date": date,
-                                "symbol": symbol,
-                                "score": value,
-                            }
-                        )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算融资融券因子"""
+        if "margin_balance" in group.columns:
+            return group["margin_balance"].pct_change(self.window)
+        return pd.Series(dtype=float)
 
 
-class InstitutionalFlowFactor(BaseFactor):
+class InstitutionalFlowFactor(RuleFactor):
     """
     机构资金流向因子
 
@@ -274,42 +164,12 @@ class InstitutionalFlowFactor(BaseFactor):
         super().__init__(name=name or f"InstitutionalFlow_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算机构资金流向因子
-
-        需要数据中包含 'institutional_buy' 和 'institutional_sell' 列。
-        """
-        results = []
-
-        if "institutional_buy" in data.columns and "institutional_sell" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-
-                # 净买入
-                net_buy = group["institutional_buy"] - group["institutional_sell"]
-                net_buy_ma = net_buy.rolling(self.window).mean()
-
-                for date, value in net_buy_ma.items():
-                    if pd.notna(value):
-                        results.append(
-                            {
-                                "date": date,
-                                "symbol": symbol,
-                                "score": value,
-                            }
-                        )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算机构资金流向因子"""
+        if "institutional_buy" in group.columns and "institutional_sell" in group.columns:
+            net_buy = group["institutional_buy"] - group["institutional_sell"]
+            return net_buy.rolling(self.window).mean()
+        return pd.Series(dtype=float)
 
 
 # ============================================================
@@ -317,7 +177,7 @@ class InstitutionalFlowFactor(BaseFactor):
 # ============================================================
 
 
-class ShortInterestFactor(BaseFactor):
+class ShortInterestFactor(RuleFactor):
     """
     卖空兴趣因子
 
@@ -327,37 +187,23 @@ class ShortInterestFactor(BaseFactor):
     def __init__(self, name: str = "ShortInterest"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         计算卖空兴趣因子
 
         需要数据中包含 'short_ratio' 列。
         """
-        results = []
+        if "short_ratio" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "short_ratio" in data.columns:
-            for idx, row in data.iterrows():
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": -row["short_ratio"],  # 卖空比例高 = 负面
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = -data["short_ratio"].values  # 卖空比例高 = 负面
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
-class AnalystRatingFactor(BaseFactor):
+class AnalystRatingFactor(RuleFactor):
     """
     分析师评级因子
 
@@ -368,44 +214,14 @@ class AnalystRatingFactor(BaseFactor):
         super().__init__(name=name or f"AnalystRating_{window}")
         self.window = window
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算分析师评级因子
-
-        需要数据中包含 'analyst_rating' 列 (1-5)。
-        """
-        results = []
-
-        if "analyst_rating" in data.columns:
-            for symbol, group in data.groupby("symbol"):
-                group = group.sort_index()
-
-                # 评级变化
-                rating_change = group["analyst_rating"].diff()
-
-                for date, value in rating_change.items():
-                    if pd.notna(value):
-                        results.append(
-                            {
-                                "date": date,
-                                "symbol": symbol,
-                                "score": value,
-                            }
-                        )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算分析师评级因子"""
+        if "analyst_rating" in group.columns:
+            return group["analyst_rating"].diff()
+        return pd.Series(dtype=float)
 
 
-class OptionsFlowFactor(BaseFactor):
+class OptionsFlowFactor(RuleFactor):
     """
     期权流向因子
 
@@ -415,36 +231,20 @@ class OptionsFlowFactor(BaseFactor):
     def __init__(self, name: str = "OptionsFlow"):
         super().__init__(name=name)
 
-    def fit(self, data: pd.DataFrame, target: Optional[pd.Series] = None):
-        self._is_fitted = True
-        return self
-
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
         """
         计算期权流向因子
 
         需要数据中包含 'put_call_ratio' 列。
         """
-        results = []
+        if "put_call_ratio" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "put_call_ratio" in data.columns:
-            for idx, row in data.iterrows():
-                # Put/Call 比率低 = 看多
-                score = 1 - row["put_call_ratio"]
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": score,
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = (1 - data["put_call_ratio"]).values  # Put/Call 比率低 = 看多
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 # ============================================================

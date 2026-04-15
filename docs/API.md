@@ -245,8 +245,8 @@ from dquant import (
     ATRFactor,          # ATR因子
     RSIFactor,          # RSI因子
     MACDFactor,         # MACD因子
-    BollingerFactor,    # 布林带因子
-    TrendFactor,        # 趋势因子
+    BollingerPositionFactor,    # 布林带因子
+    TrendStrengthFactor,        # 趋势因子
     VolumeRatioFactor,  # 量比因子
     PricePositionFactor, # 价格位置因子
 )
@@ -380,15 +380,16 @@ account = broker.get_account()
 positions = broker.get_positions()
 
 # 下单
-order_id = broker.order(
+from dquant.broker.base import Order
+order = broker.place_order(Order(
     symbol='600000.SH',
-    side='buy',
+    side='BUY',
     quantity=1000,
     price=10.5,
-)
+))
 
 # 撤单
-broker.cancel_order(order_id)
+broker.cancel_order(order.order_id)
 ```
 
 ---
@@ -521,8 +522,8 @@ plotter.save('./output/report.html')
 ```python
 from dquant import DQuantConfig
 
-# 从文件加载
-config = DQuantConfig.from_yaml('configs/config.yaml')
+# 从文件加载 (仅支持 JSON 格式)
+config = DQuantConfig.from_file('configs/config.json')
 
 # 从环境变量加载
 config = DQuantConfig.from_env()
@@ -530,7 +531,7 @@ config = DQuantConfig.from_env()
 # 访问配置
 print(config.data.default_source)
 print(config.backtest.initial_cash)
-print(config.broker.qmt.path)
+print(config.live.broker)
 ```
 
 ---

@@ -8,17 +8,17 @@ data:
 # 回测配置
 backtest:
   initial_cash: 1000000
-  commission: 0.0003  # 万三
+  commission_rate: 0.0003  # 万三
   slippage: 0.0001
   benchmark: 000300.SH
   
-# 策略配置
+# 策略配置 (placeholder — not mapped to any dataclass field)
 strategy:
   name: MLFactorStrategy
   top_k: 10
   rebalance_freq: 5
   
-# AI 配置
+# AI 配置 (placeholder — not mapped to any dataclass field)
 ai:
   model: xgboost
   features:

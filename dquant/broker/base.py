@@ -21,6 +21,7 @@ class Order:
     order_id: Optional[str] = None
     status: str = "PENDING"  # PENDING, FILLED, CANCELLED, REJECTED
     filled_quantity: int = 0  # 已成交数量
+    filled_price: float = 0.0  # 已成交均价
 
 
 @dataclass
@@ -79,7 +80,7 @@ class BaseBroker(ABC):
         pass
 
     @abstractmethod
-    def get_order_status(self, order_id: str) -> Order:
+    def get_order_status(self, order_id: str) -> Optional[Order]:
         """查询订单状态"""
         pass
 
