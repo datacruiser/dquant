@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Optional, Union
 
-import numpy as np
 import pandas as pd
 
 from dquant.data.base import DataSource

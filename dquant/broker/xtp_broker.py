@@ -211,7 +211,7 @@ class XTPBroker(BaseBroker):
                 new_filled = prev_filled + quantity
                 if total_quantity:
                     new_filled = min(new_filled, total_quantity)
-                
+
                 # 计算加权成交均价 (VWAP)
                 effective_quantity = new_filled - prev_filled
                 if new_filled > 0 and effective_quantity > 0:

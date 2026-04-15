@@ -101,5 +101,3 @@ class RuleFactor(BaseFactor):
         result = pd.concat(parts)
         result.index.name = "date"
         return result
-
-

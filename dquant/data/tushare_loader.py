@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Optional, Union
 
-import numpy as np
 import pandas as pd
 
 from dquant.constants import BATCH_SIZE, normalize_symbol

@@ -123,7 +123,6 @@ def _register_builtin_sources():
         logger.debug(f"DatabaseLoader not available: {e}")
 
 
-
 class DataManager:
     """
     数据管理器
