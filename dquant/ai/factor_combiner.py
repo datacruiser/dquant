@@ -227,7 +227,7 @@ class FactorCombiner:
         except ImportError:
             raise ImportError("sklearn not installed")
 
-        # 构建因子矩阵
+        # 构建因子矩阵 — 使用 pivot 代替 O(D*S*F) 三重循环
         all_dates = set()
         all_symbols = set()
         for fd in self.factor_values.values():
@@ -244,12 +244,10 @@ class FactorCombiner:
         factor_names = list(self.factor_values.keys())
         for i, name in enumerate(factor_names):
             fd = self.factor_values[name]
-            for j, date in enumerate(dates):
-                for k, symbol in enumerate(symbols):
-                    idx = j * len(symbols) + k
-                    row = fd[(fd.index == date) & (fd["symbol"] == symbol)]
-                    if len(row) > 0:
-                        X[idx, i] = row["score"].values[0]
+            pivot = fd.pivot(columns="symbol", values="score")
+            # Reindex to align with the canonical date/symbol ordering
+            pivot = pivot.reindex(index=dates, columns=symbols)
+            X[:, i] = pivot.values.flatten()
 
         # Temporal split: fit PCA on first 80% of data to avoid look-ahead bias
         split_idx = int(n_samples * 0.8)
