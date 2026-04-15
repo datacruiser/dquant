@@ -188,6 +188,38 @@ def test_all_factors():
     assert len(unexpected_failures) == 0, f"Unexpected failed factors: {unexpected_failures}"
 
 
+def test_rule_factor_template():
+    """Test RuleFactor._compute_score template produces correct DataFrame shape."""
+    from dquant.ai.base import RuleFactor
+
+    class DoubleCloseFactor(RuleFactor):
+        def _compute_score(self, group):
+            return group["close"] * 2
+
+    factor = DoubleCloseFactor(name="DoubleClose")
+    data = generate_test_data(n_stocks=3, n_days=50)
+    factor.fit(data)
+
+    result = factor.predict(data)
+    assert "symbol" in result.columns
+    assert "score" in result.columns
+    assert result.index.name == "date"
+
+    # Verify scores are 2x close price (within tolerance for dropna alignment)
+    for symbol in result["symbol"].unique():
+        sym_result = result[result["symbol"] == symbol]
+        sym_data = data[data["symbol"] == symbol]
+        # Result may have fewer rows due to NaN drop, so compare by index
+        common_idx = sym_result.index.intersection(sym_data.index)
+        if len(common_idx) > 0:
+            expected = sym_data.loc[common_idx, "close"] * 2
+            np.testing.assert_allclose(
+                sym_result.loc[common_idx, "score"].values,
+                expected.values,
+                rtol=1e-10,
+            )
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("因子测试")

@@ -361,7 +361,7 @@ class PricePositionFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         rolling_high = group["high"].rolling(self.window).max()
         rolling_low = group["low"].rolling(self.window).min()
-        position = (group["close"] - rolling_low) / (rolling_high - rolling_low)
+        position = (group["close"] - rolling_low) / (rolling_high - rolling_low).replace(0, float("nan"))
         return 1 - position
 
 
@@ -558,40 +558,16 @@ class MoneyFlowFactor(RuleFactor):
         super().__init__(name=name or f"MoneyFlow_{window}")
         self.window = window
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """计算因子值"""
-        # 需要有 net_inflow 字段
-        if "net_inflow" in data.columns:
-            def _compute(group):
-                group = group.sort_index()
-                return group["net_inflow"].rolling(self.window).mean()
-        else:
-            # 用成交量变化近似
-            def _compute(group):
-                group = group.sort_index()
-                vol_change = group["volume"].pct_change(fill_method=None)
-                price_change = group["close"].pct_change(fill_method=None)
-                flow = vol_change * price_change  # 量价配合
-                return flow.rolling(self.window).mean()
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-            score = _compute(grp)
-            if score is not None and len(score) > 0:
-                valid = score.dropna()
-                if len(valid) > 0:
-                    df = pd.DataFrame({
-                        "symbol": symbol,
-                        "score": valid.values,
-                    }, index=valid.index)
-                    parts.append(df)
-
-        if not parts:
-            return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算单 symbol 的资金流因子得分"""
+        group = group.sort_index()
+        if "net_inflow" in group.columns:
+            return group["net_inflow"].rolling(self.window).mean()
+        # 用成交量变化近似
+        vol_change = group["volume"].pct_change(fill_method=None)
+        price_change = group["close"].pct_change(fill_method=None)
+        flow = vol_change * price_change  # 量价配合
+        return flow.rolling(self.window).mean()
 
 
 class AmihudIlliquidityFactor(RuleFactor):

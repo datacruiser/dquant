@@ -83,24 +83,14 @@ class NewsSentimentFactor(RuleFactor):
 
         需要数据中包含 'news_sentiment' 列。
         """
-        results = []
+        if "news_sentiment" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "news_sentiment" in data.columns:
-            for idx, row in data.iterrows():
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": row["news_sentiment"],
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = data["news_sentiment"].values
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class SocialMediaFactor(RuleFactor):
@@ -203,24 +193,14 @@ class ShortInterestFactor(RuleFactor):
 
         需要数据中包含 'short_ratio' 列。
         """
-        results = []
+        if "short_ratio" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "short_ratio" in data.columns:
-            for idx, row in data.iterrows():
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": -row["short_ratio"],  # 卖空比例高 = 负面
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = -data["short_ratio"].values  # 卖空比例高 = 负面
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 class AnalystRatingFactor(RuleFactor):
@@ -257,26 +237,14 @@ class OptionsFlowFactor(RuleFactor):
 
         需要数据中包含 'put_call_ratio' 列。
         """
-        results = []
+        if "put_call_ratio" not in data.columns:
+            return pd.DataFrame(columns=["symbol", "score"])
 
-        if "put_call_ratio" in data.columns:
-            for idx, row in data.iterrows():
-                # Put/Call 比率低 = 看多
-                score = 1 - row["put_call_ratio"]
-                results.append(
-                    {
-                        "date": idx,
-                        "symbol": row["symbol"],
-                        "score": score,
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-
-        return df
+        df = data[["symbol"]].copy()
+        df["score"] = (1 - data["put_call_ratio"]).values  # Put/Call 比率低 = 看多
+        df["date"] = data.index
+        df["date"] = pd.to_datetime(df["date"])
+        return df.set_index("date")
 
 
 # ============================================================

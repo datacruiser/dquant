@@ -52,11 +52,13 @@ class ADXFactor(RuleFactor):
 
         # 平滑
         atr = tr.rolling(self.window).mean()
-        plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr)
-        minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr)
+        atr_safe = atr.replace(0, float("nan"))
+        plus_di = 100 * (plus_dm.rolling(self.window).mean() / atr_safe)
+        minus_di = 100 * (minus_dm.rolling(self.window).mean() / atr_safe)
 
         # DX
-        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+        di_sum = (plus_di + minus_di).replace(0, float("nan"))
+        dx = 100 * abs(plus_di - minus_di) / di_sum
 
         # ADX
         return dx.rolling(self.window).mean()
@@ -117,7 +119,7 @@ class StochasticFactor(RuleFactor):
         high_max = group["high"].rolling(self.k_window).max()
 
         # %K
-        k = 100 * (group["close"] - low_min) / (high_max - low_min)
+        k = 100 * (group["close"] - low_min) / (high_max - low_min).replace(0, float("nan"))
 
         # %D
         return k.rolling(self.d_window).mean()
@@ -161,7 +163,7 @@ class CMOFactor(RuleFactor):
         sum_up = diff.where(diff > 0, 0).rolling(self.window).sum()
         sum_down = abs(diff.where(diff < 0, 0).rolling(self.window).sum())
 
-        return 100 * (sum_up - sum_down) / (sum_up + sum_down)
+        return 100 * (sum_up - sum_down) / (sum_up + sum_down).replace(0, float("nan"))
 
 
 class MFIFactor(RuleFactor):

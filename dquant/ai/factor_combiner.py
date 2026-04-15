@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -101,11 +101,10 @@ class FactorCombiner:
 
         return df
 
-    def _calculate_ic(self, factor_data: pd.DataFrame, target: pd.Series) -> float:
-        """计算 IC"""
+    def _compute_daily_ics(self, factor_data: pd.DataFrame, target: pd.Series) -> List[float]:
+        """Compute per-day IC values shared by IC and IR weighting."""
+        ics: List[float] = []
         try:
-            ics = []
-
             for date in factor_data.index.unique():
                 factor_day = factor_data[factor_data.index == date]
 
@@ -113,17 +112,15 @@ class FactorCombiner:
                 if isinstance(target.index, pd.DatetimeIndex):
                     target_day = target[target.index == date]
                 else:
-                    # target 可能是 MultiIndex
                     try:
                         target_day = target.loc[date]
                     except Exception:
-                        logger.debug("[FactorCombiner] 计算 IC 权重失败")
+                        logger.debug("[FactorCombiner] 日期对齐失败")
                         continue
 
                 if len(factor_day) == 0 or len(target_day) == 0:
                     continue
 
-                # 合并
                 merged = factor_day.set_index("symbol")["score"].to_frame("factor")
                 if isinstance(target_day, pd.Series):
                     merged["target"] = target_day
@@ -133,49 +130,23 @@ class FactorCombiner:
                         corr = merged["factor"].corr(merged["target"], method="spearman")
                         if pd.notna(corr):
                             ics.append(corr)
-
-            return np.mean(ics) if ics else 0.0
         except Exception:
-            logger.debug("[FactorCombiner] 计算 IC 权重失败")
-            return 0.0
+            logger.debug("[FactorCombiner] 计算每日 IC 失败")
+        return ics
+
+    def _calculate_ic(self, factor_data: pd.DataFrame, target: pd.Series) -> float:
+        """计算 IC"""
+        ics = self._compute_daily_ics(factor_data, target)
+        return np.mean(ics) if ics else 0.0
 
     def _calculate_ir(self, factor_data: pd.DataFrame, target: pd.Series) -> float:
         """计算 IR"""
-        try:
-            ics = []
-
-            for date in factor_data.index.unique():
-                factor_day = factor_data[factor_data.index == date]
-
-                if isinstance(target.index, pd.DatetimeIndex):
-                    target_day = target[target.index == date]
-                else:
-                    try:
-                        target_day = target.loc[date]
-                    except Exception:
-                        logger.debug("[FactorCombiner] 计算 PCA 失败")
-                        continue
-
-                if len(factor_day) == 0 or len(target_day) == 0:
-                    continue
-
-                merged = factor_day.set_index("symbol")["score"].to_frame("factor")
-                if isinstance(target_day, pd.Series):
-                    merged["target"] = target_day
-                    merged = merged.dropna()
-
-                    if len(merged) > 1:
-                        corr = merged["factor"].corr(merged["target"], method="spearman")
-                        if pd.notna(corr):
-                            ics.append(corr)
-
-            ic_mean = np.mean(ics) if ics else 0.0
-            ic_std = np.std(ics) if len(ics) > 1 else 1.0
-
-            return ic_mean / ic_std if ic_std > 0 else 0.0
-        except Exception:
-            logger.debug("[FactorCombiner] 计算 IR 权重失败")
+        ics = self._compute_daily_ics(factor_data, target)
+        if not ics:
             return 0.0
+        ic_mean = np.mean(ics)
+        ic_std = np.std(ics) if len(ics) > 1 else 1.0
+        return ic_mean / ic_std if ic_std > 0 else 0.0
 
     def combine(
         self,
@@ -232,7 +203,7 @@ class FactorCombiner:
 
         weights = {}
         for name, w in self.weights.items():
-            weights[name] = w.ic / total_ic if w.ic >= 0 else -w.ic / total_ic
+            weights[name] = w.ic / total_ic
 
         return self._combine_equal(weights)
 
@@ -245,7 +216,7 @@ class FactorCombiner:
 
         weights = {}
         for name, w in self.weights.items():
-            weights[name] = w.ir / total_ir if w.ir >= 0 else -w.ir / total_ir
+            weights[name] = w.ir / total_ir
 
         return self._combine_equal(weights)
 

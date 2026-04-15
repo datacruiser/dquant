@@ -98,7 +98,7 @@ class RiceQuantLoader(DataSource):
                 all_data.append(df)
 
         except Exception as e:
-            print(f"  [RiceQuant] Error: {e}")
+            logger.warning(f"  [RiceQuant] Error: {e}")
 
         if not all_data:
             raise ValueError("No data loaded")

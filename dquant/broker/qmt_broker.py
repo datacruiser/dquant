@@ -354,6 +354,7 @@ else:
             orders = xttrade.get_stock_orders(self.account)
             for o in orders:
                 if str(o.order_id) == order_id:
+                    # xttrade order_side: 23=BUY, 24=SELL
                     side = "BUY" if getattr(o, "order_side", 0) == 23 else "SELL"
                     filled_qty = getattr(o, "traded_volume", 0)
                     return Order(

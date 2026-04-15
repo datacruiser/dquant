@@ -85,7 +85,7 @@ class JQDataLoader(DataSource):
 
         jq.auth(account, password)
         self._jq = jq
-        print("[JQData] Authenticated")
+        logger.info("[JQData] Authenticated")
 
     def load(self) -> pd.DataFrame:
         """加载数据"""
@@ -104,13 +104,13 @@ class JQDataLoader(DataSource):
                     all_data.append(df)
 
                 if (i + 1) % 50 == 0:
-                    print(f"  [JQData] 已加载 {i + 1}/{len(symbol_list)} 只股票")
+                    logger.info(f"  [JQData] 已加载 {i + 1}/{len(symbol_list)} 只股票")
 
             except Exception as e:
                 failed.append((symbol, str(e)))
 
         if failed:
-            print(f"  [JQData] 加载失败: {len(failed)} 只")
+            logger.warning(f"  [JQData] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")

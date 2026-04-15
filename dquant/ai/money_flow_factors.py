@@ -35,43 +35,17 @@ class MediumFlowFactor(RuleFactor):
         super().__init__(name=name or f"MediumFlow_{window}")
         self.window = window
 
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
+        """计算中户资金流因子"""
+        flow_ma = group["medium_net_inflow"].rolling(self.window).mean()
+        flow_std = group["medium_net_inflow"].rolling(self.window * 2).std()
+        return flow_ma / (flow_std + 1e-8)
+
     def predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算因子值
-
-        Args:
-            data: 包含 'medium_net_inflow' 列的 DataFrame
-
-        Returns:
-            DataFrame with columns: date, symbol, score
-        """
+        """计算因子值"""
         if "medium_net_inflow" not in data.columns:
-            raise ValueError("数据缺少 'medium_net_inflow' 列")
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-
-            # 中单净流入 N 日均值
-            flow_ma = grp["medium_net_inflow"].rolling(self.window).mean()
-
-            # 标准化
-            flow_std = grp["medium_net_inflow"].rolling(self.window * 2).std()
-            score = flow_ma / (flow_std + 1e-8)
-
-            valid = score.dropna()
-            if len(valid) > 0:
-                df = pd.DataFrame({
-                    "symbol": symbol,
-                    "score": valid.values,
-                }, index=valid.index)
-                parts.append(df)
-
-        if not parts:
             return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+        return super().predict(data)
 
 
 class MainForceFactor(RuleFactor):
@@ -94,35 +68,17 @@ class MainForceFactor(RuleFactor):
         super().__init__(name=name or f"MainForce_{window}")
         self.window = window
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算主力资金因子"""
+        flow_ma = group["main_net_inflow"].rolling(self.window).mean()
+        flow_std = group["main_net_inflow"].rolling(self.window * 2).std()
+        return flow_ma / (flow_std + 1e-8)
+
+    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        """计算因子值"""
         if "main_net_inflow" not in data.columns:
-            raise ValueError("数据缺少 'main_net_inflow' 列")
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-
-            # 主力净流入 N 日均值
-            flow_ma = grp["main_net_inflow"].rolling(self.window).mean()
-
-            # 标准化
-            flow_std = grp["main_net_inflow"].rolling(self.window * 2).std()
-            score = flow_ma / (flow_std + 1e-8)
-
-            valid = score.dropna()
-            if len(valid) > 0:
-                df = pd.DataFrame({
-                    "symbol": symbol,
-                    "score": valid.values,
-                }, index=valid.index)
-                parts.append(df)
-
-        if not parts:
             return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+        return super().predict(data)
 
 
 class RetailFlowFactor(RuleFactor):
@@ -147,39 +103,20 @@ class RetailFlowFactor(RuleFactor):
         self.window = window
         self.reverse = reverse  # 是否反向
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算散户资金流因子"""
+        flow_ma = group["small_net_inflow"].rolling(self.window).mean()
+        flow_std = group["small_net_inflow"].rolling(self.window * 2).std()
+        score = flow_ma / (flow_std + 1e-8)
+        if self.reverse:
+            score = -score
+        return score
+
+    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        """计算因子值"""
         if "small_net_inflow" not in data.columns:
-            raise ValueError("数据缺少 'small_net_inflow' 列")
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-
-            # 小单净流入 N 日均值
-            flow_ma = grp["small_net_inflow"].rolling(self.window).mean()
-
-            # 标准化
-            flow_std = grp["small_net_inflow"].rolling(self.window * 2).std()
-            score = flow_ma / (flow_std + 1e-8)
-
-            # 反向（散户流入记为负分）
-            if self.reverse:
-                score = -score
-
-            valid = score.dropna()
-            if len(valid) > 0:
-                df = pd.DataFrame({
-                    "symbol": symbol,
-                    "score": valid.values,
-                }, index=valid.index)
-                parts.append(df)
-
-        if not parts:
             return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+        return super().predict(data)
 
 
 class SmartFlowFactor(RuleFactor):
@@ -220,51 +157,33 @@ class SmartFlowFactor(RuleFactor):
         self.medium_weight = medium_weight
         self.retail_weight = retail_weight
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算聪明钱因子"""
+        main_ma = group["main_net_inflow"].rolling(self.window).mean()
+        medium_ma = group["medium_net_inflow"].rolling(self.window).mean()
+        retail_ma = group["small_net_inflow"].rolling(self.window).mean()
+
+        main_std = group["main_net_inflow"].rolling(self.window * 2).std()
+        medium_std = group["medium_net_inflow"].rolling(self.window * 2).std()
+        retail_std = group["small_net_inflow"].rolling(self.window * 2).std()
+
+        main_score = main_ma / (main_std + 1e-8)
+        medium_score = medium_ma / (medium_std + 1e-8)
+        retail_score = retail_ma / (retail_std + 1e-8)
+
+        return (
+            self.main_weight * main_score
+            + self.medium_weight * medium_score
+            - self.retail_weight * retail_score  # 散户反向
+        )
+
+    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        """计算因子值"""
         required_cols = ["main_net_inflow", "medium_net_inflow", "small_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
-                raise ValueError(f"数据缺少 '{col}' 列")
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-
-            # 各类资金 N 日均值
-            main_ma = grp["main_net_inflow"].rolling(self.window).mean()
-            medium_ma = grp["medium_net_inflow"].rolling(self.window).mean()
-            retail_ma = grp["small_net_inflow"].rolling(self.window).mean()
-
-            # 标准化
-            main_std = grp["main_net_inflow"].rolling(self.window * 2).std()
-            medium_std = grp["medium_net_inflow"].rolling(self.window * 2).std()
-            retail_std = grp["small_net_inflow"].rolling(self.window * 2).std()
-
-            main_score = main_ma / (main_std + 1e-8)
-            medium_score = medium_ma / (medium_std + 1e-8)
-            retail_score = retail_ma / (retail_std + 1e-8)
-
-            # 综合得分
-            score = (
-                self.main_weight * main_score
-                + self.medium_weight * medium_score
-                - self.retail_weight * retail_score  # 散户反向
-            )
-
-            valid = score.dropna()
-            if len(valid) > 0:
-                df = pd.DataFrame({
-                    "symbol": symbol,
-                    "score": valid.values,
-                }, index=valid.index)
-                parts.append(df)
-
-        if not parts:
-            return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+                return pd.DataFrame(columns=["symbol", "score"])
+        return super().predict(data)
 
 
 class FlowDivergenceFactor(RuleFactor):
@@ -286,45 +205,26 @@ class FlowDivergenceFactor(RuleFactor):
         super().__init__(name=name or f"FlowDivergence_{window}")
         self.window = window
 
-    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算资金流背离因子"""
+        price_ret = group["close"].pct_change(self.window)
+        flow_cumsum = group["main_net_inflow"].rolling(self.window).sum()
+
+        price_std = price_ret.rolling(self.window * 2).std()
+        flow_std = flow_cumsum.rolling(self.window * 2).std()
+
+        price_z = price_ret / (price_std + 1e-8)
+        flow_z = flow_cumsum / (flow_std + 1e-8)
+
+        # 背离得分
+        # 价格上涨但资金流出 -> 负分
+        # 价格下跌但资金流入 -> 正分
+        return flow_z - price_z
+
+    def predict(self, data: pd.DataFrame) -> pd.DataFrame:
+        """计算因子值"""
         required_cols = ["close", "main_net_inflow"]
         for col in required_cols:
             if col not in data.columns:
-                raise ValueError(f"数据缺少 '{col}' 列")
-
-        parts = []
-        for symbol, grp in data.groupby("symbol"):
-            grp = grp.sort_index()
-
-            # 价格变化率
-            price_ret = grp["close"].pct_change(self.window)
-
-            # 主力资金累计净流入
-            flow_cumsum = grp["main_net_inflow"].rolling(self.window).sum()
-
-            # 标准化
-            price_std = price_ret.rolling(self.window * 2).std()
-            flow_std = flow_cumsum.rolling(self.window * 2).std()
-
-            price_z = price_ret / (price_std + 1e-8)
-            flow_z = flow_cumsum / (flow_std + 1e-8)
-
-            # 背离得分
-            # 价格上涨但资金流出 -> 负分
-            # 价格下跌但资金流入 -> 正分
-            score = flow_z - price_z
-
-            valid = score.dropna()
-            if len(valid) > 0:
-                df = pd.DataFrame({
-                    "symbol": symbol,
-                    "score": valid.values,
-                }, index=valid.index)
-                parts.append(df)
-
-        if not parts:
-            return pd.DataFrame(columns=["symbol", "score"])
-        result = pd.concat(parts)
-        result.index.name = "date"
-        return result
+                return pd.DataFrame(columns=["symbol", "score"])
+        return super().predict(data)

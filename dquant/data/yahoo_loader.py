@@ -10,12 +10,15 @@ from typing import List, Optional, Union
 import pandas as pd
 
 from dquant.data.base import DataSource
+from dquant.logger import get_logger
 from dquant.data.factors_utils import (
     calculate_bollinger,
     calculate_common_factors,
     calculate_macd,
     calculate_rsi,
 )
+
+logger = get_logger(__name__)
 
 
 class YahooLoader(DataSource):
@@ -104,7 +107,7 @@ class YahooLoader(DataSource):
                 failed.append((symbol, str(e)))
 
         if failed:
-            print(f"  [Yahoo] 加载失败: {len(failed)} 只")
+            logger.warning(f"  [Yahoo] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")

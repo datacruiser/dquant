@@ -110,7 +110,7 @@ class TDXLoader(DataSource):
                 failed.append((symbol, str(e)))
 
         if failed:
-            print(f"  [TDX] 加载失败: {len(failed)} 只")
+            logger.warning(f"  [TDX] 加载失败: {len(failed)} 只")
 
         if not all_data:
             raise ValueError("No data loaded")
