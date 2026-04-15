@@ -401,7 +401,9 @@ class PerformanceMonitor:
 
             self.stats[name]["calls"] += 1
             self.stats[name]["total_time"] += elapsed
-            self.stats[name]["avg_time"] = self.stats[name]["total_time"] / self.stats[name]["calls"]
+            self.stats[name]["avg_time"] = (
+                self.stats[name]["total_time"] / self.stats[name]["calls"]
+            )
             self.stats[name]["max_time"] = max(self.stats[name]["max_time"], elapsed)
             self.stats[name]["min_time"] = min(self.stats[name]["min_time"], elapsed)
 

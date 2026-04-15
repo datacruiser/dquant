@@ -108,9 +108,9 @@ class TestCalculateRSI:
         rsi = calculate_rsi(prices, period=14)
 
         valid = rsi.dropna()
-        assert (valid >= 0).all() and (valid <= 100).all(), (
-            f"RSI out of range: min={valid.min()}, max={valid.max()}"
-        )
+        assert (valid >= 0).all() and (
+            valid <= 100
+        ).all(), f"RSI out of range: min={valid.min()}, max={valid.max()}"
 
     def test_rsi_length_matches_input(self):
         """RSI output has same length as input."""

@@ -90,10 +90,13 @@ class RuleFactor(BaseFactor):
             if score is not None and len(score) > 0:
                 valid = score.dropna()
                 if len(valid) > 0:
-                    df = pd.DataFrame({
-                        "symbol": symbol,
-                        "score": valid.values,
-                    }, index=valid.index)
+                    df = pd.DataFrame(
+                        {
+                            "symbol": symbol,
+                            "score": valid.values,
+                        },
+                        index=valid.index,
+                    )
                     parts.append(df)
 
         if not parts:

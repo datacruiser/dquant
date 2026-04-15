@@ -40,7 +40,7 @@ def calculate_common_factors(
     if "close" not in df.columns:
         return df
 
-    def _group_factors(group: pd.DataFrame) -> pd.DataFrame:
+    def _compute_factors(group: pd.DataFrame) -> pd.DataFrame:
         group = group.sort_index()
         close = group["close"]
 
@@ -66,7 +66,14 @@ def calculate_common_factors(
 
         return group
 
-    return df.groupby(symbol_col, group_keys=False).apply(_group_factors)
+    # Use explicit loop instead of groupby.apply to avoid pandas version
+    # compatibility issues with include_groups behavior
+    parts = []
+    for _key, group in df.groupby(symbol_col):
+        parts.append(_compute_factors(group))
+    if not parts:
+        return df
+    return pd.concat(parts)
 
 
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:

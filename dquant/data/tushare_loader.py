@@ -314,9 +314,9 @@ class TushareLoader(DataSource):
 
             # 扩展均线窗口
             df.loc[grp.index, "ma_60"] = grp["close"].rolling(60).mean()
-            df.loc[grp.index, "bias_60"] = (
-                grp["close"] - df.loc[grp.index, "ma_60"]
-            ) / df.loc[grp.index, "ma_60"]
+            df.loc[grp.index, "bias_60"] = (grp["close"] - df.loc[grp.index, "ma_60"]) / df.loc[
+                grp.index, "ma_60"
+            ]
 
             # 成交量 10 日均线
             df.loc[grp.index, "volume_ma_10"] = grp["volume"].rolling(10).mean()
@@ -324,9 +324,7 @@ class TushareLoader(DataSource):
             # 价格位置
             low_min = grp["low"].rolling(20).min()
             high_max = grp["high"].rolling(20).max()
-            df.loc[grp.index, "price_position_20"] = (grp["close"] - low_min) / (
-                high_max - low_min
-            )
+            df.loc[grp.index, "price_position_20"] = (grp["close"] - low_min) / (high_max - low_min)
 
         return df
 

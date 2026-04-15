@@ -267,9 +267,7 @@ class EaseOfMovementFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         """计算 EOM"""
         # Distance Moved
-        dm = (group["high"] + group["low"]) / 2 - (
-            group["high"].shift() + group["low"].shift()
-        ) / 2
+        dm = (group["high"] + group["low"]) / 2 - (group["high"].shift() + group["low"].shift()) / 2
 
         # Box Ratio
         br = (group["volume"] / 100000000) / (group["high"] - group["low"])

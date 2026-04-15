@@ -250,8 +250,8 @@ class XTPBroker(BaseBroker):
         """从订单/成交事件中提取累计成交量。"""
         # 收紧到 XTP 官方 SDK 常见的累计成交量字段
         for attr in (
-            "qty_traded",       # XTPOrderInfo 官方字段
-            "traded_volume",    # 常见 Python 封装衍生字段
+            "qty_traded",  # XTPOrderInfo 官方字段
+            "traded_volume",  # 常见 Python 封装衍生字段
         ):
             value = getattr(event, attr, None)
             if value is not None:

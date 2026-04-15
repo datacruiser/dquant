@@ -8,6 +8,7 @@ from dquant.broker.xtp_broker import XTPBroker
 
 class _FakeXTPAPI:
     """Mock XTP C++ SDK API Behavior"""
+
     def __init__(self):
         self.callbacks = {}
         self.query_orders_result = []
@@ -44,30 +45,28 @@ def broker():
 class TestXTPBrokerContract:
     """
     Contract Tests for XTPBroker.
-    Verifies that XTPBroker correctly translates XTP API callbacks and state 
+    Verifies that XTPBroker correctly translates XTP API callbacks and state
     into standard dquant Order semantics.
     """
 
     def test_order_lifecycle_callbacks(self, broker):
         """Contract: Order progresses through PENDING -> PARTIAL_FILLED -> FILLED via callbacks."""
-        order = Order(symbol="000001.SZ", side="BUY", quantity=1_000, price=10.0, order_type="LIMIT")
+        order = Order(
+            symbol="000001.SZ", side="BUY", quantity=1_000, price=10.0, order_type="LIMIT"
+        )
         result = broker.place_order(order)
 
         assert result.status == "PENDING"
         assert result.order_id == "123456"
 
         # 1. API Callback: Order accepted
-        broker._api.callbacks["on_order"](
-            SimpleNamespace(order_xt_id=123456, order_status=1), None
-        )
+        broker._api.callbacks["on_order"](SimpleNamespace(order_xt_id=123456, order_status=1), None)
         status = broker.get_order_status(result.order_id)
         assert status.status == "PARTIAL_FILLED"
 
         # 2. API Callback: Partial fill
         broker._api.callbacks["on_trade"](
-            SimpleNamespace(
-                order_xt_id=123456, stock_code="000001.SZ", quantity=400, price=10.05
-            ),
+            SimpleNamespace(order_xt_id=123456, stock_code="000001.SZ", quantity=400, price=10.05),
             None,
         )
         status = broker.get_order_status(result.order_id)
@@ -75,9 +74,7 @@ class TestXTPBrokerContract:
         assert status.filled_price == 10.05
 
         # 3. API Callback: Fully filled
-        broker._api.callbacks["on_order"](
-            SimpleNamespace(order_xt_id=123456, order_status=2), None
-        )
+        broker._api.callbacks["on_order"](SimpleNamespace(order_xt_id=123456, order_status=2), None)
         status = broker.get_order_status(result.order_id)
         assert status.status == "FILLED"
 
@@ -175,14 +172,18 @@ class TestXTPBrokerContract:
         )
 
         broker._api.callbacks["on_trade"](
-            SimpleNamespace(order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=400, price=10.0),
+            SimpleNamespace(
+                order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=400, price=10.0
+            ),
             None,
         )
         status = broker.get_order_status(result.order_id)
         assert status.filled_price == 10.0
 
         broker._api.callbacks["on_trade"](
-            SimpleNamespace(order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=600, price=10.5),
+            SimpleNamespace(
+                order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=600, price=10.5
+            ),
             None,
         )
         status = broker.get_order_status(result.order_id)
@@ -207,7 +208,9 @@ class TestXTPBrokerContract:
 
         # Trade event provides incremental volume
         broker._api.callbacks["on_trade"](
-            SimpleNamespace(order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=200, price=10.5),
+            SimpleNamespace(
+                order_xt_id=int(result.order_id), stock_code="000001.SZ", quantity=200, price=10.5
+            ),
             None,
         )
         status = broker.get_order_status(result.order_id)

@@ -144,7 +144,9 @@ class QlibModelAdapter(BaseFactor):
 
                 # 注意: 实际 Qlib 模型需要特定格式的数据
                 # 这里只是示例，真实场景需要按照 Qlib 文档准备数据
-                logger.info(f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features")
+                logger.info(
+                    f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features"
+                )
 
         except Exception as e:
             logger.error(f"[QlibAdapter] Training error: {e}")

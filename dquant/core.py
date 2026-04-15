@@ -832,8 +832,10 @@ class Engine:
 
         return {
             "best_params": best_params,
-            "best_score": getattr(best_result.metrics, actual_metric, best_score)
-            if best_result is not None
-            else best_score,
+            "best_score": (
+                getattr(best_result.metrics, actual_metric, best_score)
+                if best_result is not None
+                else best_score
+            ),
             "best_result": best_result,
         }

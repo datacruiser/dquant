@@ -361,7 +361,9 @@ class PricePositionFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         rolling_high = group["high"].rolling(self.window).max()
         rolling_low = group["low"].rolling(self.window).min()
-        position = (group["close"] - rolling_low) / (rolling_high - rolling_low).replace(0, float("nan"))
+        position = (group["close"] - rolling_low) / (rolling_high - rolling_low).replace(
+            0, float("nan")
+        )
         return 1 - position
 
 
