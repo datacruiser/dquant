@@ -10,13 +10,13 @@ from typing import List, Optional, Union
 import pandas as pd
 
 from dquant.data.base import DataSource
-from dquant.logger import get_logger
 from dquant.data.factors_utils import (
     calculate_bollinger,
     calculate_common_factors,
     calculate_macd,
     calculate_rsi,
 )
+from dquant.logger import get_logger
 
 logger = get_logger(__name__)
 

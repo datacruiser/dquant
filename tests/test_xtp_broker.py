@@ -1,6 +1,7 @@
-import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from dquant.broker.base import Order
 from dquant.broker.xtp_broker import XTPBroker
