@@ -55,7 +55,7 @@ class XTPBroker(BaseBroker):
         config: Optional["XTPBrokerConfig"] = None,
         /,
         # Backward-compatible individual params
-        server: str = "120.27.164.138",  # XTP 服务器地址
+        server: str = "",  # XTP 服务器地址，需通过配置或环境变量提供
         port: int = 6001,
         account: str = "",
         password: str = "",

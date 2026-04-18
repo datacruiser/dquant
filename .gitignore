@@ -109,6 +109,10 @@ positions.json
 orders.json
 account_info.json
 
+# 审计日志
+trade_journal/
+**/*.jsonl
+
 # ⚠️ 数据库文件
 *.db-journal
 *.sqlite-journal

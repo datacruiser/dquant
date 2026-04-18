@@ -14,7 +14,7 @@
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-197%20passed-brightgreen?style=flat)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-378%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 

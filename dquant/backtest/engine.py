@@ -2,7 +2,7 @@
 回测引擎
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -100,6 +100,7 @@ class BacktestEngine:
 
         # 预计算前日收盘价（用于涨跌停判断）
         self._prev_close: Dict[str, float] = {}
+        self._warned_no_names = False
 
     def run(self) -> BacktestResult:
         """
@@ -141,7 +142,7 @@ class BacktestEngine:
             )
 
             # 首次检测到无 symbol_name 列时发出一次性警告
-            if names is None and not hasattr(self, "_warned_no_names"):
+            if names is None and not self._warned_no_names:
                 logger.warning(
                     "[BACKTEST] 数据缺少 symbol_name 列，ST 股票涨跌停检测将退化为主板规则 (±10%)。"
                     "建议在数据源中添加 symbol_name 字段以启用 ST 判断。"
@@ -251,7 +252,7 @@ class BacktestEngine:
         prices: Dict[str, float],
         opens: Dict[str, float],
         names: Optional[Dict[str, str]] = None,
-    ) -> tuple:
+    ) -> Tuple[set, set]:
         """
         检查涨跌停股票
 
@@ -312,7 +313,10 @@ class BacktestEngine:
             # 查找下一个交易日 (T+1)
             idx = date_index_map.get(sig_date)
             if idx is None:
-                # 信号日期不在交易日列表中，找最近的后一个交易日
+                logger.debug(
+                    f"[BACKTEST] 信号日期 {sig_date.date()} 不在交易日列表中，跳过: "
+                    f"{sig.symbol} {sig.signal_type.name}"
+                )
                 continue
 
             if idx + 1 < len(sorted_dates):

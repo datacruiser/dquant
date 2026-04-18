@@ -19,16 +19,16 @@ class Position:
     """持仓"""
 
     symbol: str
-    shares: float
+    shares: int
     avg_cost: float
     current_price: float = 0.0
     timestamp: Optional[datetime] = None
-    locked_shares: float = 0.0  # T+1 冻结的股数
+    locked_shares: int = 0  # T+1 冻结的股数
 
     @property
-    def available_shares(self) -> float:
+    def available_shares(self) -> int:
         """可用持仓（总股数 - T+1冻结股数）"""
-        return max(0.0, self.shares - self.locked_shares)
+        return max(0, self.shares - self.locked_shares)
 
     @property
     def market_value(self) -> float:
@@ -107,7 +107,7 @@ class Portfolio:
         self.nav_history.append(self.nav)
         self.timestamp_history.append(timestamp)
 
-    def buy(self, symbol: str, shares: float, price: float, commission: float = 0):
+    def buy(self, symbol: str, shares: int, price: float, commission: float = 0):
         """买入"""
         # 整手买入
         shares = int(shares // MIN_SHARES) * MIN_SHARES
@@ -144,7 +144,7 @@ class Portfolio:
     def sell(
         self,
         symbol: str,
-        shares: float,
+        shares: int,
         price: float,
         commission: float = 0,
         stamp_duty: float = DEFAULT_STAMP_DUTY,
@@ -160,7 +160,7 @@ class Portfolio:
         if available <= 0:
             return
 
-        shares = min(shares, available)
+        shares = min(int(shares), available)
 
         # 整手处理：向下取整到 MIN_SHARES 的整数倍
         lot_shares = int(shares // MIN_SHARES) * MIN_SHARES
@@ -182,13 +182,13 @@ class Portfolio:
         pos.shares -= lot_shares
         pos.locked_shares = min(pos.locked_shares, pos.shares)
 
-        if pos.shares < 1e-5:
+        if pos.shares == 0:
             del self.positions[symbol]
         elif pos.shares < MIN_SHARES:
             # 零股补偿：仅补偿未锁定部分，锁定部分因 T+1 限制丢弃
-            unlocked = max(0.0, pos.shares - pos.locked_shares)
+            unlocked = max(0, pos.shares - pos.locked_shares)
             if unlocked > 0:
-                self.cash += unlocked * price
+                self.cash += unlocked * price * (1 - commission - stamp_duty)
             del self.positions[symbol]
 
     def rebalance(

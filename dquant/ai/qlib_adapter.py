@@ -290,7 +290,13 @@ class QlibFactorConverter:
             expr = expr.replace("$low", "low")
             expr = expr.replace("$volume", "volume")
 
-            # TODO: 实现 Ref, Mean, Std 等函数
+            # 安全检查：仅允许算术运算和列名引用
+            import re
+
+            safe_pattern = re.compile(r"^[0-9a-zA-Z_\s\.\+\-\*/\(\),]+$")
+            if not safe_pattern.match(expr):
+                logger.warning(f"[QlibAdapter] 表达式包含不安全字符，拒绝执行: {expr}")
+                return pd.Series(0, index=data.index)
 
             try:
                 return data.eval(expr)

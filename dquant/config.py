@@ -147,12 +147,27 @@ class LiveTradingConfig:
     max_daily_loss: float = 0.03  # 单日最大亏损
     max_consecutive_errors: int = 10  # 连续错误上限
 
+    @classmethod
+    def from_live_config(cls, config: LiveConfig, **overrides) -> "LiveTradingConfig":
+        """从 LiveConfig 创建 LiveTradingConfig（共享默认值）"""
+        return cls(
+            dry_run=overrides.get("dry_run", config.dry_run),
+            interval=overrides.get("interval", config.interval),
+            max_drawdown=overrides.get("max_drawdown", config.max_drawdown),
+            max_daily_loss=overrides.get("max_daily_loss", config.max_daily_loss),
+            max_consecutive_errors=overrides.get(
+                "max_consecutive_errors", config.max_consecutive_errors
+            ),
+            symbols=overrides.get("symbols"),
+            strategy_name=overrides.get("strategy_name", ""),
+        )
+
 
 @dataclass
 class XTPBrokerConfig:
     """XTP 券商连接配置"""
 
-    server: str = "120.27.164.138"
+    server: str = ""
     port: int = 6001
     account: str = ""
     password: str = ""

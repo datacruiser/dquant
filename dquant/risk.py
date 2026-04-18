@@ -4,7 +4,10 @@
 提供仓位管理、风险控制、资金管理等功能。
 """
 
+import hashlib
+import hmac
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -221,8 +224,15 @@ class RiskManager:
         # 尝试恢复已有状态
         self.restore_state()
 
+    @staticmethod
+    def _sign_state(state: dict) -> str:
+        """计算状态 HMAC 签名"""
+        secret = os.environ.get("DQUANT_RISK_SECRET", "dquant-default-risk-key").encode()
+        payload = json.dumps(state, sort_keys=True).encode()
+        return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
     def save_state(self):
-        """保存当前风控状态到文件"""
+        """保存当前风控状态到文件（含 HMAC 签名）"""
         if self._state_path is None:
             return
 
@@ -233,6 +243,9 @@ class RiskManager:
             "daily_start_date": self.daily_start_date,
             "halt_trading": self.halt_trading,
         }
+        state["_signature"] = self._sign_state(
+            {k: v for k, v in state.items() if k != "_signature"}
+        )
         try:
             with open(self._state_path, "w") as f:
                 json.dump(state, f, indent=2)
@@ -241,7 +254,7 @@ class RiskManager:
 
     def restore_state(self) -> bool:
         """
-        从文件恢复风控状态
+        从文件恢复风控状态（验证 HMAC 签名）
 
         Returns:
             是否成功恢复
@@ -252,6 +265,14 @@ class RiskManager:
         try:
             with open(self._state_path, "r") as f:
                 state = json.load(f)
+
+            # 验证签名
+            saved_sig = state.pop("_signature", None)
+            expected_sig = self._sign_state(state)
+            if saved_sig != expected_sig:
+                logger.warning("[RiskManager] 状态文件签名不匹配，可能被篡改，使用安全默认值")
+                self.halt_trading = True
+                return False
 
             self.peak_value = state.get("peak_value", 0.0)
             self.current_drawdown = state.get("current_drawdown", 0.0)
@@ -314,7 +335,8 @@ class RiskManager:
         if triggered:
             self.halt_trading = True
 
-        self.save_state()
+        if triggered or self.peak_value == current_value:
+            self.save_state()
         return triggered, self.current_drawdown
 
     def reset_daily_start(self, current_value: float, date_str: str):
@@ -345,8 +367,7 @@ class RiskManager:
 
         if triggered:
             self.halt_trading = True
-
-        self.save_state()
+            self.save_state()
         return triggered, daily_loss
 
     def should_halt(self) -> bool:

@@ -232,12 +232,16 @@ class Engine:
             logger.info(f"[LIVE] 收到信号 {signum}，准备优雅关机...")
             self._running.clear()
 
-        original_sigint = signal.getsignal(signal.SIGINT)
-        original_sigterm = signal.getsignal(signal.SIGTERM)
-        signal.signal(signal.SIGINT, _shutdown_handler)
-        signal.signal(signal.SIGTERM, _shutdown_handler)
+        original_sigint = None
+        original_sigterm = None
+        if threading.current_thread() is threading.main_thread():
+            original_sigint = signal.getsignal(signal.SIGINT)
+            original_sigterm = signal.getsignal(signal.SIGTERM)
+            signal.signal(signal.SIGINT, _shutdown_handler)
+            signal.signal(signal.SIGTERM, _shutdown_handler)
 
         consecutive_errors = 0
+        total_reconnect_failures = 0
         last_date_str = ""
 
         try:
@@ -253,8 +257,13 @@ class Engine:
                         # 0. 检查 broker 连接
                         if not self.broker.is_connected():
                             if not self._try_reconnect(**kwargs):
+                                total_reconnect_failures += 1
+                                if total_reconnect_failures >= 50:
+                                    logger.error("[LIVE] 累计重连失败 50 次，停止交易循环")
+                                    break
                                 time.sleep(interval)
                                 continue
+                            total_reconnect_failures = 0
 
                         # 1. 检查交易日
                         if not is_trading_day(now):
@@ -415,8 +424,10 @@ class Engine:
                     )
 
             # 清理
-            signal.signal(signal.SIGINT, original_sigint)
-            signal.signal(signal.SIGTERM, original_sigterm)
+            if original_sigint is not None:
+                signal.signal(signal.SIGINT, original_sigint)
+            if original_sigterm is not None:
+                signal.signal(signal.SIGTERM, original_sigterm)
             self.broker.disconnect()
             logger.info("[LIVE] 交易会话结束")
 
@@ -793,42 +804,49 @@ class Engine:
 
         minimize_metrics = {"max_drawdown", "volatility"}
 
-        for values in product(*param_values):
-            params = dict(zip(param_names, values))
+        try:
+            for values in product(*param_values):
+                params = dict(zip(param_names, values))
 
-            # 更新策略参数
-            for name, value in params.items():
-                if hasattr(self.strategy, name):
-                    setattr(self.strategy, name, value)
+                # 更新策略参数
+                for name, value in params.items():
+                    if hasattr(self.strategy, name):
+                        setattr(self.strategy, name, value)
 
-            try:
-                # 运行回测
-                result = self.backtest(**backtest_kwargs)
+                try:
+                    # 运行回测
+                    result = self.backtest(**backtest_kwargs)
 
-                # 获取评分
-                score = getattr(result.metrics, actual_metric, 0)
+                    # 获取评分
+                    score = getattr(result.metrics, actual_metric, 0)
 
-                comparison_score = -score if actual_metric in minimize_metrics else score
+                    comparison_score = -score if actual_metric in minimize_metrics else score
 
-                if comparison_score > best_score:
-                    best_score = comparison_score
-                    best_params = params
-                    best_result = result
-            except Exception as e:
-                logger.warning(f"[OPTIMIZE] 参数组合 {params} 回测失败: {e}")
-                continue
+                    if comparison_score > best_score:
+                        best_score = comparison_score
+                        best_params = params
+                        best_result = result
+                except Exception as e:
+                    logger.warning(f"[OPTIMIZE] 参数组合 {params} 回测失败: {e}")
+                    continue
 
-        # 恢复策略为最优参数（而非最后一个网格点的参数）
-        if best_params:
-            for name, value in best_params.items():
-                if hasattr(self.strategy, name):
-                    setattr(self.strategy, name, value)
-        else:
-            # 所有参数组合均失败，恢复原始参数
+            # 恢复策略为最优参数（而非最后一个网格点的参数）
+            if best_params:
+                for name, value in best_params.items():
+                    if hasattr(self.strategy, name):
+                        setattr(self.strategy, name, value)
+            else:
+                # 所有参数组合均失败，恢复原始参数
+                for name, value in original_params.items():
+                    if hasattr(self.strategy, name):
+                        setattr(self.strategy, name, value)
+                logger.warning("[OPTIMIZE] 所有参数组合均失败，已恢复原始参数")
+        except Exception:
+            # 异常中断时恢复原始参数
             for name, value in original_params.items():
                 if hasattr(self.strategy, name):
                     setattr(self.strategy, name, value)
-            logger.warning("[OPTIMIZE] 所有参数组合均失败，已恢复原始参数")
+            raise
 
         return {
             "best_params": best_params,
