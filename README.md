@@ -14,7 +14,7 @@
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-348%20passed-brightgreen?style=flat)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-378%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -126,13 +126,14 @@ engine.live(dry_run=True)
 
 | 能力 | 说明 |
 |------|------|
-| 风控管理 | 回撤监控 + 日亏损熔断 |
+| 风控管理 | 回撤监控 + 日亏损熔断 + HMAC 状态完整性 |
 | T+1 锁仓 | 当日买入锁定，次日释放，回测/实盘统一 |
 | 并发行情 | ThreadPoolExecutor 并发拉取多标的数据 |
 | 订单追踪 | PENDING/PARTIAL_FILLED 超时自动取消 |
-| 订单重试 | 指数退避重试瞬态网络错误 |
+| 订单重试 | 指数退避重试瞬态网络错误 + 幂等性保护 |
 | 优雅关机 | SIGINT/SIGTERM 自动取消 pending 订单 |
 | 自动重连 | Broker 断线指数退避重连 (最多 5 次) |
+| SSRF 防护 | Webhook URL 白名单验证 |
 | JSONL 审计 | 每日独立交易日志文件 |
 | 通知系统 | 钉钉 Webhook + 日志回退 |
 
@@ -193,7 +194,7 @@ dquant/
 │   ├── notify/              # 通知 (钉钉 + 日志)
 │   ├── ai/                  # AI 模块 (因子 + ML + RL + Qlib)
 │   └── visualization/       # 可视化
-├── tests/                   # 测试 (348 tests)
+├── tests/                   # 测试 (378 tests)
 └── pyproject.toml
 ```
 
@@ -220,7 +221,7 @@ dquant/
 python -m pytest tests/ -v
 
 # 当前状态
-# 348 passed, 1 skipped, 0 failures
+# 378 passed, 1 skipped, 0 failures
 ```
 
 ## 🤝 贡献

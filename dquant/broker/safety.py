@@ -74,7 +74,10 @@ class OrderValidator:
         if quantity is None:
             return False, "交易数量不能为空"
 
-        if not isinstance(quantity, int):
+        # 兼容 numpy.int64 等整数类型
+        try:
+            quantity = int(quantity)
+        except (ValueError, TypeError):
             return False, f"交易数量类型错误: {type(quantity)}"
 
         if quantity <= 0:

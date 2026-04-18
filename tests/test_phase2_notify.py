@@ -68,13 +68,15 @@ class TestDingTalkNotifier:
         assert "[ERROR]" in payload["markdown"]["title"]
 
     def test_build_url_without_secret(self):
-        notifier = DingTalkNotifier(webhook_url="https://example.com/hook")
+        notifier = DingTalkNotifier(
+            webhook_url="https://oapi.dingtalk.com/robot/send?access_token=test_token"
+        )
         url = notifier._build_url()
-        assert url == "https://example.com/hook"
+        assert url == "https://oapi.dingtalk.com/robot/send?access_token=test_token"
 
     def test_build_url_with_secret(self):
         notifier = DingTalkNotifier(
-            webhook_url="https://example.com/hook",
+            webhook_url="https://oapi.dingtalk.com/robot/send?access_token=test_token",
             secret="SEC_TEST",
         )
         url = notifier._build_url()
@@ -83,7 +85,9 @@ class TestDingTalkNotifier:
 
     def test_send_success(self):
         """模拟成功发送"""
-        notifier = DingTalkNotifier(webhook_url="https://example.com/hook")
+        notifier = DingTalkNotifier(
+            webhook_url="https://oapi.dingtalk.com/robot/send?access_token=test_token"
+        )
 
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({"errcode": 0}).encode()
@@ -96,7 +100,9 @@ class TestDingTalkNotifier:
 
     def test_send_dingtalk_error(self):
         """模拟钉钉返回错误"""
-        notifier = DingTalkNotifier(webhook_url="https://example.com/hook")
+        notifier = DingTalkNotifier(
+            webhook_url="https://oapi.dingtalk.com/robot/send?access_token=test_token"
+        )
 
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps(
@@ -111,7 +117,9 @@ class TestDingTalkNotifier:
 
     def test_send_network_error_fallback(self):
         """模拟网络错误，降级到日志"""
-        notifier = DingTalkNotifier(webhook_url="https://example.com/hook")
+        notifier = DingTalkNotifier(
+            webhook_url="https://oapi.dingtalk.com/robot/send?access_token=test_token"
+        )
 
         with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
             result = notifier.send("Test", "Hello")

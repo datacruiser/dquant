@@ -5,6 +5,7 @@
 """
 
 import json
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
@@ -26,13 +27,15 @@ class DataSourceRegistry:
 
     _sources: Dict[str, Type[DataSource]] = {}
     _initialized: bool = False
+    _init_lock = threading.Lock()
 
     @classmethod
     def _ensure_initialized(cls):
         """Lazy initialization: register built-in sources on first access."""
-        if not cls._initialized:
-            cls._initialized = True
-            _register_builtin_sources()
+        with cls._init_lock:
+            if not cls._initialized:
+                cls._initialized = True
+                _register_builtin_sources()
 
     @classmethod
     def register(cls, name: str, source_class: Type[DataSource]):
@@ -314,14 +317,20 @@ class DataManager:
             if len(symbols_str) > 200:
                 import hashlib
 
-                symbols = hashlib.md5(symbols_str.encode()).hexdigest()[:16]
+                symbols_key = hashlib.sha256(symbols_str.encode()).hexdigest()[:16]
             else:
-                symbols = symbols_str
+                symbols_key = symbols_str
+        else:
+            symbols_key = str(symbols)
 
-        key_parts = [source, str(symbols), str(start), str(end)]
+        key_parts = [source, symbols_key, str(start), str(end)]
         key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])
 
-        return "_".join(key_parts).replace("/", "_").replace(" ", "_")
+        # 清理路径特殊字符防止目录遍历
+        import re
+
+        raw_key = "_".join(key_parts)
+        return re.sub(r"[^\w.\-]", "_", raw_key)
 
     def _load_cache(self, cache_key: str) -> Optional[pd.DataFrame]:
         """加载缓存"""

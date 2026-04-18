@@ -63,7 +63,18 @@ class MoneyFlowStrategy(BaseStrategy):
                 raise ValueError(f"数据缺少 '{col}' 列")
 
         # 按日期分组
-        for date, grp in data.groupby(data.index):
+        sorted_dates = sorted(data.index.unique())
+        for i, date in enumerate(sorted_dates):
+            # 调仓频率控制：仅在调仓日生成信号
+            if self.rebalance_freq > 1 and i % self.rebalance_freq != 0:
+                continue
+
+            grp = (
+                data.loc[[date]]
+                if isinstance(data.index, pd.DatetimeIndex)
+                else data[data.index == date]
+            )
+
             # 筛选条件
             candidates = grp.copy()
 
@@ -156,20 +167,19 @@ class SmartFlowStrategy(BaseStrategy):
                 - self.retail_weight * grp["small_net_inflow"]  # 散户反向
             )
 
-            # 使用 reset_index 安全选取 TopK（避免重复日期索引导致 loc 返回多行）
-            grp_reset = grp.reset_index(drop=True)
-            score_reset = score.reset_index(drop=True)
-            top_k_indices = score_reset.nlargest(self.top_k).index
-            top_stocks = grp_reset.iloc[top_k_indices]
+            # 将得分作为列合并到 grp，避免索引对齐问题
+            grp_scored = grp.copy()
+            grp_scored["_score"] = score.values
+            top_stocks = grp_scored.nlargest(self.top_k, "_score")
 
-            for pos_idx, row in top_stocks.iterrows():
+            for _, row in top_stocks.iterrows():
                 signal = Signal(
                     symbol=row["symbol"],
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,
                     timestamp=date,
                     metadata={
-                        "composite_score": score_reset.iloc[pos_idx],
+                        "composite_score": row["_score"],
                     },
                 )
                 signals.append(signal)
@@ -215,10 +225,10 @@ class FlowDivergenceStrategy(BaseStrategy):
                 raise ValueError(f"数据缺少 '{col}' 列")
 
         # 按股票分组计算价格变化（跨日期，避免按日 groupby 后 shift 跨股票污染）
-        data_with_change = data.copy()
-        data_with_change["price_change"] = data.groupby("symbol")["close"].transform(
+        price_change = data.groupby("symbol")["close"].transform(
             lambda x: x / x.shift(self.window) - 1
         )
+        data_with_change = data.assign(price_change=price_change)
 
         # 按日期分组
         for date, grp in data_with_change.groupby(data_with_change.index):

@@ -84,7 +84,7 @@ def test_xtp_broker_config_defaults():
     from dquant.config import XTPBrokerConfig
 
     cfg = XTPBrokerConfig()
-    assert cfg.server == "120.27.164.138"
+    assert cfg.server == ""
     assert cfg.port == 6001
     assert cfg.account == ""
     assert cfg.password == ""
