@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -212,6 +213,7 @@ class RiskManager:
 
         # 持久化路径（可选）
         self._state_path: Optional[Path] = None
+        self._lock = threading.Lock()
 
     def enable_persistence(self, state_path: str = "risk_state.json"):
         """
@@ -294,22 +296,53 @@ class RiskManager:
         symbol: str,
         position_value: float,
         total_value: float,
+        sector: str = "",
+        sector_value: float = 0.0,
+        total_position_value: float = 0.0,
     ) -> Tuple[bool, str]:
         """
         检查仓位限制
+
+        Args:
+            symbol: 股票代码
+            position_value: 单只股票持仓市值
+            total_value: 投资组合总价值
+            sector: 行业分类（可选）
+            sector_value: 行业总持仓市值（可选，不含当前股票）
+            total_position_value: 当前总持仓市值（可选，不含当前股票）
 
         Returns:
             (是否通过, 原因)
         """
         if total_value <= 0:
             return False, "总价值为零或负，无法计算仓位比例"
-        pct = position_value / total_value
 
+        # 单只股票仓位限制
+        pct = position_value / total_value
         if pct > self.limits.max_single_pct:
             return (
                 False,
                 f"单只股票仓位 {pct:.1%} 超过限制 {self.limits.max_single_pct:.1%}",
             )
+
+        # 行业仓位限制
+        if sector and sector_value > 0:
+            sector_total = sector_value + position_value
+            sector_pct = sector_total / total_value
+            if sector_pct > self.limits.max_sector_pct:
+                return (
+                    False,
+                    f"行业 {sector} 仓位 {sector_pct:.1%} 超过限制 {self.limits.max_sector_pct:.1%}",
+                )
+
+        # 总仓位限制
+        if total_position_value > 0:
+            total_pct = (total_position_value + position_value) / total_value
+            if total_pct > self.limits.max_total_pct:
+                return (
+                    False,
+                    f"总仓位 {total_pct:.1%} 超过限制 {self.limits.max_total_pct:.1%}",
+                )
 
         return True, "OK"
 
@@ -323,21 +356,22 @@ class RiskManager:
         Returns:
             (是否触发风控, 当前回撤)
         """
-        if current_value > self.peak_value:
-            self.peak_value = current_value
+        with self._lock:
+            if current_value > self.peak_value:
+                self.peak_value = current_value
 
-        if self.peak_value > 0:
-            self.current_drawdown = (self.peak_value - current_value) / self.peak_value
-        else:
-            self.current_drawdown = 0.0
+            if self.peak_value > 0:
+                self.current_drawdown = (self.peak_value - current_value) / self.peak_value
+            else:
+                self.current_drawdown = 0.0
 
-        triggered = self.current_drawdown >= self.max_drawdown
-        if triggered:
-            self.halt_trading = True
+            triggered = self.current_drawdown >= self.max_drawdown
+            if triggered:
+                self.halt_trading = True
 
-        if triggered or self.peak_value == current_value:
-            self.save_state()
-        return triggered, self.current_drawdown
+            if triggered or self.peak_value == current_value:
+                self.save_state()
+            return triggered, self.current_drawdown
 
     def reset_daily_start(self, current_value: float, date_str: str):
         """
@@ -347,10 +381,11 @@ class RiskManager:
             current_value: 当前组合价值
             date_str: 当日日期字符串 (YYYY-MM-DD)
         """
-        if self.daily_start_date != date_str:
-            self.daily_start_value = current_value
-            self.daily_start_date = date_str
-            self.save_state()
+        with self._lock:
+            if self.daily_start_date != date_str:
+                self.daily_start_value = current_value
+                self.daily_start_date = date_str
+                self.save_state()
 
     def check_daily_loss(self, current_value: float) -> Tuple[bool, float]:
         """
@@ -359,16 +394,17 @@ class RiskManager:
         Returns:
             (是否触发日亏损风控, 当前日亏损比例)
         """
-        if self.daily_start_value <= 0:
-            return False, 0.0
+        with self._lock:
+            if self.daily_start_value <= 0:
+                return False, 0.0
 
-        daily_loss = (self.daily_start_value - current_value) / self.daily_start_value
-        triggered = daily_loss >= self.max_daily_loss
+            daily_loss = (self.daily_start_value - current_value) / self.daily_start_value
+            triggered = daily_loss >= self.max_daily_loss
 
-        if triggered:
-            self.halt_trading = True
-            self.save_state()
-        return triggered, daily_loss
+            if triggered:
+                self.halt_trading = True
+                self.save_state()
+            return triggered, daily_loss
 
     def should_halt(self) -> bool:
         """综合判断是否应停止交易（回撤 + 日亏损）"""

@@ -12,14 +12,14 @@
 import pandas as pd
 import pytest
 
-from dquant.backtest.engine import (
+from dquant.backtest.engine import BacktestEngine
+from dquant.constants import (
     BJ_PRICE_LIMIT,
     DEFAULT_PRICE_LIMIT,
     GEM_PRICE_LIMIT,
     ST_PRICE_LIMIT,
     STAR_PRICE_LIMIT,
-    BacktestEngine,
-    _get_price_limit,
+    get_price_limit,
 )
 from dquant.strategy.base import BaseStrategy, Signal, SignalType
 
@@ -247,46 +247,46 @@ class TestGetPriceLimit:
     """涨跌停幅度判断"""
 
     def test_main_board(self):
-        assert _get_price_limit("000001.SZ") == DEFAULT_PRICE_LIMIT
-        assert _get_price_limit("600000.SH") == DEFAULT_PRICE_LIMIT
+        assert get_price_limit("000001.SZ") == DEFAULT_PRICE_LIMIT
+        assert get_price_limit("600000.SH") == DEFAULT_PRICE_LIMIT
 
     def test_bj_board(self):
-        assert _get_price_limit("430001.BJ") == BJ_PRICE_LIMIT
-        assert _get_price_limit("830001.BJ") == BJ_PRICE_LIMIT
+        assert get_price_limit("430001.BJ") == BJ_PRICE_LIMIT
+        assert get_price_limit("830001.BJ") == BJ_PRICE_LIMIT
 
     def test_gem_board(self):
         """创业板 300xxx → ±20%"""
-        assert _get_price_limit("300001.SZ") == GEM_PRICE_LIMIT
-        assert _get_price_limit("300750.SZ") == GEM_PRICE_LIMIT
+        assert get_price_limit("300001.SZ") == GEM_PRICE_LIMIT
+        assert get_price_limit("300750.SZ") == GEM_PRICE_LIMIT
 
     def test_star_board(self):
         """科创板 688xxx → ±20%"""
-        assert _get_price_limit("688001.SH") == STAR_PRICE_LIMIT
-        assert _get_price_limit("688981.SH") == STAR_PRICE_LIMIT
+        assert get_price_limit("688001.SH") == STAR_PRICE_LIMIT
+        assert get_price_limit("688981.SH") == STAR_PRICE_LIMIT
 
     def test_st_stock(self):
         """ST 股票 → ±5%"""
-        assert _get_price_limit("000001.SZ", "ST某某") == ST_PRICE_LIMIT
-        assert _get_price_limit("600000.SH", "*ST某某") == ST_PRICE_LIMIT
+        assert get_price_limit("000001.SZ", "ST某某") == ST_PRICE_LIMIT
+        assert get_price_limit("600000.SH", "*ST某某") == ST_PRICE_LIMIT
 
     def test_non_st_name(self):
         """非 ST 名称仍按主板规则"""
-        assert _get_price_limit("000001.SZ", "平安银行") == DEFAULT_PRICE_LIMIT
-        assert _get_price_limit("000001.SZ", "") == DEFAULT_PRICE_LIMIT
-        assert _get_price_limit("000001.SZ") == DEFAULT_PRICE_LIMIT
+        assert get_price_limit("000001.SZ", "平安银行") == DEFAULT_PRICE_LIMIT
+        assert get_price_limit("000001.SZ", "") == DEFAULT_PRICE_LIMIT
+        assert get_price_limit("000001.SZ") == DEFAULT_PRICE_LIMIT
 
     def test_gem_priority_over_st_name(self):
         """创业板代码优先于 ST 名称判断"""
         # 300 开头不管名称，都返回创业板规则
-        assert _get_price_limit("300001.SZ", "ST某某") == GEM_PRICE_LIMIT
+        assert get_price_limit("300001.SZ", "ST某某") == GEM_PRICE_LIMIT
 
     def test_star_priority_over_st_name(self):
         """科创板代码优先于 ST 名称判断"""
-        assert _get_price_limit("688001.SH", "*ST某某") == STAR_PRICE_LIMIT
+        assert get_price_limit("688001.SH", "*ST某某") == STAR_PRICE_LIMIT
 
     def test_bj_priority_over_st_name(self):
         """北交所代码优先于 ST 名称判断"""
-        assert _get_price_limit("430001.BJ", "ST某某") == BJ_PRICE_LIMIT
+        assert get_price_limit("430001.BJ", "ST某某") == BJ_PRICE_LIMIT
 
 
 # ============================================================
