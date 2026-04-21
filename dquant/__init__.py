@@ -5,7 +5,7 @@ DQuant - 轻量级AI量化框架
 避免因缺少可选依赖（xgboost、lightgbm、qlib 等）导致 import 失败。
 """
 
-from dquant.constants import VERSION as __version__
+from dquant.constants import VERSION as __version__  # noqa: F401
 
 # ---------- 延迟导入映射 ----------
 # 格式: "公开名称": "module.path:ClassName"

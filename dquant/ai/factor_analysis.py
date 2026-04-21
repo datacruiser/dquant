@@ -7,6 +7,7 @@
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+import numpy as np
 import pandas as pd
 
 from dquant.logger import get_logger
