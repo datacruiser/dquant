@@ -8,7 +8,7 @@ import tempfile
 
 import pytest
 
-from dquant.risk import RiskManager
+from dquant.risk import PositionLimit, RiskManager
 
 
 class TestRiskManagerPersistence:
@@ -112,3 +112,79 @@ class TestRiskManagerPersistence:
             assert rm.peak_value == 0.0
         finally:
             os.unlink(state_path)
+
+
+class TestPositionLimits:
+    """仓位限制检查测试"""
+
+    def test_single_position_pass(self):
+        rm = RiskManager()
+        ok, msg = rm.check_position_limit("000001.SZ", 50_000, 1_000_000)
+        assert ok is True
+        assert msg == "OK"
+
+    def test_single_position_exceeds(self):
+        limits = PositionLimit(max_single_pct=0.05)
+        rm = RiskManager(limits=limits)
+        ok, msg = rm.check_position_limit("000001.SZ", 60_000, 1_000_000)
+        assert ok is False
+        assert "单只股票仓位" in msg
+
+    def test_sector_limit_exceeds(self):
+        limits = PositionLimit(max_sector_pct=0.2)
+        rm = RiskManager(limits=limits)
+        ok, msg = rm.check_position_limit(
+            "000001.SZ",
+            80_000,
+            1_000_000,
+            sector="银行",
+            sector_value=150_000,
+        )
+        assert ok is False
+        assert "行业" in msg
+
+    def test_sector_limit_passes(self):
+        limits = PositionLimit(max_sector_pct=0.3)
+        rm = RiskManager(limits=limits)
+        ok, msg = rm.check_position_limit(
+            "000001.SZ",
+            80_000,
+            1_000_000,
+            sector="银行",
+            sector_value=150_000,
+        )
+        assert ok is True
+
+    def test_total_position_exceeds(self):
+        limits = PositionLimit(max_total_pct=0.9)
+        rm = RiskManager(limits=limits)
+        ok, msg = rm.check_position_limit(
+            "000001.SZ",
+            100_000,
+            1_000_000,
+            total_position_value=850_000,
+        )
+        assert ok is False
+        assert "总仓位" in msg
+
+    def test_total_position_passes(self):
+        limits = PositionLimit(max_total_pct=0.95)
+        rm = RiskManager(limits=limits)
+        ok, msg = rm.check_position_limit(
+            "000001.SZ",
+            100_000,
+            1_000_000,
+            total_position_value=800_000,
+        )
+        assert ok is True
+
+    def test_zero_total_value(self):
+        rm = RiskManager()
+        ok, msg = rm.check_position_limit("000001.SZ", 100, 0)
+        assert ok is False
+
+    def test_backward_compatible_no_optional_args(self):
+        """旧的调用方式仍然有效"""
+        rm = RiskManager()
+        ok, msg = rm.check_position_limit("000001.SZ", 50_000, 1_000_000)
+        assert ok is True

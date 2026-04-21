@@ -160,11 +160,19 @@ class SmartFlowStrategy(BaseStrategy):
 
         # 按日期分组
         for date, grp in data.groupby(data.index):
+            # 对资金流做窗口平滑
+            if self.window > 1 and len(grp) >= self.window:
+                main = grp["main_net_inflow"].rolling(self.window, min_periods=1).mean()
+                medium = grp["medium_net_inflow"].rolling(self.window, min_periods=1).mean()
+                small = grp["small_net_inflow"].rolling(self.window, min_periods=1).mean()
+            else:
+                main = grp["main_net_inflow"]
+                medium = grp["medium_net_inflow"]
+                small = grp["small_net_inflow"]
+
             # 综合得分
             score = (
-                self.main_weight * grp["main_net_inflow"]
-                + self.medium_weight * grp["medium_net_inflow"]
-                - self.retail_weight * grp["small_net_inflow"]  # 散户反向
+                self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
             )
 
             # 将得分作为列合并到 grp，避免索引对齐问题

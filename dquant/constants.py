@@ -194,6 +194,39 @@ ZZ500_SAMPLE = [
 ]
 
 # ============================================================
+# A 股涨跌停限制
+# ============================================================
+
+DEFAULT_PRICE_LIMIT = 0.10  # 主板 ±10%
+ST_PRICE_LIMIT = 0.05  # ST 板块 ±5%
+GEM_PRICE_LIMIT = 0.20  # 创业板 (300xxx) ±20%
+STAR_PRICE_LIMIT = 0.20  # 科创板 (688xxx) ±20%
+BJ_PRICE_LIMIT = 0.30  # 北交所 ±30%
+
+# ST 股票名称关键字（需要在数据中提供 symbol_name 列）
+_ST_KEYWORDS = frozenset({"ST", "*ST", "S*ST", "SST", "S"})
+
+
+def get_price_limit(symbol: str, symbol_name: str = "") -> float:
+    """根据股票代码和名称判断涨跌停幅度"""
+    code = symbol.split(".")[0] if "." in symbol else symbol
+
+    if code and code[0] in ("4", "8"):
+        return BJ_PRICE_LIMIT
+    if code.startswith("688"):
+        return STAR_PRICE_LIMIT
+    if code.startswith("300"):
+        return GEM_PRICE_LIMIT
+    if symbol_name:
+        name_upper = symbol_name.upper().strip()
+        for kw in _ST_KEYWORDS:
+            if name_upper.startswith(kw):
+                return ST_PRICE_LIMIT
+
+    return DEFAULT_PRICE_LIMIT
+
+
+# ============================================================
 # 版本信息
 # ============================================================
 

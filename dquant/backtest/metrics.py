@@ -82,6 +82,36 @@ class Metrics:
             calmar=calmar,
         )
 
+    @classmethod
+    def from_nav_and_trades(
+        cls,
+        nav_series: pd.Series,
+        trades: pd.DataFrame,
+        rf: float = 0.03,
+    ) -> "Metrics":
+        """
+        从净值序列和交易记录计算绩效（含 win_rate/profit_factor）
+
+        Args:
+            nav_series: 净值序列
+            trades: 交易记录 DataFrame，需包含 'pnl' 列
+            rf: 无风险利率 (年化)
+        """
+        metrics = cls.from_nav(nav_series, rf=rf)
+
+        if trades is not None and "pnl" in trades.columns and len(trades) > 0:
+            pnl = trades["pnl"].dropna()
+            if len(pnl) > 0:
+                wins = pnl[pnl > 0]
+                losses = pnl[pnl < 0]
+                metrics.total_trades = len(pnl)
+                metrics.win_rate = len(wins) / len(pnl) if len(pnl) > 0 else 0.0
+                gross_profit = wins.sum()
+                gross_loss = abs(losses.sum())
+                metrics.profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
+
+        return metrics
+
     def __repr__(self):
         return (
             f"Metrics(\n"

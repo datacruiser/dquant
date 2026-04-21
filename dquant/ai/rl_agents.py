@@ -388,7 +388,7 @@ class DQNAgent(BaseRLAgent):
 
 class PPOAgent(BaseRLAgent):
     """
-    PPO 交易代理 (Stub - 待实现)
+    PPO 交易代理 (EXPERIMENTAL — 未完整实现)
 
     使用 Proximal Policy Optimization 进行交易决策。
     """
@@ -409,6 +409,7 @@ class PPOAgent(BaseRLAgent):
         self.clip_ratio = clip_ratio
 
         self._model = None
+        logger.warning("[EXPERIMENTAL] PPOAgent 尚未完整实现，当前仅返回持有动作")
 
     def select_action(self, state: np.ndarray, training: bool = True) -> np.ndarray:
         """选择动作"""
@@ -422,18 +423,9 @@ class PPOAgent(BaseRLAgent):
 
 class RLStrategy:
     """
-    RL 策略包装器
+    RL 策略包装器 (EXPERIMENTAL — 未完整实现)
 
     将 RL Agent 包装为 DQuant 策略接口。
-
-    Usage:
-        from dquant.ai import DQNAgent, RLStrategy
-
-        agent = DQNAgent(n_stocks=10)
-        # ... 训练 agent ...
-
-        strategy = RLStrategy(agent, symbols=['000001.SZ', ...])
-        result = engine.backtest(strategy=strategy)
     """
 
     def __init__(
@@ -447,6 +439,7 @@ class RLStrategy:
         self.symbols = symbols
         self.lookback = lookback
         self.name = name
+        logger.warning("[EXPERIMENTAL] RLStrategy 尚未完整实现")
 
     def generate_signals(self, data: pd.DataFrame) -> list:
         """生成信号"""

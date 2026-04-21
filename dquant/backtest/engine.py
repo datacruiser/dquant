@@ -9,52 +9,16 @@ import pandas as pd
 from dquant.backtest.metrics import Metrics
 from dquant.backtest.portfolio import Portfolio
 from dquant.backtest.result import BacktestResult
-from dquant.constants import DEFAULT_COMMISSION, DEFAULT_INITIAL_CASH, DEFAULT_SLIPPAGE
+from dquant.constants import (
+    DEFAULT_COMMISSION,
+    DEFAULT_INITIAL_CASH,
+    DEFAULT_SLIPPAGE,
+    get_price_limit,
+)
 from dquant.logger import get_logger
 from dquant.strategy.base import BaseStrategy, Signal
 
 logger = get_logger(__name__)
-
-# A 股涨跌停限制
-DEFAULT_PRICE_LIMIT = 0.10  # 主板 ±10%
-ST_PRICE_LIMIT = 0.05  # ST 板块 ±5%
-GEM_PRICE_LIMIT = 0.20  # 创业板 (300xxx) ±20%
-STAR_PRICE_LIMIT = 0.20  # 科创板 (688xxx) ±20%
-BJ_PRICE_LIMIT = 0.30  # 北交所 ±30%
-
-# ST 股票名称关键字（需要在数据中提供 symbol_name 列）
-_ST_KEYWORDS = frozenset({"ST", "*ST", "S*ST", "SST", "S"})
-
-
-def _get_price_limit(symbol: str, symbol_name: str = "") -> float:
-    """根据股票代码和名称判断涨跌停幅度
-
-    Args:
-        symbol: 股票代码 (如 '000001.SZ')
-        symbol_name: 股票名称 (如 '*ST某某')，用于 ST 判断
-    """
-    code = symbol.split(".")[0] if "." in symbol else symbol
-
-    # 北交所: 4/8 开头
-    if code and code[0] in ("4", "8"):
-        return BJ_PRICE_LIMIT
-
-    # 科创板: 688 开头
-    if code.startswith("688"):
-        return STAR_PRICE_LIMIT
-
-    # 创业板: 300 开头
-    if code.startswith("300"):
-        return GEM_PRICE_LIMIT
-
-    # ST 股: 名称含 ST 关键字
-    if symbol_name:
-        name_upper = symbol_name.upper().strip()
-        for kw in _ST_KEYWORDS:
-            if name_upper.startswith(kw):
-                return ST_PRICE_LIMIT
-
-    return DEFAULT_PRICE_LIMIT
 
 
 class BacktestEngine:
@@ -273,7 +237,7 @@ class BacktestEngine:
             if prev is None or prev <= 0:
                 continue
 
-            limit_pct = _get_price_limit(symbol, names.get(symbol, ""))
+            limit_pct = get_price_limit(symbol, names.get(symbol, ""))
             pct_change = (close_price - prev) / prev
 
             # 涨停：涨幅达到限制（精确到小数点后 4 位以避免浮点误差）
