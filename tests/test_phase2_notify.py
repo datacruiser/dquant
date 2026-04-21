@@ -11,6 +11,7 @@ import pytest
 from dquant.notify import create_notifier
 from dquant.notify.base import Notifier
 from dquant.notify.dingtalk import DingTalkNotifier
+from dquant.notify.lark import LarkNotifier
 from dquant.notify.log_notifier import LogNotifier
 
 
@@ -136,9 +137,149 @@ class TestCreateNotifier:
         notifier = create_notifier("dingtalk", webhook_url="https://example.com")
         assert isinstance(notifier, DingTalkNotifier)
 
+    def test_create_lark(self):
+        notifier = create_notifier("lark", webhook_url="https://example.com")
+        assert isinstance(notifier, LarkNotifier)
+
     def test_create_unknown_raises(self):
         with pytest.raises(ValueError, match="Unknown notifier"):
             create_notifier("unknown")
+
+
+class TestLarkNotifier:
+
+    def test_no_webhook_falls_back(self):
+        """无 webhook 时降级到日志"""
+        notifier = LarkNotifier(webhook_url="", secret="")
+        result = notifier.send("Test", "Hello")
+        assert result is False
+
+    def test_with_webhook_env(self):
+        """从环境变量读取 webhook"""
+        with patch.dict(os.environ, {"LARK_WEBHOOK": "https://open.feishu.cn/open-apis/bot/v2/hook/test"}):
+            notifier = LarkNotifier()
+            assert notifier.webhook_url == "https://open.feishu.cn/open-apis/bot/v2/hook/test"
+
+    def test_build_payload_info(self):
+        notifier = LarkNotifier()
+        payload = notifier._build_payload("Test Title", "Test Message", "INFO")
+        assert payload["msg_type"] == "interactive"
+        assert "Test Title" in payload["card"]["header"]["title"]["content"]
+        assert payload["card"]["elements"][0]["content"] == "Test Message"
+        assert payload["card"]["header"]["template"] == "blue"
+
+    def test_build_payload_critical(self):
+        notifier = LarkNotifier()
+        payload = notifier._build_payload("Alert", "Something wrong", "CRITICAL")
+        assert payload["card"]["header"]["template"] == "red"
+        assert "🚨" in payload["card"]["header"]["title"]["content"]
+
+    def test_build_url_without_secret(self):
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token"
+        )
+        url = notifier._build_url()
+        assert url == "https://open.feishu.cn/open-apis/bot/v2/hook/test_token"
+
+    def test_build_url_with_secret(self):
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token",
+            secret="TEST_SECRET",
+        )
+        url = notifier._build_url()
+        assert "timestamp=" in url
+        assert "sign=" in url
+
+    def test_sign_uses_hmac_sha256(self):
+        """验证签名使用 HMAC-SHA256 而非普通 SHA256"""
+        import base64
+        import hashlib
+        import hmac as hmac_mod
+        import urllib.parse
+
+        secret = "my_secret_key"
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token",
+            secret=secret,
+        )
+        with patch("time.time", return_value=1700000000):
+            url = notifier._build_url()
+
+        timestamp = "1700000000"
+        string_to_sign = f"{timestamp}\n{secret}"
+        expected_sign = urllib.parse.quote_plus(
+            base64.b64encode(
+                hmac_mod.new(
+                    secret.encode("utf-8"),
+                    string_to_sign.encode("utf-8"),
+                    digestmod=hashlib.sha256,
+                ).digest()
+            )
+        )
+        assert f"sign={expected_sign}" in url
+
+    def test_send_success(self):
+        """模拟成功发送"""
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token"
+        )
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"code": 0}).encode()
+        mock_response.__enter__ = lambda s: mock_response
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            result = notifier.send("Test", "Hello")
+            assert result is True
+
+    def test_send_lark_error(self):
+        """模拟飞书返回错误"""
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token"
+        )
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(
+            {"code": 19001, "msg": "invalid sign"}
+        ).encode()
+        mock_response.__enter__ = lambda s: mock_response
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            result = notifier.send("Test", "Hello")
+            assert result is False
+
+    def test_send_network_error_fallback(self):
+        """模拟网络错误，降级到日志"""
+        notifier = LarkNotifier(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test_token"
+        )
+
+        with patch("urllib.request.urlopen", side_effect=Exception("Network error")):
+            result = notifier.send("Test", "Hello")
+            assert result is False
+
+    def test_ssrf_blocked(self):
+        """非法 URL 被 SSRF 防护拦截"""
+        notifier = LarkNotifier(webhook_url="https://evil.com/hook")
+        result = notifier.send("Test", "Hello")
+        assert result is False
+
+    def test_larksuite_domain_allowed(self):
+        """Lark Suite 国际版域名也可用"""
+        notifier = LarkNotifier(
+            webhook_url="https://open.larksuite.com/open-apis/bot/v2/hook/test_token"
+        )
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"code": 0}).encode()
+        mock_response.__enter__ = lambda s: mock_response
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response):
+            result = notifier.send("Test", "Hello")
+            assert result is True
 
 
 if __name__ == "__main__":
