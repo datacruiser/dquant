@@ -14,7 +14,7 @@
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-378%20passed-brightgreen?style=flat)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-390%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -135,7 +135,7 @@ engine.live(dry_run=True)
 | 自动重连 | Broker 断线指数退避重连 (最多 5 次) |
 | SSRF 防护 | Webhook URL 白名单验证 |
 | JSONL 审计 | 每日独立交易日志文件 |
-| 通知系统 | 钉钉 Webhook + 日志回退 |
+| 通知系统 | 钉钉/飞书 Webhook + 日志回退 |
 
 ## 🧠 AI/ML 模块
 
@@ -191,10 +191,10 @@ dquant/
 │   │   ├── order_tracker.py # 订单追踪 + 超时检测
 │   │   ├── trade_journal.py # JSONL 审计日志
 │   │   └── safety.py        # 交易安全检查
-│   ├── notify/              # 通知 (钉钉 + 日志)
+│   ├── notify/              # 通知 (钉钉 + 飞书 + 日志)
 │   ├── ai/                  # AI 模块 (因子 + ML + RL + Qlib)
 │   └── visualization/       # 可视化
-├── tests/                   # 测试 (378 tests)
+├── tests/                   # 测试 (390 tests)
 └── pyproject.toml
 ```
 
@@ -221,7 +221,7 @@ dquant/
 python -m pytest tests/ -v
 
 # 当前状态
-# 378 passed, 1 skipped, 0 failures
+# 390 passed, 1 skipped, 0 failures
 ```
 
 ## 🤝 贡献
