@@ -156,7 +156,9 @@ class TestLarkNotifier:
 
     def test_with_webhook_env(self):
         """从环境变量读取 webhook"""
-        with patch.dict(os.environ, {"LARK_WEBHOOK": "https://open.feishu.cn/open-apis/bot/v2/hook/test"}):
+        with patch.dict(
+            os.environ, {"LARK_WEBHOOK": "https://open.feishu.cn/open-apis/bot/v2/hook/test"}
+        ):
             notifier = LarkNotifier()
             assert notifier.webhook_url == "https://open.feishu.cn/open-apis/bot/v2/hook/test"
 
