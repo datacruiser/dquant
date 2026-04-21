@@ -134,8 +134,11 @@ class TestPositionLimits:
         limits = PositionLimit(max_sector_pct=0.2)
         rm = RiskManager(limits=limits)
         ok, msg = rm.check_position_limit(
-            "000001.SZ", 80_000, 1_000_000,
-            sector="银行", sector_value=150_000,
+            "000001.SZ",
+            80_000,
+            1_000_000,
+            sector="银行",
+            sector_value=150_000,
         )
         assert ok is False
         assert "行业" in msg
@@ -144,8 +147,11 @@ class TestPositionLimits:
         limits = PositionLimit(max_sector_pct=0.3)
         rm = RiskManager(limits=limits)
         ok, msg = rm.check_position_limit(
-            "000001.SZ", 80_000, 1_000_000,
-            sector="银行", sector_value=150_000,
+            "000001.SZ",
+            80_000,
+            1_000_000,
+            sector="银行",
+            sector_value=150_000,
         )
         assert ok is True
 
@@ -153,7 +159,9 @@ class TestPositionLimits:
         limits = PositionLimit(max_total_pct=0.9)
         rm = RiskManager(limits=limits)
         ok, msg = rm.check_position_limit(
-            "000001.SZ", 100_000, 1_000_000,
+            "000001.SZ",
+            100_000,
+            1_000_000,
             total_position_value=850_000,
         )
         assert ok is False
@@ -163,7 +171,9 @@ class TestPositionLimits:
         limits = PositionLimit(max_total_pct=0.95)
         rm = RiskManager(limits=limits)
         ok, msg = rm.check_position_limit(
-            "000001.SZ", 100_000, 1_000_000,
+            "000001.SZ",
+            100_000,
+            1_000_000,
             total_position_value=800_000,
         )
         assert ok is True

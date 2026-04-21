@@ -6,6 +6,7 @@ import concurrent.futures
 import signal
 import threading
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -36,6 +37,27 @@ from dquant.risk import RiskManager
 from dquant.strategy.base import BaseStrategy, Signal
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class _LiveContext:
+    """Bundles mutable state passed between live() sub-methods."""
+
+    risk_mgr: RiskManager
+    journal: TradeJournal
+    tracker: OrderTracker
+    time_checker: TradingTimeChecker
+    executor: concurrent.futures.ThreadPoolExecutor
+    strategy_name: str
+    dry_run: bool
+    interval: int
+    symbols: Optional[List[str]]
+    max_consecutive_errors: int
+    consecutive_errors: int = 0
+    total_reconnect_failures: int = 0
+    last_date_str: str = ""
+    original_sigint: Any = None
+    original_sigterm: Any = None
 
 
 class Engine:
@@ -206,7 +228,46 @@ class Engine:
             max_drawdown = config.max_drawdown
             max_daily_loss = config.max_daily_loss
             max_consecutive_errors = config.max_consecutive_errors
-        # ---- 初始化 ----
+
+        ctx = self._init_live_session(
+            dry_run=dry_run,
+            interval=interval,
+            symbols=symbols,
+            strategy_name=strategy_name,
+            max_drawdown=max_drawdown,
+            max_daily_loss=max_daily_loss,
+            max_consecutive_errors=max_consecutive_errors,
+            **kwargs,
+        )
+        if ctx is None:
+            return
+
+        try:
+            self._run_trading_loop(ctx, **kwargs)
+        finally:
+            self._shutdown_live_session(ctx)
+
+    # ------------------------------------------------------------------
+    # live() sub-methods
+    # ------------------------------------------------------------------
+
+    def _init_live_session(
+        self,
+        *,
+        dry_run: bool,
+        interval: int,
+        symbols: Optional[List[str]],
+        strategy_name: str,
+        max_drawdown: float,
+        max_daily_loss: float,
+        max_consecutive_errors: int,
+        **kwargs,
+    ) -> Optional[_LiveContext]:
+        """Initialize broker connection, risk/journal/tracker, signal handlers.
+
+        Returns ``_LiveContext`` on success, or ``None`` if broker connection
+        fails (in which case ``live()`` should return immediately).
+        """
         if dry_run:
             logger.info("[LIVE] Running in dry-run mode (模拟运行)")
         else:
@@ -215,7 +276,7 @@ class Engine:
         # 连接 broker
         if not self.broker.connect(**kwargs):
             logger.error("[LIVE] Broker 连接失败，退出")
-            return
+            return None
 
         logger.info(f"[LIVE] Connected to broker: {self.broker.name}")
 
@@ -240,196 +301,217 @@ class Engine:
             signal.signal(signal.SIGINT, _shutdown_handler)
             signal.signal(signal.SIGTERM, _shutdown_handler)
 
-        consecutive_errors = 0
-        total_reconnect_failures = 0
-        last_date_str = ""
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
+        return _LiveContext(
+            risk_mgr=risk_mgr,
+            journal=journal,
+            tracker=tracker,
+            time_checker=time_checker,
+            executor=executor,
+            strategy_name=strategy_name,
+            dry_run=dry_run,
+            interval=interval,
+            symbols=symbols,
+            max_consecutive_errors=max_consecutive_errors,
+            consecutive_errors=0,
+            total_reconnect_failures=0,
+            last_date_str="",
+            original_sigint=original_sigint,
+            original_sigterm=original_sigterm,
+        )
+
+    def _run_trading_loop(self, ctx: _LiveContext, **kwargs) -> None:
+        """Main trading loop — runs until ``self._running`` is cleared or a
+        break condition is triggered."""
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                while self._running.is_set():
-                    loop_start = time.time()
+            while self._running.is_set():
+                loop_start = time.time()
 
-                    realtime_df = None
-                    try:
-                        now = datetime.now()
-                        date_str = now.strftime("%Y-%m-%d")
+                realtime_df = None
+                try:
+                    now = datetime.now()
+                    date_str = now.strftime("%Y-%m-%d")
 
-                        # 0. 检查 broker 连接
-                        if not self.broker.is_connected():
-                            if not self._try_reconnect(**kwargs):
-                                total_reconnect_failures += 1
-                                if total_reconnect_failures >= 50:
-                                    logger.error("[LIVE] 累计重连失败 50 次，停止交易循环")
-                                    break
-                                time.sleep(interval)
-                                continue
-                            total_reconnect_failures = 0
-
-                        # 1. 检查交易日
-                        if not is_trading_day(now):
-                            logger.debug(f"[LIVE] 非交易日: {date_str}")
-                            time.sleep(interval)
+                    # 0. 检查 broker 连接
+                    if not self.broker.is_connected():
+                        if not self._try_reconnect(**kwargs):
+                            ctx.total_reconnect_failures += 1
+                            if ctx.total_reconnect_failures >= 50:
+                                logger.error("[LIVE] 累计重连失败 50 次，停止交易循环")
+                                break
+                            time.sleep(ctx.interval)
                             continue
+                        ctx.total_reconnect_failures = 0
 
-                        # 2. 检查交易时间
-                        can_trade, time_msg = time_checker.is_trading_time(now)
-                        if not can_trade:
-                            logger.debug(f"[LIVE] {time_msg}")
-                            time.sleep(interval)
-                            continue
+                    # 1. 检查交易日
+                    if not is_trading_day(now):
+                        logger.debug(f"[LIVE] 非交易日: {date_str}")
+                        time.sleep(ctx.interval)
+                        continue
 
-                        # 3. 新一天 → 重置日亏损基准
-                        if date_str != last_date_str:
-                            account = self.broker.get_account()
-                            total_value = account.get(
-                                "total_value", account.get("cash", self.initial_cash)
-                            )
-                            risk_mgr.reset_daily_start(total_value, date_str)
-                            last_date_str = date_str
-                            logger.info(
-                                f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}"
-                            )
+                    # 2. 检查交易时间
+                    can_trade, time_msg = ctx.time_checker.is_trading_time(now)
+                    if not can_trade:
+                        logger.debug(f"[LIVE] {time_msg}")
+                        time.sleep(ctx.interval)
+                        continue
 
-                        # 4. 获取实时行情 & 并发轮询挂单
-                        future_data = executor.submit(self._fetch_realtime_data, symbols)
-                        future_poll = None
-                        if tracker.has_pending() and not dry_run:
-                            future_poll = executor.submit(
-                                self._poll_pending_orders, tracker, journal, strategy_name
-                            )
+                    # 3. 新一天 → 重置日亏损基准
+                    if date_str != ctx.last_date_str:
+                        account = self.broker.get_account()
+                        total_value = account.get(
+                            "total_value", account.get("cash", self.initial_cash)
+                        )
+                        ctx.risk_mgr.reset_daily_start(total_value, date_str)
+                        ctx.last_date_str = date_str
+                        logger.info(f"[LIVE] 新交易日: {date_str}, 组合价值: {total_value:,.0f}")
 
-                        realtime_df = future_data.result()
-                        if future_poll:
-                            future_poll.result()
-
-                    except Exception as e:
-                        consecutive_errors += 1
-                        logger.error(
-                            f"[LIVE] 循环异常 ({consecutive_errors}/{max_consecutive_errors}): {e}"
+                    # 4. 获取实时行情 & 并发轮询挂单
+                    future_data = ctx.executor.submit(self._fetch_realtime_data, ctx.symbols)
+                    future_poll = None
+                    if ctx.tracker.has_pending() and not ctx.dry_run:
+                        future_poll = ctx.executor.submit(
+                            self._poll_pending_orders,
+                            ctx.tracker,
+                            ctx.journal,
+                            ctx.strategy_name,
                         )
 
-                        if consecutive_errors >= max_consecutive_errors:
-                            logger.error(
-                                f"[LIVE] 连续错误达到 {max_consecutive_errors} 次，停止交易"
-                            )
-                            break
+                    realtime_df = future_data.result()
+                    if future_poll:
+                        future_poll.result()
 
-                        time.sleep(interval)
-                        continue
-
-                    if realtime_df is None or realtime_df.empty:
-                        logger.warning("[LIVE] 获取实时行情失败，跳过本轮")
-                        time.sleep(interval)
-                        continue
-
-                    # 5. 生成信号
-                    # 检测策略是否 override 了 on_bar
-                    use_on_bar = type(self.strategy).on_bar is not BaseStrategy.on_bar
-
-                    if use_on_bar:
-                        # 逐行调用 on_bar，收集非 None 信号
-                        signals = []
-                        for idx, row in realtime_df.iterrows():
-                            sig = self.strategy.on_bar(row)
-                            if sig is not None:
-                                signals.append(sig)
-                    else:
-                        signals = self.strategy.generate_signals(realtime_df)
-
-                    if not signals:
-                        logger.debug("[LIVE] 无交易信号")
-                        time.sleep(interval)
-                        continue
-
-                    buy_signals = [s for s in signals if s.is_buy]
-                    sell_signals = [s for s in signals if s.is_sell]
-
-                    # 6. 获取账户 & 持仓
-                    account = self.broker.get_account()
-                    positions = self.broker.get_positions()
-                    current_value = account.get(
-                        "total_value", account.get("cash", self.initial_cash)
+                except Exception as e:
+                    ctx.consecutive_errors += 1
+                    logger.error(
+                        f"[LIVE] 循环异常 ({ctx.consecutive_errors}/{ctx.max_consecutive_errors}): {e}"
                     )
-                    available_cash = account.get("cash", 0)
 
-                    # 7. 风控检查
-                    risk_mgr.check_drawdown(current_value)
-                    risk_mgr.check_daily_loss(current_value)
-
-                    if risk_mgr.should_halt():
-                        logger.warning("[LIVE] 触发风控 halt，停止交易")
+                    if ctx.consecutive_errors >= ctx.max_consecutive_errors:
+                        logger.error(
+                            f"[LIVE] 连续错误达到 {ctx.max_consecutive_errors} 次，停止交易"
+                        )
                         break
 
-                    # 8. 执行卖出信号
-                    for sig in sell_signals:
-                        sell_res = self._execute_sell(
-                            sig,
-                            positions,
-                            dry_run,
-                            journal,
-                            strategy_name,
-                        )
-                        if sell_res:
-                            order, result = sell_res
-                            if result.status in ("PENDING", "PARTIAL_FILLED"):
-                                tracker.add(order, result)
+                    time.sleep(ctx.interval)
+                    continue
 
-                    # 9. (已移至上方与拉取行情并发)
+                if realtime_df is None or realtime_df.empty:
+                    logger.warning("[LIVE] 获取实时行情失败，跳过本轮")
+                    time.sleep(ctx.interval)
+                    continue
 
-                    # 9.5 卖出后刷新账户现金，避免换仓时系统性低配
-                    if sell_signals and not dry_run:
-                        account = self.broker.get_account()
-                        available_cash = account.get("cash", available_cash)
+                # 5. 生成信号
+                # 检测策略是否 override 了 on_bar
+                use_on_bar = type(self.strategy).on_bar is not BaseStrategy.on_bar
 
-                    # 10. 执行买入信号 (等权仓位)
-                    if buy_signals:
-                        latest_prices = self._build_price_lookup(realtime_df)
-                        self._execute_buys(
-                            buy_signals,
-                            available_cash,
-                            dry_run,
-                            journal,
-                            strategy_name,
-                            tracker,
-                            latest_prices,
-                        )
+                if use_on_bar:
+                    # 逐行调用 on_bar，收集非 None 信号
+                    signals = []
+                    for idx, row in realtime_df.iterrows():
+                        sig = self.strategy.on_bar(row)
+                        if sig is not None:
+                            signals.append(sig)
+                else:
+                    signals = self.strategy.generate_signals(realtime_df)
 
-                    # 11. 更新持仓价格
-                    self._update_position_prices(realtime_df)
+                if not signals:
+                    logger.debug("[LIVE] 无交易信号")
+                    time.sleep(ctx.interval)
+                    continue
 
-                    consecutive_errors = 0
+                buy_signals = [s for s in signals if s.is_buy]
+                sell_signals = [s for s in signals if s.is_sell]
 
-                # 控制循环频率
-                elapsed = time.time() - loop_start
-                sleep_time = max(0, interval - elapsed)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+                # 6. 获取账户 & 持仓
+                account = self.broker.get_account()
+                positions = self.broker.get_positions()
+                current_value = account.get("total_value", account.get("cash", self.initial_cash))
+                available_cash = account.get("cash", 0)
 
-        finally:
-            # 优雅关机：取消所有 pending 订单
-            if tracker.has_pending():
-                logger.info(f"[LIVE] 关机：取消 {len(tracker.get_pending())} 个 pending 订单")
-                cancelled = tracker.cancel_all(self.broker)
-                for order_id in cancelled:
-                    journal.record(
-                        "CANCELLED_ON_SHUTDOWN",
-                        Order(
-                            symbol="",
-                            side="",
-                            quantity=0,
-                            order_id=order_id,
-                        ),
-                        None,
-                        strategy_name=strategy_name,
+                # 7. 风控检查
+                ctx.risk_mgr.check_drawdown(current_value)
+                ctx.risk_mgr.check_daily_loss(current_value)
+
+                if ctx.risk_mgr.should_halt():
+                    logger.warning("[LIVE] 触发风控 halt，停止交易")
+                    break
+
+                # 8. 执行卖出信号
+                for sig in sell_signals:
+                    sell_res = self._execute_sell(
+                        sig,
+                        positions,
+                        ctx.dry_run,
+                        ctx.journal,
+                        ctx.strategy_name,
+                    )
+                    if sell_res:
+                        order, result = sell_res
+                        if result.status in ("PENDING", "PARTIAL_FILLED"):
+                            ctx.tracker.add(order, result)
+
+                # 9. (已移至上方与拉取行情并发)
+
+                # 9.5 卖出后刷新账户现金，避免换仓时系统性低配
+                if sell_signals and not ctx.dry_run:
+                    account = self.broker.get_account()
+                    available_cash = account.get("cash", available_cash)
+
+                # 10. 执行买入信号 (等权仓位)
+                if buy_signals:
+                    latest_prices = self._build_price_lookup(realtime_df)
+                    self._execute_buys(
+                        buy_signals,
+                        available_cash,
+                        ctx.dry_run,
+                        ctx.journal,
+                        ctx.strategy_name,
+                        ctx.tracker,
+                        latest_prices,
                     )
 
-            # 清理
-            if original_sigint is not None:
-                signal.signal(signal.SIGINT, original_sigint)
-            if original_sigterm is not None:
-                signal.signal(signal.SIGTERM, original_sigterm)
-            self.broker.disconnect()
-            logger.info("[LIVE] 交易会话结束")
+                # 11. 更新持仓价格
+                self._update_position_prices(realtime_df)
+
+                ctx.consecutive_errors = 0
+
+            # 控制循环频率
+            elapsed = time.time() - loop_start
+            sleep_time = max(0, ctx.interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        finally:
+            # Ensure the executor is always shut down even on exceptions.
+            ctx.executor.shutdown(wait=False)
+
+    def _shutdown_live_session(self, ctx: _LiveContext) -> None:
+        """Cancel pending orders, restore signal handlers, disconnect broker."""
+        # 优雅关机：取消所有 pending 订单
+        if ctx.tracker.has_pending():
+            logger.info(f"[LIVE] 关机：取消 {len(ctx.tracker.get_pending())} 个 pending 订单")
+            cancelled = ctx.tracker.cancel_all(self.broker)
+            for order_id in cancelled:
+                ctx.journal.record(
+                    "CANCELLED_ON_SHUTDOWN",
+                    Order(
+                        symbol="",
+                        side="",
+                        quantity=0,
+                        order_id=order_id,
+                    ),
+                    None,
+                    strategy_name=ctx.strategy_name,
+                )
+
+        # 清理
+        if ctx.original_sigint is not None:
+            signal.signal(signal.SIGINT, ctx.original_sigint)
+        if ctx.original_sigterm is not None:
+            signal.signal(signal.SIGTERM, ctx.original_sigterm)
+        self.broker.disconnect()
+        logger.info("[LIVE] 交易会话结束")
 
     def _fetch_realtime_data(self, symbols: Optional[List[str]]) -> Optional[pd.DataFrame]:
         """获取实时行情数据"""

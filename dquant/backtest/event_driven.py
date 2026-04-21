@@ -20,6 +20,7 @@ from dquant.constants import (
     MIN_SHARES,
 )
 from dquant.logger import get_logger
+from dquant.strategy.base import SignalType
 
 logger = get_logger(__name__)
 
@@ -67,7 +68,7 @@ class SignalEvent(Event):
     """信号事件"""
 
     symbol: str
-    signal_type: str  # 'LONG', 'SHORT', 'EXIT'
+    signal_type: SignalType  # BUY, SELL, HOLD
     strength: float = 1.0
 
     def __init__(self, timestamp, symbol, signal_type, strength=1.0):
@@ -377,7 +378,7 @@ class EventDrivenBacktest:
     def _on_signal(self, event: SignalEvent):
         """处理信号事件"""
         # 生成订单
-        if event.signal_type == "LONG":
+        if event.signal_type == SignalType.BUY:
             # 买入
             order = OrderEvent(
                 timestamp=event.timestamp,
@@ -388,7 +389,7 @@ class EventDrivenBacktest:
             )
             self.events.append(order)
 
-        elif event.signal_type == "EXIT":
+        elif event.signal_type == SignalType.SELL:
             # 平仓
             if self.positions[event.symbol] > 0:
                 order = OrderEvent(

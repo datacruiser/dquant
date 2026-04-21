@@ -172,9 +172,7 @@ class SmartFlowStrategy(BaseStrategy):
 
             # 综合得分
             score = (
-                self.main_weight * main
-                + self.medium_weight * medium
-                - self.retail_weight * small
+                self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
             )
 
             # 将得分作为列合并到 grp，避免索引对齐问题

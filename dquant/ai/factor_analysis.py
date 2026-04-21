@@ -105,54 +105,44 @@ class FactorAnalyzer:
         forward_returns: pd.Series,
         dates: Optional[pd.DatetimeIndex],
     ) -> pd.Series:
-        """计算 IC 时间序列"""
+        """计算 IC 时间序列（向量化）"""
         if dates is None:
             dates = factor_scores.index.unique()
 
-        ic_values = []
-        ic_dates = []
+        method = self.ic_method if self.ic_method in ("spearman", "pearson") else "pearson"
 
-        for date in dates:
-            # 获取当天因子值
-            day_factors = factor_scores[factor_scores.index == date]
+        # 准备合并的 DataFrame: date x symbol
+        factor_df = factor_scores.set_index("symbol", append=True)["score"]
+        factor_df.index.names = ["date", "symbol"]
+        factor_df = factor_df.rename("factor")
 
-            # 获取对应收益
-            if isinstance(forward_returns.index, pd.DatetimeIndex):
-                day_returns = forward_returns[forward_returns.index == date]
-            else:
-                try:
-                    day_returns = forward_returns.loc[date]
-                except Exception as e:
-                    logger.debug(f"[FactorAnalysis] 计算因子 IC 失败: {e}")
-                    continue
-
-            if len(day_factors) == 0 or len(day_returns) == 0:
-                continue
-
-            # 合并
-            merged = day_factors.set_index("symbol")["score"].to_frame("factor")
-
-            if isinstance(day_returns, pd.Series):
-                merged["return"] = day_returns
-            else:
-                continue
-
+        if isinstance(forward_returns.index, pd.DatetimeIndex):
+            returns_df = forward_returns
+            returns_df.index.names = ["date"]
+            merged = factor_df.to_frame().join(returns_df.rename("return"), how="inner").dropna()
+        else:
+            merged = factor_df.to_frame()
+            merged["return"] = (
+                forward_returns.values[: len(merged)] if len(forward_returns) == len(merged) else 0
+            )
             merged = merged.dropna()
 
-            if len(merged) < 5:  # 样本太少
-                continue
+        if len(merged) < 5:
+            return pd.Series(dtype=float)
 
-            # 计算 IC
-            if self.ic_method == "spearman":
-                ic = merged["factor"].corr(merged["return"], method="spearman")
-            else:
-                ic = merged["factor"].corr(merged["return"], method="pearson")
+        # 按日期分组计算相关系数
+        def _group_ic(group):
+            if len(group) < 5:
+                return np.nan
+            return group["factor"].corr(group["return"], method=method)
 
-            if pd.notna(ic):
-                ic_values.append(ic)
-                ic_dates.append(date)
+        ic_series = merged.groupby(level=0).apply(_group_ic).dropna()
 
-        return pd.Series(ic_values, index=ic_dates)
+        # 过滤只保留指定日期范围
+        if len(dates) > 0:
+            ic_series = ic_series.reindex(dates).dropna()
+
+        return ic_series
 
     def _get_day_factors(self, factor_scores, date):
         """获取当天的因子数据并分组"""
