@@ -183,7 +183,7 @@ class Simulator(BaseBroker):
                         "price": filled_price,
                     }
 
-                commission = filled_price * filled_quantity * DEFAULT_COMMISSION
+                commission = total_cost - (filled_price * filled_quantity)
 
             elif order.side == "SELL":
                 if (
@@ -218,7 +218,9 @@ class Simulator(BaseBroker):
                     del self.positions[order.symbol]
 
             order.filled_quantity = filled_quantity
-            order.status = "FILLED"
+            order.status = (
+                "PARTIAL_FILLED" if filled_quantity < order.quantity else "FILLED"
+            )
             self.orders[order.order_id] = order
 
             return OrderResult(
@@ -229,7 +231,7 @@ class Simulator(BaseBroker):
                 filled_price=filled_price,
                 commission=commission,
                 timestamp=order.timestamp,
-                status="FILLED",
+                status=order.status,
             )
 
     def cancel_order(self, order_id: str) -> bool:

@@ -121,12 +121,16 @@ class FactorAnalyzer:
             returns_df = forward_returns
             returns_df.index.names = ["date"]
             merged = factor_df.to_frame().join(returns_df.rename("return"), how="inner").dropna()
+        elif isinstance(forward_returns.index, pd.MultiIndex):
+            # (date, symbol) MultiIndex — 直接按 (date, symbol) 对齐
+            ret_aligned = forward_returns.copy()
+            ret_aligned.index.names = ["date", "symbol"]
+            ret_aligned = ret_aligned.rename("return")
+            merged = factor_df.to_frame().join(ret_aligned, how="inner").dropna()
         else:
-            merged = factor_df.to_frame()
-            merged["return"] = (
-                forward_returns.values[: len(merged)] if len(forward_returns) == len(merged) else 0
+            raise ValueError(
+                "forward_returns 必须有 DatetimeIndex 或 (date, symbol) MultiIndex"
             )
-            merged = merged.dropna()
 
         if len(merged) < 5:
             return pd.Series(dtype=float)
@@ -138,6 +142,8 @@ class FactorAnalyzer:
             return group["factor"].corr(group["return"], method=method)
 
         ic_series = merged.groupby(level=0).apply(_group_ic).dropna()
+        if isinstance(ic_series.index, pd.MultiIndex):
+            ic_series = ic_series.droplevel(0)
 
         # 过滤只保留指定日期范围
         if len(dates) > 0:
@@ -169,7 +175,7 @@ class FactorAnalyzer:
 
         try:
             return forward_returns.loc[date]
-        except Exception:
+        except (KeyError, ValueError):
             logger.debug("[FactorAnalysis] 计算因子相关性失败")
             return None
 
@@ -311,9 +317,9 @@ class FactorAnalyzer:
             return group.rolling(period).sum().shift(-period)
 
         result = returns.groupby("symbol")["return"].apply(calc_forward)
-        # groupby.apply 返回 MultiIndex (symbol, date)，对齐到单层 date 索引
+        # groupby.apply 返回 MultiIndex (symbol, date)，重排为 (date, symbol) 以便对齐
         if isinstance(result.index, pd.MultiIndex):
-            result = result.droplevel(0)
+            result = result.reorder_levels([1, 0]).sort_index()
         return result
 
 

@@ -255,9 +255,10 @@ class TestGetPriceLimit:
         assert get_price_limit("830001.BJ") == BJ_PRICE_LIMIT
 
     def test_gem_board(self):
-        """创业板 300xxx → ±20%"""
+        """创业板 300xxx/301xxx → ±20%"""
         assert get_price_limit("300001.SZ") == GEM_PRICE_LIMIT
         assert get_price_limit("300750.SZ") == GEM_PRICE_LIMIT
+        assert get_price_limit("301001.SZ") == GEM_PRICE_LIMIT
 
     def test_star_board(self):
         """科创板 688xxx → ±20%"""

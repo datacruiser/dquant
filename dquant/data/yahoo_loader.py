@@ -246,8 +246,8 @@ class YahooRealTime:
         return pd.DataFrame(results)
 
     @staticmethod
-    def get_fx_rate(from_currency: str, to_currency: str = "USD") -> float:
-        """获取汇率"""
+    def get_fx_rate(from_currency: str, to_currency: str = "USD") -> Optional[float]:
+        """获取汇率，失败返回 None"""
         try:
             import yfinance as yf
 
@@ -255,4 +255,4 @@ class YahooRealTime:
             ticker = yf.Ticker(pair)
             return ticker.history(period="1d")["Close"].iloc[-1]
         except Exception:
-            return 0
+            return None
