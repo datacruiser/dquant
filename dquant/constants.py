@@ -199,7 +199,7 @@ ZZ500_SAMPLE = [
 
 DEFAULT_PRICE_LIMIT = 0.10  # 主板 ±10%
 ST_PRICE_LIMIT = 0.05  # ST 板块 ±5%
-GEM_PRICE_LIMIT = 0.20  # 创业板 (300xxx) ±20%
+GEM_PRICE_LIMIT = 0.20  # 创业板 (300xxx/301xxx) ±20%
 STAR_PRICE_LIMIT = 0.20  # 科创板 (688xxx) ±20%
 BJ_PRICE_LIMIT = 0.30  # 北交所 ±30%
 
@@ -215,7 +215,7 @@ def get_price_limit(symbol: str, symbol_name: str = "") -> float:
         return BJ_PRICE_LIMIT
     if code.startswith("688"):
         return STAR_PRICE_LIMIT
-    if code.startswith("300"):
+    if code.startswith("30"):
         return GEM_PRICE_LIMIT
     if symbol_name:
         name_upper = symbol_name.upper().strip()

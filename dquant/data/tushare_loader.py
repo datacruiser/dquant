@@ -346,7 +346,7 @@ class TushareLoader(DataSource):
                 fin_df = fin_df.sort_values("end_date").groupby("ts_code").last()
 
                 # TODO: 合并到主数据
-                pass
+                logger.warning("[Tushare] 财务数据合并尚未实现，include_financial=True 暂不生效")
         except Exception as e:
             logger.warning(f"Failed to add financial data: {e}")
 

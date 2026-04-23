@@ -343,15 +343,15 @@ class EventDrivenBacktest:
         if self.data is None:
             return
 
-        for idx, row in self.data.iterrows():
+        for row in self.data.itertuples():
             event = MarketEvent(
-                timestamp=idx,
-                symbol=row.get("symbol", ""),
-                open=row["open"],
-                high=row["high"],
-                low=row["low"],
-                close=row["close"],
-                volume=row["volume"],
+                timestamp=row.Index,
+                symbol=getattr(row, "symbol", ""),
+                open=row.open,
+                high=row.high,
+                low=row.low,
+                close=row.close,
+                volume=row.volume,
             )
             yield event
 
@@ -413,6 +413,10 @@ class EventDrivenBacktest:
         else:
             price = 0
             volume = 0
+
+        if price == 0:
+            logger.warning(f"No price for {event.symbol}, skipping order")
+            return
 
         market_data = {
             "close": price,

@@ -90,9 +90,11 @@ class FactorCombiner:
             return df
 
         if self.winsorize:
-            lower = df["score"].quantile(self.winsorize_limit)
-            upper = df["score"].quantile(1 - self.winsorize_limit)
-            df["score"] = df["score"].clip(lower, upper)
+            df["score"] = df.groupby(df.index)["score"].transform(
+                lambda x: x.clip(
+                    x.quantile(self.winsorize_limit), x.quantile(1 - self.winsorize_limit)
+                )
+            )
 
         if self.standardize:
             df["score"] = df.groupby(df.index)["score"].transform(
@@ -130,7 +132,7 @@ class FactorCombiner:
                         corr = merged["factor"].corr(merged["target"], method="spearman")
                         if pd.notna(corr):
                             ics.append(corr)
-        except Exception:
+        except (KeyError, ValueError):
             logger.debug("[FactorCombiner] 计算每日 IC 失败")
         return ics
 
@@ -157,8 +159,10 @@ class FactorCombiner:
         if not self.factor_values:
             raise ValueError("No factor values. Call fit() first.")
 
-        if method == "equal" or weights:
+        if method == "equal":
             return self._combine_equal(weights)
+        elif weights is not None:
+            raise ValueError(f"自定义 weights 仅支持 method='equal'，当前 method='{method}'")
         elif method == "ic_weight":
             return self._combine_ic_weight()
         elif method == "ir_weight":
@@ -190,6 +194,9 @@ class FactorCombiner:
 
         result = pd.concat(combined_scores)
         result = result.groupby([result.index, "symbol"])["score"].sum().reset_index()
+        # reset_index 后第一列是日期（名称可能是 "date"、"index" 或 None）
+        date_col = result.columns[0]
+        result = result.rename(columns={date_col: "date"})
         result = result.set_index("date")
 
         return result
@@ -249,8 +256,10 @@ class FactorCombiner:
             pivot = pivot.reindex(index=dates, columns=symbols)
             X[:, i] = pivot.values.flatten()
 
-        # Temporal split: fit PCA on first 80% of data to avoid look-ahead bias
-        split_idx = int(n_samples * 0.8)
+        # Temporal split: fit PCA on first 80% of dates to avoid look-ahead bias
+        # 至少保留 1 个日期的数据用于训练
+        split_date_idx = max(1, int(len(dates) * 0.8))
+        split_idx = split_date_idx * len(symbols)
         pca = PCA(n_components=1)
         pca.fit(X[:split_idx])
         combined = pca.transform(X)

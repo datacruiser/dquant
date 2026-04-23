@@ -86,8 +86,12 @@ class MoneyFlowStrategy(BaseStrategy):
             if self.require_main_flow and "main_net_inflow" in candidates.columns:
                 candidates = candidates[candidates["main_net_inflow"] > 0]
 
-            # 3. 避免散户大量流入
-            if self.avoid_retail_inflow and "small_net_inflow" in candidates.columns:
+            # 3. 避免散户大量流入（截面过小时跳过 quantile 过滤）
+            if (
+                self.avoid_retail_inflow
+                and "small_net_inflow" in candidates.columns
+                and len(candidates) >= 5
+            ):
                 candidates = candidates[
                     candidates["small_net_inflow"] < candidates["small_net_inflow"].quantile(0.8)
                 ]
@@ -158,27 +162,29 @@ class SmartFlowStrategy(BaseStrategy):
             if col not in data.columns:
                 raise ValueError(f"数据缺少 '{col}' 列")
 
-        # 按日期分组
-        for date, grp in data.groupby(data.index):
-            # 对资金流做窗口平滑
-            if self.window > 1 and len(grp) >= self.window:
-                main = grp["main_net_inflow"].rolling(self.window, min_periods=1).mean()
-                medium = grp["medium_net_inflow"].rolling(self.window, min_periods=1).mean()
-                small = grp["small_net_inflow"].rolling(self.window, min_periods=1).mean()
-            else:
-                main = grp["main_net_inflow"]
-                medium = grp["medium_net_inflow"]
-                small = grp["small_net_inflow"]
-
-            # 综合得分
-            score = (
-                self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
+        # 按股票分组做时间序列滚动平滑（跨日期，而非截面内）
+        if self.window > 1:
+            main = data.groupby("symbol")["main_net_inflow"].transform(
+                lambda x: x.rolling(self.window, min_periods=1).mean()
             )
+            medium = data.groupby("symbol")["medium_net_inflow"].transform(
+                lambda x: x.rolling(self.window, min_periods=1).mean()
+            )
+            small = data.groupby("symbol")["small_net_inflow"].transform(
+                lambda x: x.rolling(self.window, min_periods=1).mean()
+            )
+        else:
+            main = data["main_net_inflow"]
+            medium = data["medium_net_inflow"]
+            small = data["small_net_inflow"]
 
-            # 将得分作为列合并到 grp，避免索引对齐问题
-            grp_scored = grp.copy()
-            grp_scored["_score"] = score.values
-            top_stocks = grp_scored.nlargest(self.top_k, "_score")
+        # 综合得分
+        score = self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
+        data_scored = data.assign(_score=score)
+
+        # 按日期分组选股
+        for date, grp in data_scored.groupby(data_scored.index):
+            top_stocks = grp.nlargest(self.top_k, "_score")
 
             for _, row in top_stocks.iterrows():
                 signal = Signal(

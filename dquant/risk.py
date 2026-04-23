@@ -147,7 +147,7 @@ class PositionSizer:
                 volatilities[symbol] = 0.02  # 默认 2% 日波动
 
         # 计算风险贡献权重
-        inv_vol = {s: 1.0 / volatilities[s] for s in symbols}
+        inv_vol = {s: 1.0 / max(volatilities[s], 1e-10) for s in symbols}
         total_inv_vol = sum(inv_vol.values())
 
         positions = {}
@@ -213,7 +213,7 @@ class RiskManager:
 
         # 持久化路径（可选）
         self._state_path: Optional[Path] = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def enable_persistence(self, state_path: str = "risk_state.json"):
         """
@@ -229,7 +229,11 @@ class RiskManager:
     @staticmethod
     def _sign_state(state: dict) -> str:
         """计算状态 HMAC 签名"""
-        secret = os.environ.get("DQUANT_RISK_SECRET", "dquant-default-risk-key").encode()
+        secret = os.environ.get("DQUANT_RISK_SECRET")
+        if not secret:
+            logger.warning("[RiskManager] DQUANT_RISK_SECRET 未设置，使用默认密钥（不安全）")
+            secret = "dquant-default-risk-key"
+        secret = secret.encode()
         payload = json.dumps(state, sort_keys=True).encode()
         return hmac.new(secret, payload, hashlib.sha256).hexdigest()
 
@@ -238,13 +242,14 @@ class RiskManager:
         if self._state_path is None:
             return
 
-        state = {
-            "peak_value": self.peak_value,
-            "current_drawdown": self.current_drawdown,
-            "daily_start_value": self.daily_start_value,
-            "daily_start_date": self.daily_start_date,
-            "halt_trading": self.halt_trading,
-        }
+        with self._lock:
+            state = {
+                "peak_value": self.peak_value,
+                "current_drawdown": self.current_drawdown,
+                "daily_start_value": self.daily_start_value,
+                "daily_start_date": self.daily_start_date,
+                "halt_trading": self.halt_trading,
+            }
         state["_signature"] = self._sign_state(
             {k: v for k, v in state.items() if k != "_signature"}
         )
@@ -270,6 +275,10 @@ class RiskManager:
 
             # 验证签名
             saved_sig = state.pop("_signature", None)
+            if saved_sig is None:
+                logger.warning("[RiskManager] 状态文件缺少签名，可能被篡改")
+                self.halt_trading = True
+                return False
             expected_sig = self._sign_state(state)
             if saved_sig != expected_sig:
                 logger.warning("[RiskManager] 状态文件签名不匹配，可能被篡改，使用安全默认值")
@@ -408,7 +417,15 @@ class RiskManager:
 
     def should_halt(self) -> bool:
         """综合判断是否应停止交易（回撤 + 日亏损）"""
-        return self.halt_trading
+        with self._lock:
+            return self.halt_trading
+
+    def reset_halt(self):
+        """手动重置 halt 状态（需人工确认后调用）"""
+        with self._lock:
+            self.halt_trading = False
+            self.save_state()
+            logger.info("[RiskManager] halt_trading 已重置")
 
     def calculate_var(
         self,

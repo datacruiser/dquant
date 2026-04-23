@@ -79,7 +79,7 @@ class XTPBroker(BaseBroker):
         self.port = port
         self.account = account
         # 优先从环境变量读取密码，避免明文存储
-        self.password = os.getenv(password_env, password) if password_env else password
+        self._password = os.getenv(password_env, password) if password_env else password
         self.client_id = client_id
         self.timeout = timeout
 
@@ -94,6 +94,11 @@ class XTPBroker(BaseBroker):
             enable_fund_check=kwargs.get("enable_fund_check", True),
             enable_order_validation=kwargs.get("enable_order_validation", True),
             enable_position_check=kwargs.get("enable_position_check", True),
+        )
+
+    def __repr__(self):
+        return (
+            f"XTPBroker(server={self.server}, account={self.account}, connected={self._connected})"
         )
 
     def connect(self, **kwargs) -> bool:
@@ -118,7 +123,7 @@ class XTPBroker(BaseBroker):
                 self.server,
                 self.port,
                 self.account,
-                self.password,
+                self._password,
                 self.client_id,
             )
 
