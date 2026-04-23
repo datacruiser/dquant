@@ -62,7 +62,9 @@ class LarkNotifier(Notifier):
             return False
 
         if not self.webhook_url.startswith(self._ALLOWED_PREFIXES):
-            logger.error(f"[Lark] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***")
+            logger.error(
+                f"[Lark] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***"
+            )
             self._fallback.send(title, f"[Lark BLOCKED] {message}", "ERROR")
             return False
 

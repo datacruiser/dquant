@@ -91,7 +91,9 @@ class FactorCombiner:
 
         if self.winsorize:
             df["score"] = df.groupby(df.index)["score"].transform(
-                lambda x: x.clip(x.quantile(self.winsorize_limit), x.quantile(1 - self.winsorize_limit))
+                lambda x: x.clip(
+                    x.quantile(self.winsorize_limit), x.quantile(1 - self.winsorize_limit)
+                )
             )
 
         if self.standardize:
@@ -160,9 +162,7 @@ class FactorCombiner:
         if method == "equal":
             return self._combine_equal(weights)
         elif weights is not None:
-            raise ValueError(
-                f"自定义 weights 仅支持 method='equal'，当前 method='{method}'"
-            )
+            raise ValueError(f"自定义 weights 仅支持 method='equal'，当前 method='{method}'")
         elif method == "ic_weight":
             return self._combine_ic_weight()
         elif method == "ir_weight":

@@ -128,9 +128,7 @@ class FactorAnalyzer:
             ret_aligned = ret_aligned.rename("return")
             merged = factor_df.to_frame().join(ret_aligned, how="inner").dropna()
         else:
-            raise ValueError(
-                "forward_returns 必须有 DatetimeIndex 或 (date, symbol) MultiIndex"
-            )
+            raise ValueError("forward_returns 必须有 DatetimeIndex 或 (date, symbol) MultiIndex")
 
         if len(merged) < 5:
             return pd.Series(dtype=float)

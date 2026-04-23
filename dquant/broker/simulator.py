@@ -218,9 +218,7 @@ class Simulator(BaseBroker):
                     del self.positions[order.symbol]
 
             order.filled_quantity = filled_quantity
-            order.status = (
-                "PARTIAL_FILLED" if filled_quantity < order.quantity else "FILLED"
-            )
+            order.status = "PARTIAL_FILLED" if filled_quantity < order.quantity else "FILLED"
             self.orders[order.order_id] = order
 
             return OrderResult(

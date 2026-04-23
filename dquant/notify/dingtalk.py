@@ -54,7 +54,9 @@ class DingTalkNotifier(Notifier):
         # SSRF 防护：仅允许钉钉官方 webhook 域名
         _ALLOWED_PREFIX = "https://oapi.dingtalk.com/robot/send"
         if not self.webhook_url.startswith(_ALLOWED_PREFIX):
-            logger.error(f"[DingTalk] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***")
+            logger.error(
+                f"[DingTalk] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***"
+            )
             self._fallback.send(title, f"[DingTalk BLOCKED] {message}", "ERROR")
             return False
 

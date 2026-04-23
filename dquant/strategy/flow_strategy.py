@@ -179,9 +179,7 @@ class SmartFlowStrategy(BaseStrategy):
             small = data["small_net_inflow"]
 
         # 综合得分
-        score = (
-            self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
-        )
+        score = self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
         data_scored = data.assign(_score=score)
 
         # 按日期分组选股

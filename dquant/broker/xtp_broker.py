@@ -97,7 +97,9 @@ class XTPBroker(BaseBroker):
         )
 
     def __repr__(self):
-        return f"XTPBroker(server={self.server}, account={self.account}, connected={self._connected})"
+        return (
+            f"XTPBroker(server={self.server}, account={self.account}, connected={self._connected})"
+        )
 
     def connect(self, **kwargs) -> bool:
         """连接 XTP 服务器"""
