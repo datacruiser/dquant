@@ -45,11 +45,6 @@ def get_logger(
     """
     logger = logging.getLogger(name)
 
-    # 如果已经有 handler，直接返回
-    if logger.handlers:
-        return logger
-
-    # 设置级别
     level_map = {
         "DEBUG": logging.DEBUG,
         "INFO": logging.INFO,
@@ -57,6 +52,15 @@ def get_logger(
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
+
+    # 如果已经有 *我们自己的* handler（标记为 dquant handler），说明已初始化
+    dquant_handlers = [h for h in logger.handlers if getattr(h, "_dquant", False)]
+    if dquant_handlers:
+        # 更新级别（允许后续调用调整级别）
+        logger.setLevel(level_map.get(level.upper(), logging.INFO))
+        return logger
+
+    # 设置级别
     logger.setLevel(level_map.get(level.upper(), logging.INFO))
 
     # 选择格式
@@ -67,6 +71,7 @@ def get_logger(
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(formatter)
+    console_handler._dquant = True  # 标记为 dquant handler
     logger.addHandler(console_handler)
 
     # 文件 handler
@@ -88,6 +93,7 @@ def get_logger(
 
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
+        file_handler._dquant = True  # 标记为 dquant handler
         logger.addHandler(file_handler)
 
     return logger

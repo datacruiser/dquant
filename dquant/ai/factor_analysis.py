@@ -275,6 +275,7 @@ class FactorAnalyzer:
         因子衰减分析
 
         分析因子对不同持有期的预测能力。
+        因子对齐（merge + groupby）只执行一次，避免重复计算。
 
         Args:
             returns: 收益率数据 (index=date, columns=['symbol', 'return'])
@@ -283,15 +284,51 @@ class FactorAnalyzer:
         Returns:
             {持有期: IC}
         """
+        # ---- 对齐因子数据一次 ----
+        factor_df = factor_scores.set_index("symbol", append=True)["score"]
+        factor_df.index.names = ["date", "symbol"]
+        factor_df = factor_df.rename("factor")
+
+        method = self.ic_method if self.ic_method in ("spearman", "pearson") else "pearson"
+        dates = factor_scores.index.unique()
+
         decay = {}
 
         for period in range(1, max_periods + 1):
             # 计算 period 天后的收益
             forward_returns = self._calculate_forward_returns(returns, period)
 
-            # 计算 IC
-            result = self.analyze(factor_scores, forward_returns)
-            decay[period] = result.ic_mean
+            # 直接使用已对齐的 factor_df 与当期 forward_returns 合并
+            if isinstance(forward_returns.index, pd.DatetimeIndex):
+                returns_df = forward_returns
+                returns_df.index.names = ["date"]
+                merged = factor_df.to_frame().join(returns_df.rename("return"), how="inner").dropna()
+            elif isinstance(forward_returns.index, pd.MultiIndex):
+                ret_aligned = forward_returns.copy()
+                ret_aligned.index.names = ["date", "symbol"]
+                ret_aligned = ret_aligned.rename("return")
+                merged = factor_df.to_frame().join(ret_aligned, how="inner").dropna()
+            else:
+                raise ValueError("forward_returns 必须有 DatetimeIndex 或 (date, symbol) MultiIndex")
+
+            if len(merged) < 5:
+                decay[period] = 0.0
+                continue
+
+            # 按日期分组计算相关系数
+            def _group_ic(group):
+                if len(group) < 5:
+                    return np.nan
+                return group["factor"].corr(group["return"], method=method)
+
+            ic_series = merged.groupby(level=0).apply(_group_ic).dropna()
+            if isinstance(ic_series.index, pd.MultiIndex):
+                ic_series = ic_series.droplevel(0)
+
+            if len(dates) > 0:
+                ic_series = ic_series.reindex(dates).dropna()
+
+            decay[period] = ic_series.mean() if len(ic_series) > 0 else 0.0
 
         return pd.Series(decay)
 

@@ -147,8 +147,8 @@ class MockRealtimeSource(RealtimeDataSource):
 
                     self.quotes[symbol] = quote
 
-                    # 触发回调
-                    for callback in self.callbacks:
+                    # 触发回调 (迭代副本，避免并发修改)
+                    for callback in list(self.callbacks):
                         try:
                             callback(quote)
                         except Exception as e:
@@ -197,7 +197,7 @@ class RealtimeManager:
 
     def _on_quote(self, quote: RealtimeQuote):
         """内部回调"""
-        for callback in self.callbacks:
+        for callback in list(self.callbacks):
             try:
                 callback(quote)
             except Exception as e:
@@ -301,17 +301,21 @@ class RealtimeServer:
             }
         )
 
-        def _handle_send_result(t):
-            if not t.cancelled() and t.exception():
-                logger.warning(f"WS send failed: {t.exception()}")
-
-        # 向所有客户端发送
-        for client in self.clients:
+        # 向所有客户端发送，收集 task 以便清理
+        tasks = []
+        for client in list(self.clients):
             try:
                 task = asyncio.create_task(client.send(message))
-                task.add_done_callback(_handle_send_result)
+                tasks.append(task)
             except Exception as e:
                 logger.warning(f"Failed to send message to client: {e}")
+
+        # 附加回调清理已完成的 task
+        if tasks:
+            async def _cleanup(tasks=tasks):
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+            asyncio.create_task(_cleanup())
 
     async def start(self):
         """启动服务器"""
@@ -348,7 +352,7 @@ class RealtimeClient:
             import websockets
         except ImportError:
             logger.warning("需要安装 websockets: pip install websockets")
-            return
+            raise ImportError("websockets is required: pip install websockets")
 
         self.websocket = await websockets.connect(self.url)
 
@@ -404,7 +408,7 @@ class RealtimeClient:
                         timestamp=datetime.fromisoformat(quote_data["timestamp"]),
                     )
 
-                    for callback in self.callbacks:
+                    for callback in list(self.callbacks):
                         try:
                             callback(quote)
                         except Exception as e:

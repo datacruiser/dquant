@@ -4,18 +4,13 @@
 通过钉钉机器人 Webhook 发送通知，使用标准库 urllib（无外部依赖）。
 """
 
-import base64
-import hashlib
-import hmac
 import json
 import os
-import time
 import urllib.error
-import urllib.parse
 import urllib.request
 
 from dquant.logger import get_logger
-from dquant.notify.base import Notifier
+from dquant.notify.base import Notifier, sign_webhook_url
 from dquant.notify.log_notifier import LogNotifier
 
 logger = get_logger(__name__)
@@ -87,20 +82,7 @@ class DingTalkNotifier(Notifier):
 
     def _build_url(self) -> str:
         """构建带签名的 Webhook URL"""
-        if not self.secret:
-            return self.webhook_url
-
-        timestamp = str(int(time.time() * 1000))
-        string_to_sign = f"{timestamp}\n{self.secret}"
-        hmac_code = hmac.new(
-            self.secret.encode("utf-8"),
-            string_to_sign.encode("utf-8"),
-            digestmod=hashlib.sha256,
-        ).digest()
-        sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-
-        separator = "&" if "?" in self.webhook_url else "?"
-        return f"{self.webhook_url}{separator}timestamp={timestamp}&sign={sign}"
+        return sign_webhook_url(self.webhook_url, self.secret, timestamp_ms=True)
 
     def _build_payload(self, title: str, message: str, level: str) -> dict:
         """构建钉钉消息 payload"""

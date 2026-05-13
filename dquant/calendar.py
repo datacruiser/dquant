@@ -173,6 +173,8 @@ def get_previous_trading_day(
             logger.debug(f"exchange_calendars get_previous_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天回退
+    if n > 1000:
+        raise ValueError(f"n={n} is unreasonably large for get_previous_trading_day, max is 1000")
     result = ts
     count = 0
     while count < n:
@@ -213,6 +215,8 @@ def get_next_trading_day(
             logger.debug(f"exchange_calendars get_next_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天前进
+    if n > 1000:
+        raise ValueError(f"n={n} is unreasonably large for get_next_trading_day, max is 1000")
     result = ts
     count = 0
     while count < n:

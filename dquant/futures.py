@@ -324,10 +324,14 @@ class FuturesAccount:
         """
         检查是否触发追保
 
+        追保条件: 总权益 < 维持保证金 (= 总持仓保证金 × 维持保证金比例)
+        即当亏损导致权益不足以覆盖维持保证金时触发。
+
         Args:
-            maintenance_ratio: 维持保证金比例
+            maintenance_ratio: 维持保证金占总保证金的比例
 
         Returns:
             是否触发追保
         """
-        return self.margin_usage_ratio > maintenance_ratio
+        required_equity = self.total_margin_used * maintenance_ratio
+        return self.total_equity < required_equity

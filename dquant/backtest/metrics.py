@@ -3,6 +3,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -14,15 +15,19 @@ from dquant.constants import TRADING_DAYS_PER_YEAR
 class Metrics:
     """
     回测绩效指标
+
+    Note: win_rate, profit_factor, total_trades are None when computed
+    via from_nav() (no trade-level data). Use from_nav_and_trades() to
+    populate these fields.
     """
 
     total_return: float = 0.0  # 总收益率
     annual_return: float = 0.0  # 年化收益率
     sharpe: float = 0.0  # 夏普比率
     max_drawdown: float = 0.0  # 最大回撤
-    win_rate: float = 0.0  # 胜率
-    profit_factor: float = 0.0  # 盈亏比
-    total_trades: int = 0  # 总交易次数
+    win_rate: Optional[float] = None  # 胜率 (None if no trade data)
+    profit_factor: Optional[float] = None  # 盈亏比 (None if no trade data)
+    total_trades: Optional[int] = None  # 总交易次数 (None if no trade data)
     volatility: float = 0.0  # 年化波动率
     calmar: float = 0.0  # 卡玛比率
 
@@ -98,6 +103,11 @@ class Metrics:
             rf: 无风险利率 (年化)
         """
         metrics = cls.from_nav(nav_series, rf=rf)
+
+        # 初始化 trade-level 指标为 0 (from_nav 中为 None)
+        metrics.total_trades = 0
+        metrics.win_rate = 0.0
+        metrics.profit_factor = 0.0
 
         if trades is not None and "pnl" in trades.columns and len(trades) > 0:
             pnl = trades["pnl"].dropna()

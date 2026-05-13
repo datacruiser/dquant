@@ -55,7 +55,8 @@ class AccMomentumFactor(RuleFactor):
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         ret = group["close"].pct_change(fill_method=None)
-        return (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
+        cumprod = (1 + ret).cumprod()
+        return cumprod / cumprod.shift(self.window) - 1
 
 
 # ============================================================
@@ -255,7 +256,7 @@ class CCIFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         tp = (group["high"] + group["low"] + group["close"]) / 3
         ma = tp.rolling(self.window).mean()
-        md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean())
+        md = (tp - ma).abs().rolling(self.window).mean()
         cci = (tp - ma) / (0.015 * md.replace(0, float("nan")))
         return -cci  # CCI 反转
 
@@ -697,5 +698,12 @@ def _register_extended_factors():
     )
 
 
-# 注册扩展因子
-_register_extended_factors()
+# 注册扩展因子（包裹 try/except 避免单个模块缺失导致所有因子不可用）
+try:
+    _register_extended_factors()
+except Exception as _e:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        f"Extended factors registration failed (some factors unavailable): {_e}"
+    )

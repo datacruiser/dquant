@@ -31,6 +31,8 @@ class TradeJournal:
     def __init__(self, journal_dir: str = "./trade_journal"):
         self.journal_dir = Path(journal_dir)
         self.journal_dir.mkdir(parents=True, exist_ok=True)
+        # 写入失败缓冲队列：磁盘满时暂存，避免崩掉交易循环
+        self._write_failures: list = []
 
     def record(
         self,
@@ -79,9 +81,31 @@ class TradeJournal:
         try:
             with open(filepath, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            # 写入成功后尝试刷出之前缓冲的失败记录
+            self._flush_failures()
         except Exception as e:
-            logger.error(f"写入交易日志失败: {e}")
-            raise  # 审计日志不可丢失，向上抛出
+            logger.error(f"写入交易日志失败 (已缓冲): {e}")
+            self._write_failures.append(record)
+            if len(self._write_failures) > 1000:
+                logger.critical("审计日志缓冲超过 1000 条，丢弃最旧记录")
+                self._write_failures = self._write_failures[-500:]
+
+    def _flush_failures(self):
+        """尝试写入之前失败的缓冲记录"""
+        if not self._write_failures:
+            return
+        remaining = []
+        for record in self._write_failures:
+            date_str = record.get("timestamp", datetime.now().isoformat())[:10]
+            filepath = self.journal_dir / f"{date_str}.jsonl"
+            try:
+                with open(filepath, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            except Exception:
+                remaining.append(record)
+        if remaining:
+            logger.warning(f"审计日志仍有 {len(remaining)} 条缓冲未写出")
+        self._write_failures = remaining
 
     def read_day(self, date_str: str) -> list:
         """读取某天的所有交易记录"""
