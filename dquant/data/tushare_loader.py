@@ -299,11 +299,12 @@ class TushareLoader(DataSource):
         return df
 
     def _add_financial_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """添加财务数据（尚未实现）"""
-        raise NotImplementedError(
-            "include_financial is not yet implemented. "
-            "Use TushareFinancial class directly for financial data."
+        """添加财务数据（尚未实现，当前为 no-op 并记录 warning）"""
+        logger.warning(
+            "[Tushare] include_financial=True 但财务数据合并尚未实现，"
+            "数据将不含财务字段。如需财务数据请使用 TushareFinancial 类。"
         )
+        return df
 
     def get_realtime_quotes(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:
         """获取实时行情"""

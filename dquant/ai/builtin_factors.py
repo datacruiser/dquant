@@ -256,7 +256,7 @@ class CCIFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         tp = (group["high"] + group["low"] + group["close"]) / 3
         ma = tp.rolling(self.window).mean()
-        md = (tp - ma).abs().rolling(self.window).mean()
+        md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
         cci = (tp - ma) / (0.015 * md.replace(0, float("nan")))
         return -cci  # CCI 反转
 

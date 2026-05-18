@@ -19,10 +19,10 @@ logger = get_logger("dquant.trading")
 class OrderValidator:
     """订单验证器"""
 
-    # 股票代码格式
+    # 股票代码格式（A 股代码固定 6 位数字）
     SYMBOL_PATTERNS = {
-        "SH": r"^6\d{5,6}$",  # 上海: 600xxx-689xxx (含科创板 688xxx)
-        "SZ": r"^(00|30)\d{4,5}$",  # 深圳: 000xxx-002xxx, 300xxx-301xxx (含创业板 301xxx)
+        "SH": r"^6\d{5}$",  # 上海: 600xxx-689xxx (含科创板 688xxx)
+        "SZ": r"^(00|30)\d{4}$",  # 深圳: 000xxx-002xxx, 300xxx-301xxx (含创业板 301xxx)
         "BJ": r"^(4|8)\d{5}$",  # 北交所: 430xxx-873xxx
     }
 

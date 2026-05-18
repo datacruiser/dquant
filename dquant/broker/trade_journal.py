@@ -84,11 +84,14 @@ class TradeJournal:
             # 写入成功后尝试刷出之前缓冲的失败记录
             self._flush_failures()
         except Exception as e:
-            logger.error(f"写入交易日志失败 (已缓冲): {e}")
             self._write_failures.append(record)
+            logger.error(f"写入交易日志失败 (已缓冲 {len(self._write_failures)} 条): {e}")
             if len(self._write_failures) > 1000:
-                logger.critical("审计日志缓冲超过 1000 条，丢弃最旧记录")
-                self._write_failures = self._write_failures[-500:]
+                # 审计日志不可丢失，超限仍向上抛出
+                raise RuntimeError(
+                    f"审计日志缓冲超过 1000 条 ({len(self._write_failures)})，"
+                    f"请检查磁盘空间。最后错误: {e}"
+                ) from e
 
     def _flush_failures(self):
         """尝试写入之前失败的缓冲记录"""

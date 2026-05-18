@@ -32,8 +32,11 @@ def _temporal_split(
     idx = data.index
     if isinstance(idx, pd.DatetimeIndex):
         unique_dates = idx.unique().sort_values()
-        split_date = unique_dates[int(len(unique_dates) * train_ratio)]
-        train_mask = (idx <= split_date) & mask
+        split_idx = int(len(unique_dates) * train_ratio)
+        # Guard: ensure at least 1 test date
+        split_idx = min(split_idx, len(unique_dates) - 1)
+        split_date = unique_dates[split_idx]
+        train_mask = (idx < split_date) & mask
         return X[train_mask[mask]], y[train_mask[mask]]
 
     # Fallback: row-count split for non-datetime index

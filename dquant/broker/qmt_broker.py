@@ -146,11 +146,9 @@ else:
 """
 
         try:
-            env = {
-                "PATH": os.environ.get("PATH", ""),
-                "DQ_QMT_PATH": self.qmt_path,
-                "DQ_QMT_FUNC": func_name,
-            }
+            env = os.environ.copy()
+            env["DQ_QMT_PATH"] = self.qmt_path
+            env["DQ_QMT_FUNC"] = func_name
 
             proc_result = subprocess.run(
                 [sys.executable, "-c", script],

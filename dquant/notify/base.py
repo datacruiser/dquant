@@ -43,7 +43,7 @@ def sign_webhook_url(webhook_url: str, secret: str, timestamp_ms: bool = False) 
     if not secret:
         return webhook_url
 
-    timestamp = str(int(time.time() * 1000) if timestamp_ms else time.time())
+    timestamp = str(int(time.time() * 1000) if timestamp_ms else int(time.time()))
     string_to_sign = f"{timestamp}\n{secret}"
     hmac_code = hmac.new(
         secret.encode("utf-8"),
