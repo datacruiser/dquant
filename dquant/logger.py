@@ -58,6 +58,34 @@ def get_logger(
     if dquant_handlers:
         # 更新级别（允许后续调用调整级别）
         logger.setLevel(level_map.get(level.upper(), logging.INFO))
+
+        # 如果本次请求了 log_file 但还没有 file handler，补充创建
+        if log_file:
+            has_file_handler = any(
+                isinstance(h, (logging.FileHandler,)) and getattr(h, "_dquant", False)
+                for h in logger.handlers
+            )
+            if not has_file_handler:
+                fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
+                formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
+                log_path = Path(log_file)
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                if rotating:
+                    from logging.handlers import RotatingFileHandler
+
+                    file_handler = RotatingFileHandler(
+                        log_file,
+                        maxBytes=max_bytes,
+                        backupCount=backup_count,
+                        encoding="utf-8",
+                    )
+                else:
+                    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+                file_handler.setLevel(logging.DEBUG)
+                file_handler.setFormatter(formatter)
+                file_handler._dquant = True
+                logger.addHandler(file_handler)
+
         return logger
 
     # 设置级别

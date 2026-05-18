@@ -27,19 +27,23 @@ def _temporal_split(
     This method finds the date that covers ``train_ratio`` of the *unique*
     dates and splits accordingly.
 
-    Falls back to row-count split when the index is not date-based.
+    Falls back to row-count split when the index is not date-based or
+    there are too few unique dates for a meaningful temporal split.
     """
     idx = data.index
     if isinstance(idx, pd.DatetimeIndex):
         unique_dates = idx.unique().sort_values()
-        split_idx = int(len(unique_dates) * train_ratio)
-        # Guard: ensure at least 1 test date
-        split_idx = min(split_idx, len(unique_dates) - 1)
-        split_date = unique_dates[split_idx]
-        train_mask = (idx < split_date) & mask
-        return X[train_mask[mask]], y[train_mask[mask]]
+        # Need at least 2 unique dates for a temporal split;
+        # otherwise fall through to row-count split.
+        if len(unique_dates) >= 2:
+            split_idx = max(1, int(len(unique_dates) * train_ratio))
+            # Ensure at least 1 test date
+            split_idx = min(split_idx, len(unique_dates) - 1)
+            split_date = unique_dates[split_idx]
+            train_mask = (idx < split_date) & mask
+            return X[train_mask[mask]], y[train_mask[mask]]
 
-    # Fallback: row-count split for non-datetime index
+    # Fallback: row-count split (non-datetime index or single-date data)
     split_idx = int(len(X) * train_ratio)
     return X[:split_idx], y[:split_idx]
 

@@ -56,7 +56,7 @@ class TushareLoader(DataSource):
         freq: str = "D",  # D=日线, W=周线, M=月线, 1/5/15/30/60=分钟线
         adj: str = "qfq",  # qfq=前复权, hfq=后复权, None=不复权
         include_factors: bool = True,
-        include_financial: bool = False,  # 是否包含财务数据
+        include_financial: bool = False,  # 当前不生效（仅 warning），如需财务数据请用 TushareFinancial
         max_workers: int = 3,  # 并发加载数（Tushare 限制更严格）
         rate_limit: int = 180,  # 每分钟最大请求数（Tushare 基础积分200/min）
     ):
@@ -299,7 +299,11 @@ class TushareLoader(DataSource):
         return df
 
     def _add_financial_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """添加财务数据（尚未实现，当前为 no-op 并记录 warning）"""
+        """添加财务数据（尚未实现 — 当前为 no-op 并记录 warning）。
+
+        传入 include_financial=True 不会修改返回的 DataFrame，
+        也不会抛异常。如需财务数据请直接使用 TushareFinancial 类。
+        """
         logger.warning(
             "[Tushare] include_financial=True 但财务数据合并尚未实现，"
             "数据将不含财务字段。如需财务数据请使用 TushareFinancial 类。"

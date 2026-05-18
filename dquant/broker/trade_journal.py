@@ -79,10 +79,10 @@ class TradeJournal:
         filepath = self.journal_dir / f"{date_str}.jsonl"
 
         try:
+            # 先刷出缓冲的旧记录，保证审计顺序：旧事件先写，新事件后写
+            self._flush_failures()
             with open(filepath, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-            # 写入成功后尝试刷出之前缓冲的失败记录
-            self._flush_failures()
         except Exception as e:
             self._write_failures.append(record)
             logger.error(f"写入交易日志失败 (已缓冲 {len(self._write_failures)} 条): {e}")
