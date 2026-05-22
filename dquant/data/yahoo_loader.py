@@ -255,4 +255,4 @@ class YahooRealTime:
             ticker = yf.Ticker(pair)
             return ticker.history(period="1d")["Close"].iloc[-1]
         except Exception:
-            return 0
+            return None
