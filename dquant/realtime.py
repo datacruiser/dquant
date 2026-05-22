@@ -313,7 +313,10 @@ class RealtimeServer:
         # 附加回调清理已完成的 task
         if tasks:
             async def _cleanup(tasks=tasks):
-                await asyncio.gather(*tasks, return_exceptions=True)
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for r in results:
+                    if isinstance(r, Exception):
+                        logger.warning(f"WS send failed: {r}")
 
             asyncio.create_task(_cleanup())
 

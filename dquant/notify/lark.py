@@ -50,6 +50,7 @@ class LarkNotifier(Notifier):
         self.secret = secret or os.getenv("LARK_SECRET", "")
         self.timeout = timeout
         self._fallback = LogNotifier()
+        self._safe_url = self.webhook_url.split("?")[0] + "?***" if self.webhook_url else ""
 
     def send(self, title: str, message: str, level: str = "INFO") -> bool:
         if not self.webhook_url:
@@ -58,7 +59,7 @@ class LarkNotifier(Notifier):
 
         if not self.webhook_url.startswith(self._ALLOWED_PREFIXES):
             logger.error(
-                f"[Lark] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***"
+                f"[Lark] webhook URL 不在白名单中，拒绝发送: {self._safe_url}"
             )
             self._fallback.send(title, f"[Lark BLOCKED] {message}", "ERROR")
             return False

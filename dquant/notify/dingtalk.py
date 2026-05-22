@@ -40,6 +40,7 @@ class DingTalkNotifier(Notifier):
         self.secret = secret or os.getenv("DINGTALK_SECRET", "")
         self.timeout = timeout
         self._fallback = LogNotifier()
+        self._safe_url = self.webhook_url.split("?")[0] + "?***" if self.webhook_url else ""
 
     def send(self, title: str, message: str, level: str = "INFO") -> bool:
         if not self.webhook_url:
@@ -50,7 +51,7 @@ class DingTalkNotifier(Notifier):
         _ALLOWED_PREFIX = "https://oapi.dingtalk.com/robot/send"
         if not self.webhook_url.startswith(_ALLOWED_PREFIX):
             logger.error(
-                f"[DingTalk] webhook URL 不在白名单中，拒绝发送: {self.webhook_url.split('?')[0]}?***"
+                f"[DingTalk] webhook URL 不在白名单中，拒绝发送: {self._safe_url}"
             )
             self._fallback.send(title, f"[DingTalk BLOCKED] {message}", "ERROR")
             return False

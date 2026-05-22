@@ -55,8 +55,13 @@ class AccMomentumFactor(RuleFactor):
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         ret = group["close"].pct_change(fill_method=None)
-        cumprod = (1 + ret).cumprod()
-        return cumprod / cumprod.shift(self.window) - 1
+        # fillna(0) 防止 cumprod 中间 NaN 毒化整个尾部
+        ret_clean = ret.fillna(0)
+        cumprod = (1 + ret_clean).cumprod()
+        result = cumprod / cumprod.shift(self.window) - 1
+        # 前 window 个值无足够数据，标记为 NaN
+        result.iloc[: self.window] = float("nan")
+        return result
 
 
 # ============================================================
@@ -701,7 +706,7 @@ def _register_extended_factors():
 # 注册扩展因子（包裹 try/except 避免单个模块缺失导致所有因子不可用）
 try:
     _register_extended_factors()
-except Exception as _e:
+except (ImportError, ModuleNotFoundError) as _e:
     import logging as _logging
 
     _logging.getLogger(__name__).warning(

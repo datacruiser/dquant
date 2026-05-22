@@ -98,16 +98,21 @@ class TradeJournal:
         if not self._write_failures:
             return
         remaining = []
+        last_error = None
         for record in self._write_failures:
             date_str = record.get("timestamp", datetime.now().isoformat())[:10]
             filepath = self.journal_dir / f"{date_str}.jsonl"
             try:
                 with open(filepath, "a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-            except Exception:
+            except Exception as e:
+                last_error = e
                 remaining.append(record)
         if remaining:
-            logger.warning(f"审计日志仍有 {len(remaining)} 条缓冲未写出")
+            logger.warning(
+                f"审计日志仍有 {len(remaining)} 条缓冲未写出 "
+                f"(最近错误: {last_error!r})"
+            )
         self._write_failures = remaining
 
     def read_day(self, date_str: str) -> list:

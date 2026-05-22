@@ -74,9 +74,15 @@ class QMTBroker(BaseBroker):
 
         # 验证 xtquant 是否可导入
         try:
+            # 临时插入路径，导入后立即清理，避免全局污染
             sys.path.insert(0, self.qmt_path)
             import xtquant.xttrade as xttrade  # noqa: F401
+
+            # 验证核心模块存在
+            if not hasattr(xttrade, "XtQuantTrader"):
+                raise ImportError("xttrade.XtQuantTrader not found — invalid xtquant package")
         except ImportError:
+            sys.path = [p for p in sys.path if p != self.qmt_path]
             logger.error("[QMT] xtquant not found in QMT path, is QMT client running?")
             return False
 

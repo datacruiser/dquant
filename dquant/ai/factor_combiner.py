@@ -90,6 +90,7 @@ class FactorCombiner:
             return df
 
         if self.winsorize:
+            # 注意：按日期截面 winsorize（非全局），与旧版本全局分位数行为不同
             df["score"] = df.groupby(df.index)["score"].transform(
                 lambda x: x.clip(
                     x.quantile(self.winsorize_limit), x.quantile(1 - self.winsorize_limit)

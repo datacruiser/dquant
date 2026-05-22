@@ -180,20 +180,20 @@ class SmartFlowStrategy(BaseStrategy):
 
         # 综合得分
         score = self.main_weight * main + self.medium_weight * medium - self.retail_weight * small
-        data_scored = data.assign(_score=score)
+        data_scored = data.assign(composite_score=score)
 
         # 按日期分组选股
         for date, grp in data_scored.groupby(data_scored.index):
-            top_stocks = grp.nlargest(self.top_k, "_score")
+            top_stocks = grp.nlargest(self.top_k, "composite_score")
 
-            for _, row in top_stocks.iterrows():
+            for row in top_stocks.itertuples():
                 signal = Signal(
-                    symbol=row["symbol"],
+                    symbol=row.symbol,
                     signal_type=SignalType.BUY,
                     strength=1.0 / self.top_k,
                     timestamp=date,
                     metadata={
-                        "composite_score": row["_score"],
+                        "composite_score": row.composite_score,
                     },
                 )
                 signals.append(signal)

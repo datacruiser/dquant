@@ -104,11 +104,6 @@ class Metrics:
         """
         metrics = cls.from_nav(nav_series, rf=rf)
 
-        # 初始化 trade-level 指标为 0 (from_nav 中为 None)
-        metrics.total_trades = 0
-        metrics.win_rate = 0.0
-        metrics.profit_factor = 0.0
-
         if trades is not None and "pnl" in trades.columns and len(trades) > 0:
             pnl = trades["pnl"].dropna()
             if len(pnl) > 0:

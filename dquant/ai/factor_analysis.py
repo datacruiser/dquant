@@ -100,29 +100,25 @@ class FactorAnalyzer:
 
         return result
 
-    def _calculate_ic_series(
+    def _compute_ic_from_merged(
         self,
-        factor_scores: pd.DataFrame,
+        factor_df: pd.Series,
         forward_returns: pd.Series,
         dates: Optional[pd.DatetimeIndex],
     ) -> pd.Series:
-        """计算 IC 时间序列（向量化）"""
-        if dates is None:
-            dates = factor_scores.index.unique()
+        """从已对齐的 factor_df 和 forward_returns 计算 IC 时间序列。
 
+        factor_df: (date, symbol) MultiIndex Series named "factor"
+        forward_returns: DatetimeIndex 或 (date, symbol) MultiIndex Series
+        dates: 用于 reindex 的日期集合
+        """
         method = self.ic_method if self.ic_method in ("spearman", "pearson") else "pearson"
-
-        # 准备合并的 DataFrame: date x symbol
-        factor_df = factor_scores.set_index("symbol", append=True)["score"]
-        factor_df.index.names = ["date", "symbol"]
-        factor_df = factor_df.rename("factor")
 
         if isinstance(forward_returns.index, pd.DatetimeIndex):
             returns_df = forward_returns
             returns_df.index.names = ["date"]
             merged = factor_df.to_frame().join(returns_df.rename("return"), how="inner").dropna()
         elif isinstance(forward_returns.index, pd.MultiIndex):
-            # (date, symbol) MultiIndex — 直接按 (date, symbol) 对齐
             ret_aligned = forward_returns.copy()
             ret_aligned.index.names = ["date", "symbol"]
             ret_aligned = ret_aligned.rename("return")
@@ -133,7 +129,6 @@ class FactorAnalyzer:
         if len(merged) < 5:
             return pd.Series(dtype=float)
 
-        # 按日期分组计算相关系数
         def _group_ic(group):
             if len(group) < 5:
                 return np.nan
@@ -143,11 +138,26 @@ class FactorAnalyzer:
         if isinstance(ic_series.index, pd.MultiIndex):
             ic_series = ic_series.droplevel(0)
 
-        # 过滤只保留指定日期范围
-        if len(dates) > 0:
+        if dates is not None and len(dates) > 0:
             ic_series = ic_series.reindex(dates).dropna()
 
         return ic_series
+
+    def _calculate_ic_series(
+        self,
+        factor_scores: pd.DataFrame,
+        forward_returns: pd.Series,
+        dates: Optional[pd.DatetimeIndex],
+    ) -> pd.Series:
+        """计算 IC 时间序列（向量化）"""
+        if dates is None:
+            dates = factor_scores.index.unique()
+
+        factor_df = factor_scores.set_index("symbol", append=True)["score"]
+        factor_df.index.names = ["date", "symbol"]
+        factor_df = factor_df.rename("factor")
+
+        return self._compute_ic_from_merged(factor_df, forward_returns, dates)
 
     def _get_day_factors(self, factor_scores, date):
         """获取当天的因子数据并分组"""
@@ -289,45 +299,13 @@ class FactorAnalyzer:
         factor_df.index.names = ["date", "symbol"]
         factor_df = factor_df.rename("factor")
 
-        method = self.ic_method if self.ic_method in ("spearman", "pearson") else "pearson"
         dates = factor_scores.index.unique()
 
         decay = {}
 
         for period in range(1, max_periods + 1):
-            # 计算 period 天后的收益
             forward_returns = self._calculate_forward_returns(returns, period)
-
-            # 直接使用已对齐的 factor_df 与当期 forward_returns 合并
-            if isinstance(forward_returns.index, pd.DatetimeIndex):
-                returns_df = forward_returns
-                returns_df.index.names = ["date"]
-                merged = factor_df.to_frame().join(returns_df.rename("return"), how="inner").dropna()
-            elif isinstance(forward_returns.index, pd.MultiIndex):
-                ret_aligned = forward_returns.copy()
-                ret_aligned.index.names = ["date", "symbol"]
-                ret_aligned = ret_aligned.rename("return")
-                merged = factor_df.to_frame().join(ret_aligned, how="inner").dropna()
-            else:
-                raise ValueError("forward_returns 必须有 DatetimeIndex 或 (date, symbol) MultiIndex")
-
-            if len(merged) < 5:
-                decay[period] = 0.0
-                continue
-
-            # 按日期分组计算相关系数
-            def _group_ic(group):
-                if len(group) < 5:
-                    return np.nan
-                return group["factor"].corr(group["return"], method=method)
-
-            ic_series = merged.groupby(level=0).apply(_group_ic).dropna()
-            if isinstance(ic_series.index, pd.MultiIndex):
-                ic_series = ic_series.droplevel(0)
-
-            if len(dates) > 0:
-                ic_series = ic_series.reindex(dates).dropna()
-
+            ic_series = self._compute_ic_from_merged(factor_df, forward_returns, dates)
             decay[period] = ic_series.mean() if len(ic_series) > 0 else 0.0
 
         return pd.Series(decay)

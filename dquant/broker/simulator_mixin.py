@@ -93,7 +93,8 @@ class SimulatorMixin:
 
     @cash.setter
     def cash(self, value: float):
-        self._sim.cash = value
+        with self._sim._lock:
+            self._sim.cash = value
 
     @property
     def positions(self) -> Dict[str, dict]:
@@ -101,7 +102,8 @@ class SimulatorMixin:
 
     @positions.setter
     def positions(self, value: Dict[str, dict]):
-        self._sim.positions = value
+        with self._sim._lock:
+            self._sim.positions = value
 
     @property
     def orders(self) -> Dict[str, Order]:
@@ -109,7 +111,8 @@ class SimulatorMixin:
 
     @orders.setter
     def orders(self, value: Dict[str, Order]):
-        self._sim.orders = value
+        with self._sim._lock:
+            self._sim.orders = value
 
     def update_prices(self, price_map: dict):
         """Delegate price updates to the internal Simulator."""

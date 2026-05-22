@@ -201,7 +201,7 @@ class XTPBroker(BaseBroker):
 
             logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
 
-            # 快照当前缓存，在锁外计算 VWAP
+            # 整个读取-计算-写回在锁内完成，避免 TOCTOU 竞态
             with self._lock:
                 cached = self._orders.setdefault(
                     order_id,
@@ -216,23 +216,17 @@ class XTPBroker(BaseBroker):
                 prev_filled = cached.get("filled", 0)
                 prev_price = cached.get("filled_price", 0.0)
 
-            # VWAP 计算在锁外完成
-            new_filled = prev_filled + quantity
-            if total_quantity:
-                new_filled = min(new_filled, total_quantity)
+                new_filled = prev_filled + quantity
+                if total_quantity:
+                    new_filled = min(new_filled, total_quantity)
 
-            effective_quantity = new_filled - prev_filled
-            if new_filled > 0 and effective_quantity > 0:
-                total_cost = (prev_filled * prev_price) + (effective_quantity * price)
-                new_vwap = total_cost / new_filled
-            else:
-                new_vwap = prev_price
+                effective_quantity = new_filled - prev_filled
+                if new_filled > 0 and effective_quantity > 0:
+                    total_cost = (prev_filled * prev_price) + (effective_quantity * price)
+                    new_vwap = total_cost / new_filled
+                else:
+                    new_vwap = prev_price
 
-            # 写回结果
-            with self._lock:
-                cached = self._orders.get(order_id)
-                if cached is None:
-                    return
                 cached["symbol"] = symbol
                 cached["filled"] = new_filled
                 cached["filled_price"] = new_vwap

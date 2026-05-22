@@ -40,8 +40,8 @@ def _temporal_split(
             # Ensure at least 1 test date
             split_idx = min(split_idx, len(unique_dates) - 1)
             split_date = unique_dates[split_idx]
-            train_mask = (idx < split_date) & mask
-            return X[train_mask[mask]], y[train_mask[mask]]
+            combined = (idx < split_date) & mask
+            return X[combined], y[combined]
 
     # Fallback: row-count split (non-datetime index or single-date data)
     split_idx = int(len(X) * train_ratio)
