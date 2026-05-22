@@ -176,7 +176,9 @@ def get_previous_trading_day(
 
     # 退化为逐天回退
     if n > MAX_CALENDAR_STEP:
-        raise ValueError(f"n={n} is unreasonably large for get_previous_trading_day, max is {MAX_CALENDAR_STEP}")
+        raise ValueError(
+            f"n={n} is unreasonably large for get_previous_trading_day, max is {MAX_CALENDAR_STEP}"
+        )
     result = ts
     count = 0
     while count < n:
@@ -218,7 +220,9 @@ def get_next_trading_day(
 
     # 退化为逐天前进
     if n > MAX_CALENDAR_STEP:
-        raise ValueError(f"n={n} is unreasonably large for get_next_trading_day, max is {MAX_CALENDAR_STEP}")
+        raise ValueError(
+            f"n={n} is unreasonably large for get_next_trading_day, max is {MAX_CALENDAR_STEP}"
+        )
     result = ts
     count = 0
     while count < n:

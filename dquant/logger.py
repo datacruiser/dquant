@@ -16,11 +16,13 @@ DETAILED_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(funcN
 
 class DquantStreamHandler(logging.StreamHandler):
     """dquant 专用 StreamHandler，用于识别自身创建的 handler。"""
+
     pass
 
 
 class DquantFileHandler(logging.FileHandler):
     """dquant 专用 FileHandler，用于识别自身创建的 handler。"""
+
     pass
 
 
@@ -64,7 +66,9 @@ def get_logger(
     }
 
     # 如果已经有 *我们自己的* handler（DquantStreamHandler / DquantFileHandler 实例），说明已初始化
-    dquant_handlers = [h for h in logger.handlers if isinstance(h, (DquantStreamHandler, DquantFileHandler))]
+    dquant_handlers = [
+        h for h in logger.handlers if isinstance(h, (DquantStreamHandler, DquantFileHandler))
+    ]
     if dquant_handlers:
         # 更新级别（允许后续调用调整级别）
         logger.setLevel(level_map.get(level.upper(), logging.INFO))

@@ -110,8 +110,7 @@ class TradeJournal:
                 remaining.append(record)
         if remaining:
             logger.warning(
-                f"审计日志仍有 {len(remaining)} 条缓冲未写出 "
-                f"(最近错误: {last_error!r})"
+                f"审计日志仍有 {len(remaining)} 条缓冲未写出 " f"(最近错误: {last_error!r})"
             )
         self._write_failures = remaining
 

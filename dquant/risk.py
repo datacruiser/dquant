@@ -235,8 +235,7 @@ class RiskManager:
                 logger.warning("[RiskManager] DQUANT_RISK_SECRET 未设置 — 测试模式，使用默认密钥")
                 return "dquant-default-risk-key"
             raise RuntimeError(
-                "DQUANT_RISK_SECRET 必须在生产环境中设置。"
-                "拒绝使用默认密钥签名状态文件。"
+                "DQUANT_RISK_SECRET 必须在生产环境中设置。" "拒绝使用默认密钥签名状态文件。"
             )
         return secret
 

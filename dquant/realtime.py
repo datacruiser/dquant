@@ -312,6 +312,7 @@ class RealtimeServer:
 
         # 附加回调清理已完成的 task
         if tasks:
+
             async def _cleanup(tasks=tasks):
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 for r in results:
