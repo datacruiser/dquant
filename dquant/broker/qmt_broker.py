@@ -9,7 +9,6 @@ import os
 import re
 import subprocess
 import sys
-from copy import deepcopy
 from datetime import datetime
 from typing import Dict, Optional
 

@@ -12,7 +12,6 @@ from typing import Dict, Optional
 
 from dquant.broker.base import Order, OrderResult
 from dquant.broker.simulator import Simulator
-from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
 logger = get_logger(__name__)
