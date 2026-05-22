@@ -62,11 +62,20 @@ class Portfolio:
     def __post_init__(self):
         if self.cash == 0:
             self.cash = self.initial_cash
+        self._total_value_cache: Optional[float] = None
+
+    def invalidate_cache(self):
+        """Invalidate cached total_value (call after cash/position changes)."""
+        self._total_value_cache = None
 
     @property
     def total_value(self) -> float:
-        """总资产"""
-        return self.cash + sum(p.market_value for p in self.positions.values())
+        """总资产 (cached, invalidated on cash/position changes)"""
+        if self._total_value_cache is None:
+            self._total_value_cache = self.cash + sum(
+                p.market_value for p in self.positions.values()
+            )
+        return self._total_value_cache
 
     @property
     def nav(self) -> float:
@@ -90,11 +99,13 @@ class Portfolio:
                 > pd.to_datetime(self.timestamp_history[-1]).date()
             ):
                 for pos in self.positions.values():
-                    pos.locked_shares = 0.0
+                    pos.locked_shares = 0
 
         for symbol, price in prices.items():
             if symbol in self.positions:
                 self.positions[symbol].current_price = price
+
+        self.invalidate_cache()
 
         if not record_nav:
             return
@@ -125,6 +136,7 @@ class Portfolio:
             cost = shares * price * (1 + commission)
 
         self.cash -= cost
+        self.invalidate_cache()
 
         if symbol in self.positions:
             pos = self.positions[symbol]
@@ -179,6 +191,7 @@ class Portfolio:
 
         revenue = lot_shares * price * (1 - commission - stamp_duty)
         self.cash += revenue
+        self.invalidate_cache()
         pos.shares -= lot_shares
         pos.locked_shares = min(pos.locked_shares, pos.shares)
 
@@ -189,6 +202,7 @@ class Portfolio:
             unlocked = max(0, pos.shares - pos.locked_shares)
             if unlocked > 0:
                 self.cash += unlocked * price * (1 - commission - stamp_duty)
+                self.invalidate_cache()
             del self.positions[symbol]
 
     def rebalance(

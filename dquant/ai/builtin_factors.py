@@ -55,7 +55,13 @@ class AccMomentumFactor(RuleFactor):
 
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         ret = group["close"].pct_change(fill_method=None)
-        return (1 + ret).rolling(self.window).apply(lambda x: x.prod(), raw=True) - 1
+        # fillna(0) 防止 cumprod 中间 NaN 毒化整个尾部
+        ret_clean = ret.fillna(0)
+        cumprod = (1 + ret_clean).cumprod()
+        result = cumprod / cumprod.shift(self.window) - 1
+        # 前 window 个值无足够数据，标记为 NaN
+        result.iloc[: self.window] = float("nan")
+        return result
 
 
 # ============================================================
@@ -255,7 +261,7 @@ class CCIFactor(RuleFactor):
     def _compute_score(self, group: pd.DataFrame) -> pd.Series:
         tp = (group["high"] + group["low"] + group["close"]) / 3
         ma = tp.rolling(self.window).mean()
-        md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean())
+        md = tp.rolling(self.window).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
         cci = (tp - ma) / (0.015 * md.replace(0, float("nan")))
         return -cci  # CCI 反转
 
@@ -697,5 +703,12 @@ def _register_extended_factors():
     )
 
 
-# 注册扩展因子
-_register_extended_factors()
+# 注册扩展因子（包裹 try/except 避免单个模块缺失导致所有因子不可用）
+try:
+    _register_extended_factors()
+except (ImportError, ModuleNotFoundError) as _e:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        f"Extended factors registration failed (some factors unavailable): {_e}"
+    )

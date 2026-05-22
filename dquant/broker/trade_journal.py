@@ -31,6 +31,8 @@ class TradeJournal:
     def __init__(self, journal_dir: str = "./trade_journal"):
         self.journal_dir = Path(journal_dir)
         self.journal_dir.mkdir(parents=True, exist_ok=True)
+        # 写入失败缓冲队列：磁盘满时暂存，避免崩掉交易循环
+        self._write_failures: list = []
 
     def record(
         self,
@@ -77,11 +79,40 @@ class TradeJournal:
         filepath = self.journal_dir / f"{date_str}.jsonl"
 
         try:
+            # 先刷出缓冲的旧记录，保证审计顺序：旧事件先写，新事件后写
+            self._flush_failures()
             with open(filepath, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         except Exception as e:
-            logger.error(f"写入交易日志失败: {e}")
-            raise  # 审计日志不可丢失，向上抛出
+            self._write_failures.append(record)
+            logger.error(f"写入交易日志失败 (已缓冲 {len(self._write_failures)} 条): {e}")
+            if len(self._write_failures) > 1000:
+                # 审计日志不可丢失，超限仍向上抛出
+                raise RuntimeError(
+                    f"审计日志缓冲超过 1000 条 ({len(self._write_failures)})，"
+                    f"请检查磁盘空间。最后错误: {e}"
+                ) from e
+
+    def _flush_failures(self):
+        """尝试写入之前失败的缓冲记录"""
+        if not self._write_failures:
+            return
+        remaining = []
+        last_error = None
+        for record in self._write_failures:
+            date_str = record.get("timestamp", datetime.now().isoformat())[:10]
+            filepath = self.journal_dir / f"{date_str}.jsonl"
+            try:
+                with open(filepath, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+            except Exception as e:
+                last_error = e
+                remaining.append(record)
+        if remaining:
+            logger.warning(
+                f"审计日志仍有 {len(remaining)} 条缓冲未写出 " f"(最近错误: {last_error!r})"
+            )
+        self._write_failures = remaining
 
     def read_day(self, date_str: str) -> list:
         """读取某天的所有交易记录"""

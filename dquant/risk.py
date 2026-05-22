@@ -227,13 +227,21 @@ class RiskManager:
         self.restore_state()
 
     @staticmethod
-    def _sign_state(state: dict) -> str:
-        """计算状态 HMAC 签名"""
+    def _get_signing_secret() -> str:
+        """获取签名密钥，生产环境必须设置环境变量"""
         secret = os.environ.get("DQUANT_RISK_SECRET")
         if not secret:
-            logger.warning("[RiskManager] DQUANT_RISK_SECRET 未设置，使用默认密钥（不安全）")
-            secret = "dquant-default-risk-key"
-        secret = secret.encode()
+            if os.environ.get("DQUANT_TEST_MODE") == "1":
+                logger.warning("[RiskManager] DQUANT_RISK_SECRET 未设置 — 测试模式，使用默认密钥")
+                return "dquant-default-risk-key"
+            raise RuntimeError(
+                "DQUANT_RISK_SECRET 必须在生产环境中设置。" "拒绝使用默认密钥签名状态文件。"
+            )
+        return secret
+
+    def _sign_state(self, state: dict) -> str:
+        """计算状态 HMAC 签名"""
+        secret = self._get_signing_secret().encode()
         payload = json.dumps(state, sort_keys=True).encode()
         return hmac.new(secret, payload, hashlib.sha256).hexdigest()
 
@@ -250,14 +258,14 @@ class RiskManager:
                 "daily_start_date": self.daily_start_date,
                 "halt_trading": self.halt_trading,
             }
-        state["_signature"] = self._sign_state(
-            {k: v for k, v in state.items() if k != "_signature"}
-        )
-        try:
-            with open(self._state_path, "w") as f:
-                json.dump(state, f, indent=2)
-        except Exception as e:
-            logger.error(f"[RiskManager] Failed to save state: {e}")
+            state["_signature"] = self._sign_state(
+                {k: v for k, v in state.items() if k != "_signature"}
+            )
+            try:
+                with open(self._state_path, "w") as f:
+                    json.dump(state, f, indent=2)
+            except Exception as e:
+                logger.error(f"[RiskManager] Failed to save state: {e}")
 
     def restore_state(self) -> bool:
         """

@@ -9,13 +9,13 @@ import os
 import re
 import subprocess
 import sys
-from copy import deepcopy
 from datetime import datetime
 from typing import Dict, Optional
 
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
 from dquant.broker.simulator import Simulator
+from dquant.broker.simulator_mixin import SimulatorMixin
 from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
 
@@ -69,6 +69,20 @@ class QMTBroker(BaseBroker):
 
         if not os.path.exists(self.qmt_path):
             logger.error(f"[QMT] QMT path not found: {self.qmt_path}")
+            return False
+
+        # 验证 xtquant 是否可导入
+        try:
+            # 临时插入路径，导入后立即清理，避免全局污染
+            sys.path.insert(0, self.qmt_path)
+            import xtquant.xttrade as xttrade  # noqa: F401
+
+            # 验证核心模块存在
+            if not hasattr(xttrade, "XtQuantTrader"):
+                raise ImportError("xttrade.XtQuantTrader not found — invalid xtquant package")
+        except ImportError:
+            sys.path = [p for p in sys.path if p != self.qmt_path]
+            logger.error("[QMT] xtquant not found in QMT path, is QMT client running?")
             return False
 
         self._connected = True
@@ -379,6 +393,9 @@ else:
 
     def get_market_data(self, symbol: str) -> dict:
         """获取实时行情"""
+        if not self._connected:
+            return {}
+
         try:
             from xtquant import xtdata
 
@@ -399,17 +416,16 @@ else:
             return {}
 
 
-class QMTSimulator(QMTBroker):
+class QMTSimulator(QMTBroker, SimulatorMixin):
     """
     QMT 模拟交易
 
-    通过组合 Simulator 实现，避免代码重复。
+    通过 SimulatorMixin 委托给内部 Simulator，消除重复代码。
     """
 
     def __init__(self, initial_cash: float = DEFAULT_INITIAL_CASH, **kwargs):
         super().__init__(**kwargs)
         self.name = "QMTSimulator"
-        # 组合：内部委托给 Simulator
         self._sim = Simulator(
             initial_cash=initial_cash,
             order_id_prefix="SIM",
@@ -419,83 +435,12 @@ class QMTSimulator(QMTBroker):
             strict_sell=True,
         )
 
-    # ---------- 连接管理 ----------
-    def connect(self, **kwargs) -> bool:
-        logger.info(f"[{self.name}] Connected (simulated)")
-        self._connected = True
-        self._sim.connect()
-        return True
-
-    def disconnect(self) -> bool:
-        self._connected = False
-        return True
-
-    # ---------- 账户 & 持仓 ----------
-    def get_account(self) -> dict:
-        total_value = self._sim.cash + sum(
-            p["quantity"] * p.get("price", 0) for p in self._sim.positions.values()
-        )
-        return {
-            "cash": self._sim.cash,
-            "total_value": total_value,
-            "market_value": total_value - self._sim.cash,
-            "available": self._sim.cash,
-        }
-
-    def get_positions(self) -> Dict[str, dict]:
-        return deepcopy(self._sim.positions)
-
-    # ---------- 交易 ----------
-    def place_order(self, order: Order) -> OrderResult:
-        """模拟下单（不需要 xtquant）"""
-        if not self._connected:
-            return OrderResult(
-                order_id="",
-                symbol=order.symbol,
-                side=order.side,
-                filled_quantity=0,
-                filled_price=0,
-                commission=0,
-                timestamp=datetime.now(),
-                status="REJECTED",
-            )
-        return self._sim.place_order(order)
-
-    def cancel_order(self, order_id: str) -> bool:
-        return self._sim.cancel_order(order_id)
-
-    def get_order_status(self, order_id: str) -> Optional[Order]:
-        return self._sim.get_order_status(order_id)
-
-    # ---------- 行情 ----------
-    def get_market_data(self, symbol: str) -> dict:
-        return self._sim.get_market_data(symbol)
-
-    # ---------- 属性代理（保持兼容） ----------
-    @property
-    def initial_cash(self) -> float:
-        return self._sim.initial_cash
-
-    @property
-    def cash(self) -> float:
-        return self._sim.cash
-
-    @cash.setter
-    def cash(self, value: float):
-        self._sim.cash = value
-
-    @property
-    def positions(self) -> Dict[str, dict]:
-        return self._sim.positions
-
-    @positions.setter
-    def positions(self, value: Dict[str, dict]):
-        self._sim.positions = value
-
-    @property
-    def orders(self) -> Dict[str, Order]:
-        return self._sim.orders
-
-    @orders.setter
-    def orders(self, value: Dict[str, Order]):
-        self._sim.orders = value
+    # ---------- 委托到 SimulatorMixin ----------
+    connect = SimulatorMixin.sim_connect
+    disconnect = SimulatorMixin.sim_disconnect
+    get_account = SimulatorMixin.sim_get_account
+    get_positions = SimulatorMixin.sim_get_positions
+    place_order = SimulatorMixin.sim_place_order
+    cancel_order = SimulatorMixin.sim_cancel_order
+    get_order_status = SimulatorMixin.sim_get_order_status
+    get_market_data = SimulatorMixin.sim_get_market_data

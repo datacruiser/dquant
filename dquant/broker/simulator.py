@@ -183,7 +183,7 @@ class Simulator(BaseBroker):
                         "price": filled_price,
                     }
 
-                commission = total_cost - (filled_price * filled_quantity)
+                commission = filled_price * filled_quantity * DEFAULT_COMMISSION
 
             elif order.side == "SELL":
                 if (

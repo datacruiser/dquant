@@ -14,6 +14,7 @@ from dquant.risk import PositionLimit, RiskManager
 class TestRiskManagerPersistence:
     def test_save_and_restore(self):
         """测试保存和恢复状态"""
+        os.environ["DQUANT_TEST_MODE"] = "1"
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             state_path = f.name
 

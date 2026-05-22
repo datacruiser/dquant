@@ -14,6 +14,18 @@ DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 DETAILED_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(funcName)s | %(message)s"
 
 
+class DquantStreamHandler(logging.StreamHandler):
+    """dquant 专用 StreamHandler，用于识别自身创建的 handler。"""
+
+    pass
+
+
+class DquantFileHandler(logging.FileHandler):
+    """dquant 专用 FileHandler，用于识别自身创建的 handler。"""
+
+    pass
+
+
 def get_logger(
     name: str = "dquant",
     level: str = "INFO",
@@ -45,11 +57,6 @@ def get_logger(
     """
     logger = logging.getLogger(name)
 
-    # 如果已经有 handler，直接返回
-    if logger.handlers:
-        return logger
-
-    # 设置级别
     level_map = {
         "DEBUG": logging.DEBUG,
         "INFO": logging.INFO,
@@ -57,6 +64,41 @@ def get_logger(
         "ERROR": logging.ERROR,
         "CRITICAL": logging.CRITICAL,
     }
+
+    # 如果已经有 *我们自己的* handler（DquantStreamHandler / DquantFileHandler 实例），说明已初始化
+    dquant_handlers = [
+        h for h in logger.handlers if isinstance(h, (DquantStreamHandler, DquantFileHandler))
+    ]
+    if dquant_handlers:
+        # 更新级别（允许后续调用调整级别）
+        logger.setLevel(level_map.get(level.upper(), logging.INFO))
+
+        # 如果本次请求了 log_file 但还没有 file handler，补充创建
+        if log_file:
+            has_file_handler = any(isinstance(h, DquantFileHandler) for h in logger.handlers)
+            if not has_file_handler:
+                fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
+                formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
+                log_path = Path(log_file)
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                if rotating:
+                    from logging.handlers import RotatingFileHandler
+
+                    file_handler = RotatingFileHandler(
+                        log_file,
+                        maxBytes=max_bytes,
+                        backupCount=backup_count,
+                        encoding="utf-8",
+                    )
+                else:
+                    file_handler = DquantFileHandler(log_file, encoding="utf-8")
+                file_handler.setLevel(logging.DEBUG)
+                file_handler.setFormatter(formatter)
+                logger.addHandler(file_handler)
+
+        return logger
+
+    # 设置级别
     logger.setLevel(level_map.get(level.upper(), logging.INFO))
 
     # 选择格式
@@ -64,7 +106,7 @@ def get_logger(
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
     # 控制台 handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = DquantStreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
@@ -84,7 +126,7 @@ def get_logger(
                 encoding="utf-8",
             )
         else:
-            file_handler = logging.FileHandler(log_file, encoding="utf-8")
+            file_handler = DquantFileHandler(log_file, encoding="utf-8")
 
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)

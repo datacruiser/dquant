@@ -246,8 +246,8 @@ class YahooRealTime:
         return pd.DataFrame(results)
 
     @staticmethod
-    def get_fx_rate(from_currency: str, to_currency: str = "USD") -> Optional[float]:
-        """获取汇率，失败返回 None"""
+    def get_fx_rate(from_currency: str, to_currency: str = "USD") -> float:
+        """获取汇率，失败返回 0"""
         try:
             import yfinance as yf
 

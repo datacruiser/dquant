@@ -208,8 +208,8 @@ class AKShareLoader(DataSource):
 
             return df
 
-        except Exception:
-            logger.warning(f"[AKShare] _get_stock_data 加载 {symbol} 失败")
+        except Exception as e:
+            logger.warning(f"[AKShare] _get_stock_data 加载 {symbol} 失败: {e!r}")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:

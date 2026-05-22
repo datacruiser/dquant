@@ -13,6 +13,41 @@ from dquant.ai.base import BaseFactor
 DEFAULT_N_ESTIMATORS = 100
 
 
+def _temporal_split(
+    data: pd.DataFrame,
+    X: np.ndarray,
+    y: np.ndarray,
+    mask: np.ndarray,
+    train_ratio: float = 0.8,
+):
+    """Split data by date index to avoid look-ahead bias across symbols.
+
+    When the DataFrame contains multiple symbols, a simple row-count split
+    would place different symbols at different calendar cut-off dates.
+    This method finds the date that covers ``train_ratio`` of the *unique*
+    dates and splits accordingly.
+
+    Falls back to row-count split when the index is not date-based or
+    there are too few unique dates for a meaningful temporal split.
+    """
+    idx = data.index
+    if isinstance(idx, pd.DatetimeIndex):
+        unique_dates = idx.unique().sort_values()
+        # Need at least 2 unique dates for a temporal split;
+        # otherwise fall through to row-count split.
+        if len(unique_dates) >= 2:
+            split_idx = max(1, int(len(unique_dates) * train_ratio))
+            # Ensure at least 1 test date
+            split_idx = min(split_idx, len(unique_dates) - 1)
+            split_date = unique_dates[split_idx]
+            combined = (idx < split_date) & mask
+            return X[combined], y[combined]
+
+    # Fallback: row-count split (non-datetime index or single-date data)
+    split_idx = int(len(X) * train_ratio)
+    return X[:split_idx], y[:split_idx]
+
+
 class XGBoostFactor(BaseFactor):
     """
     XGBoost 因子
@@ -71,14 +106,14 @@ class XGBoostFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
-        # Temporal split: use first 80% for training to avoid look-ahead bias
-        split_idx = int(len(X) * 0.8)
-        X = X[:split_idx]
-        y = y[:split_idx]
+        # Temporal split by date to avoid look-ahead bias
+        # When data contains multiple symbols, a row-count split would place
+        # different symbols at different calendar cut-off dates.
+        X_train, y_train = _temporal_split(data, X, y, mask)
 
         # 训练
         self._model = xgb.XGBRegressor(**self.model_params)
-        self._model.fit(X, y)
+        self._model.fit(X_train, y_train)
         self._is_fitted = True
 
         return self
@@ -163,13 +198,11 @@ class LGBMFactor(BaseFactor):
         mask = ~(np.isnan(X).any(axis=1) | np.isnan(y))
         X, y = X[mask], y[mask]
 
-        # Temporal split: use first 80% for training to avoid look-ahead bias
-        split_idx = int(len(X) * 0.8)
-        X = X[:split_idx]
-        y = y[:split_idx]
+        # Temporal split by date to avoid look-ahead bias
+        X_train, y_train = _temporal_split(data, X, y, mask)
 
         self._model = lgb.LGBMRegressor(**self.model_params)
-        self._model.fit(X, y)
+        self._model.fit(X_train, y_train)
         self._is_fitted = True
 
         return self

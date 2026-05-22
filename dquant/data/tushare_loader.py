@@ -56,7 +56,7 @@ class TushareLoader(DataSource):
         freq: str = "D",  # D=日线, W=周线, M=月线, 1/5/15/30/60=分钟线
         adj: str = "qfq",  # qfq=前复权, hfq=后复权, None=不复权
         include_factors: bool = True,
-        include_financial: bool = False,  # 是否包含财务数据
+        include_financial: bool = False,  # 当前不生效（仅 warning），如需财务数据请用 TushareFinancial
         max_workers: int = 3,  # 并发加载数（Tushare 限制更严格）
         rate_limit: int = 180,  # 每分钟最大请求数（Tushare 基础积分200/min）
     ):
@@ -99,36 +99,6 @@ class TushareLoader(DataSource):
 
         self._pro = ts.pro_api()
         logger.info("[Tushare] API initialized")
-
-    def _load_single_symbol(self, symbol):
-        """加载单个股票数据"""
-        try:
-            df = self._pro.daily(
-                ts_code=symbol,
-                start_date=self.start.replace("-", ""),
-                end_date=self.end.replace("-", ""),
-            )
-
-            if df is None or len(df) == 0:
-                return None
-
-            df = df.rename(
-                columns={
-                    "trade_date": "date",
-                    "vol": "volume",
-                }
-            )
-
-            df["symbol"] = df["ts_code"]
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-            df = df.sort_index()
-
-            return df[["symbol", "open", "high", "low", "close", "volume"]]
-
-        except Exception as e:
-            logger.debug(f"Failed to load symbol {symbol}: {e}")
-            return None
 
     def load(self) -> pd.DataFrame:
         """加载数据（并发）"""
@@ -296,7 +266,7 @@ class TushareLoader(DataSource):
             return df
 
         except Exception as e:
-            logger.debug(f"Failed to get stock data for {symbol}: {e}")
+            logger.warning(f"[Tushare] _get_stock_data 加载 {symbol} 失败: {e!r}")
             return None
 
     def _calculate_factors(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -329,27 +299,15 @@ class TushareLoader(DataSource):
         return df
 
     def _add_financial_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """添加财务数据"""
-        # 获取所有股票代码
-        symbols = df["symbol"].unique()
+        """添加财务数据（尚未实现 — 当前为 no-op 并记录 warning）。
 
-        try:
-            # 获取财务指标
-            fin_df = self._pro.fina_indicator(
-                ts_code=",".join(symbols[:BATCH_SIZE]),  # 限制数量
-                start_date=self.start.replace("-", "") if self.start else "20200101",
-            )
-
-            if fin_df is not None and len(fin_df) > 0:
-                # 合并财务数据
-                # 简化处理：只保留最新财务数据
-                fin_df = fin_df.sort_values("end_date").groupby("ts_code").last()
-
-                # TODO: 合并到主数据
-                logger.warning("[Tushare] 财务数据合并尚未实现，include_financial=True 暂不生效")
-        except Exception as e:
-            logger.warning(f"Failed to add financial data: {e}")
-
+        传入 include_financial=True 不会修改返回的 DataFrame，
+        也不会抛异常。如需财务数据请直接使用 TushareFinancial 类。
+        """
+        logger.warning(
+            "[Tushare] include_financial=True 但财务数据合并尚未实现，"
+            "数据将不含财务字段。如需财务数据请使用 TushareFinancial 类。"
+        )
         return df
 
     def get_realtime_quotes(self, symbols: Optional[List[str]] = None) -> pd.DataFrame:

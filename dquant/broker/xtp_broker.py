@@ -13,6 +13,7 @@ from typing import Dict, Optional
 from dquant.broker.base import BaseBroker, Order, OrderResult
 from dquant.broker.safety import TradingSafety, log_error
 from dquant.broker.simulator import Simulator
+from dquant.broker.simulator_mixin import SimulatorMixin
 from dquant.config import XTPBrokerConfig
 from dquant.constants import DEFAULT_INITIAL_CASH
 from dquant.logger import get_logger
@@ -173,6 +174,7 @@ class XTPBroker(BaseBroker):
 
             filled_qty = self._extract_filled_quantity(event)
 
+            # 缩小锁范围：仅做 dict 更新
             with self._lock:
                 cached = self._orders.setdefault(order_id, {"filled": 0})
                 if filled_qty is not None:
@@ -199,6 +201,7 @@ class XTPBroker(BaseBroker):
 
             logger.info(f"[XTP] Trade: {symbol} x {quantity} @ {price}")
 
+            # 整个读取-计算-写回在锁内完成，避免 TOCTOU 竞态
             with self._lock:
                 cached = self._orders.setdefault(
                     order_id,
@@ -217,7 +220,6 @@ class XTPBroker(BaseBroker):
                 if total_quantity:
                     new_filled = min(new_filled, total_quantity)
 
-                # 计算加权成交均价 (VWAP)
                 effective_quantity = new_filled - prev_filled
                 if new_filled > 0 and effective_quantity > 0:
                     total_cost = (prev_filled * prev_price) + (effective_quantity * price)
@@ -583,19 +585,18 @@ class XTPBroker(BaseBroker):
         return status_map.get(xtp_status, "UNKNOWN")
 
 
-class XTPSimulator(XTPBroker):
+class XTPSimulator(XTPBroker, SimulatorMixin):
     """
     XTP 模拟交易
 
     在没有 XTP 接口权限时使用模拟交易。
-    通过组合 Simulator 实现，避免代码重复。
+    通过 SimulatorMixin 委托给内部 Simulator，消除重复代码。
     """
 
     def __init__(self, initial_cash: float = DEFAULT_INITIAL_CASH, **kwargs):
         # 忽略连接参数，不调用 XTPBroker.__init__
         super().__init__(**kwargs)
         self.name = "XTPSimulator"
-        # 组合：内部委托给 Simulator
         self._sim = Simulator(
             initial_cash=initial_cash,
             order_id_prefix="XTPSIM",
@@ -605,82 +606,12 @@ class XTPSimulator(XTPBroker):
             strict_sell=True,
         )
 
-    # ---------- 连接管理 ----------
-    def connect(self, **kwargs) -> bool:
-        logger.info(f"[{self.name}] Connected (simulated)")
-        self._connected = True
-        self._sim.connect()
-        return True
-
-    def disconnect(self) -> bool:
-        self._connected = False
-        return True
-
-    # ---------- 账户 & 持仓 ----------
-    def get_account(self) -> dict:
-        total_value = self._sim.cash + sum(
-            p["quantity"] * p.get("price", 0) for p in self._sim.positions.values()
-        )
-        return {
-            "cash": self._sim.cash,
-            "total_value": total_value,
-            "market_value": total_value - self._sim.cash,
-            "available": self._sim.cash,
-        }
-
-    def get_positions(self) -> Dict[str, dict]:
-        return deepcopy(self._sim.positions)
-
-    # ---------- 交易 ----------
-    def place_order(self, order: Order) -> OrderResult:
-        if not self._connected:
-            return OrderResult(
-                order_id="",
-                symbol=order.symbol,
-                side=order.side,
-                filled_quantity=0,
-                filled_price=0,
-                commission=0,
-                timestamp=datetime.now(),
-                status="REJECTED",
-            )
-        return self._sim.place_order(order)
-
-    def cancel_order(self, order_id: str) -> bool:
-        return self._sim.cancel_order(order_id)
-
-    def get_order_status(self, order_id: str) -> Optional[Order]:
-        return self._sim.get_order_status(order_id)
-
-    # ---------- 行情 ----------
-    def get_market_data(self, symbol: str) -> dict:
-        return self._sim.get_market_data(symbol)
-
-    # ---------- 属性代理（保持兼容） ----------
-    @property
-    def initial_cash(self) -> float:
-        return self._sim.initial_cash
-
-    @property
-    def cash(self) -> float:
-        return self._sim.cash
-
-    @cash.setter
-    def cash(self, value: float):
-        self._sim.cash = value
-
-    @property
-    def positions(self) -> Dict[str, dict]:
-        return self._sim.positions
-
-    @positions.setter
-    def positions(self, value: Dict[str, dict]):
-        self._sim.positions = value
-
-    @property
-    def orders(self) -> Dict[str, Order]:
-        return self._sim.orders
-
-    @orders.setter
-    def orders(self, value: Dict[str, Order]):
-        self._sim.orders = value
+    # ---------- 委托到 SimulatorMixin ----------
+    connect = SimulatorMixin.sim_connect
+    disconnect = SimulatorMixin.sim_disconnect
+    get_account = SimulatorMixin.sim_get_account
+    get_positions = SimulatorMixin.sim_get_positions
+    place_order = SimulatorMixin.sim_place_order
+    cancel_order = SimulatorMixin.sim_cancel_order
+    get_order_status = SimulatorMixin.sim_get_order_status
+    get_market_data = SimulatorMixin.sim_get_market_data

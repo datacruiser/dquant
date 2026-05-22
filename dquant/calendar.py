@@ -23,6 +23,8 @@ from dquant.logger import get_logger
 
 logger = get_logger(__name__)
 
+MAX_CALENDAR_STEP = 10_000
+
 # 尝试导入 exchange_calendars
 try:
     import exchange_calendars as ec
@@ -173,6 +175,10 @@ def get_previous_trading_day(
             logger.debug(f"exchange_calendars get_previous_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天回退
+    if n > MAX_CALENDAR_STEP:
+        raise ValueError(
+            f"n={n} is unreasonably large for get_previous_trading_day, max is {MAX_CALENDAR_STEP}"
+        )
     result = ts
     count = 0
     while count < n:
@@ -213,6 +219,10 @@ def get_next_trading_day(
             logger.debug(f"exchange_calendars get_next_trading_day failed for {ts}, n={n}")
 
     # 退化为逐天前进
+    if n > MAX_CALENDAR_STEP:
+        raise ValueError(
+            f"n={n} is unreasonably large for get_next_trading_day, max is {MAX_CALENDAR_STEP}"
+        )
     result = ts
     count = 0
     while count < n:
