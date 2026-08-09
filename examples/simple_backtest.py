@@ -7,8 +7,11 @@ import numpy as np
 from datetime import datetime, timedelta
 
 # 添加路径
+import os
 import sys
-sys.path.insert(0, '/Users/datacruiser/github/dquant')
+
+# 允许在未 `pip install -e .` 的情况下直接运行示例
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dquant import Engine
 from dquant.data.base import DataSource

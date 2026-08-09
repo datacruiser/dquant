@@ -87,16 +87,19 @@ class FuturesPosition:
     entry_price: float = 0.0
     current_price: float = 0.0
     unrealized_pnl: float = 0.0
-    margin_used: float = 0.0
+    margin_used: float = 0.0  # 按开仓价锁定的累计保证金；不在 update_price 中重算
 
     def update_price(self, price: float):
-        """更新当前价格和未实现盈亏"""
+        """更新当前价格和未实现盈亏。
+
+        注意：``margin_used`` 是按开仓价锁定的累计保证金，**不**会随价格变动重算，
+        以避免“开仓扣减按 A 价、平仓返还按 B 价”的双计盈亏错误。
+        """
         self.current_price = price
         price_diff = price - self.entry_price
         if self.direction == "short":
             price_diff = -price_diff
         self.unrealized_pnl = price_diff * self.contract.multiplier * self.quantity
-        self.margin_used = self.contract.margin_required(price) * self.quantity
 
     @property
     def notional(self) -> float:
@@ -236,12 +239,14 @@ class FuturesAccount:
             )
             return False
 
-        # 如果已有同方向持仓，合并
+        # 如果已有同方向持仓，合并：保证金按加权累计锁定（始终基于开仓价）
         key = f"{symbol}_{direction}"
         if key in self.positions:
             pos = self.positions[key]
             total_qty = pos.quantity + quantity
             pos.entry_price = (pos.entry_price * pos.quantity + price * quantity) / total_qty
+            # 累加新开仓部分按其开仓价锁定的保证金
+            pos.margin_used += margin
             pos.quantity = total_qty
             pos.update_price(price)
         else:
@@ -251,6 +256,7 @@ class FuturesAccount:
                 quantity=quantity,
                 entry_price=price,
             )
+            pos.margin_used = margin  # 锁定开仓时的保证金
             pos.update_price(price)
             self.positions[key] = pos
 
@@ -290,8 +296,13 @@ class FuturesAccount:
             price_diff = -price_diff
         realized_pnl = price_diff * pos.contract.multiplier * close_qty
 
-        # 返还保证金
-        margin_return = pos.contract.margin_required(price) * close_qty
+        # 返还保证金：按“剩余累计锁定保证金 / 当前持仓手数 * 平仓手数”算，
+        # 保证与开仓时扣减的口径完全一致，避免双计盈亏。
+        if pos.quantity > 0:
+            margin_return = pos.margin_used * (close_qty / pos.quantity)
+        else:
+            margin_return = 0.0
+        pos.margin_used -= margin_return
         self.cash += margin_return + realized_pnl
 
         pos.quantity -= close_qty

@@ -308,8 +308,29 @@ class DataManager:
 
         return dfs
 
+    # 敏感字段黑名单：绝不进入缓存键（文件名），避免凭据落盘
+    _SENSITIVE_KWARGS = frozenset(
+        {
+            "token",
+            "password",
+            "passwd",
+            "secret",
+            "api_key",
+            "apikey",
+            "account",
+            "credential",
+            "credentials",
+            "connection_string",
+            "conn_str",
+        }
+    )
+
     def _get_cache_key(self, source: str, symbols, start, end, kwargs) -> str:
-        """生成缓存键（使用完整 symbol 列表避免碰撞）"""
+        """生成缓存键（使用完整 symbol 列表避免碰撞）
+
+        凭据类字段（token/password/account/...）会被显式过滤，
+        不会写入缓存文件名或 meta.json。
+        """
         if isinstance(symbols, list):
             sorted_symbols = sorted(symbols)
             symbols_str = ",".join(sorted_symbols)
@@ -324,7 +345,11 @@ class DataManager:
             symbols_key = str(symbols)
 
         key_parts = [source, symbols_key, str(start), str(end)]
-        key_parts.extend([f"{k}={v}" for k, v in sorted(kwargs.items())])
+        # 跳过任何敏感字段
+        for k, v in sorted(kwargs.items()):
+            if k.lower() in self._SENSITIVE_KWARGS:
+                continue
+            key_parts.append(f"{k}={v}")
 
         # 清理路径特殊字符防止目录遍历
         import re

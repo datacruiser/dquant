@@ -10,7 +10,10 @@ DQuant 完整示例
 """
 
 import sys
-sys.path.insert(0, '/Users/datacruiser/github/dquant')
+import os
+
+# 允许在未 `pip install -e .` 的情况下直接运行示例
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pandas as pd
 import numpy as np

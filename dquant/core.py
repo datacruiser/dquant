@@ -33,6 +33,7 @@ from dquant.constants import (
 from dquant.data.base import DataSource
 from dquant.logger import get_logger
 from dquant.notify.base import Notifier
+from dquant.notify.log_notifier import LogNotifier
 from dquant.risk import RiskManager
 from dquant.strategy.base import BaseStrategy, Signal
 
@@ -58,6 +59,7 @@ class _LiveContext:
     last_date_str: str = ""
     original_sigint: Any = None
     original_sigterm: Any = None
+    notifier: Any = None
 
 
 class Engine:
@@ -229,6 +231,10 @@ class Engine:
             max_daily_loss = config.max_daily_loss
             max_consecutive_errors = config.max_consecutive_errors
 
+        # 默认走 LogNotifier，保证通知路径始终可用
+        if notifier is None:
+            notifier = LogNotifier()
+
         ctx = self._init_live_session(
             dry_run=dry_run,
             interval=interval,
@@ -237,6 +243,7 @@ class Engine:
             max_drawdown=max_drawdown,
             max_daily_loss=max_daily_loss,
             max_consecutive_errors=max_consecutive_errors,
+            notifier=notifier,
             **kwargs,
         )
         if ctx is None:
@@ -261,6 +268,7 @@ class Engine:
         max_drawdown: float,
         max_daily_loss: float,
         max_consecutive_errors: int,
+        notifier: Optional[Notifier] = None,
         **kwargs,
     ) -> Optional[_LiveContext]:
         """Initialize broker connection, risk/journal/tracker, signal handlers.
@@ -276,6 +284,14 @@ class Engine:
         # 连接 broker
         if not self.broker.connect(**kwargs):
             logger.error("[LIVE] Broker 连接失败，退出")
+            if notifier is not None:
+                try:
+                    notifier.send(
+                        "[LIVE] Broker 连接失败",
+                        f"broker={self.broker.name} 连接失败，实盘循环未启动",
+                    )
+                except Exception:
+                    logger.exception("[LIVE] notifier 发送失败（broker 连接失败）")
             return None
 
         logger.info(f"[LIVE] Connected to broker: {self.broker.name}")
@@ -319,6 +335,7 @@ class Engine:
             last_date_str="",
             original_sigint=original_sigint,
             original_sigterm=original_sigterm,
+            notifier=notifier,
         )
 
     def _run_trading_loop(self, ctx: _LiveContext, **kwargs) -> None:
@@ -392,6 +409,11 @@ class Engine:
                         logger.error(
                             f"[LIVE] 连续错误达到 {ctx.max_consecutive_errors} 次，停止交易"
                         )
+                        self._notify(
+                            ctx,
+                            "[LIVE] 连续错误超阈值",
+                            f"{ctx.consecutive_errors}/{ctx.max_consecutive_errors}，循环退出。最后错误: {e}",
+                        )
                         break
 
                     time.sleep(ctx.interval)
@@ -436,6 +458,11 @@ class Engine:
 
                 if ctx.risk_mgr.should_halt():
                     logger.warning("[LIVE] 触发风控 halt，停止交易")
+                    self._notify(
+                        ctx,
+                        "[LIVE] 触发风控 halt",
+                        f"current_value={current_value}, drawdown/daily_loss 触发，循环退出",
+                    )
                     break
 
                 # 8. 执行卖出信号
@@ -477,14 +504,24 @@ class Engine:
 
                 ctx.consecutive_errors = 0
 
-            # 控制循环频率
-            elapsed = time.time() - loop_start
-            sleep_time = max(0, ctx.interval - elapsed)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+                # 控制循环频率（必须在 while 体内，否则 happy path 会高频轮询）
+                elapsed = time.time() - loop_start
+                sleep_time = max(0, ctx.interval - elapsed)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
         finally:
             # Ensure the executor is always shut down even on exceptions.
             ctx.executor.shutdown(wait=False)
+
+    def _notify(self, ctx: _LiveContext, title: str, message: str) -> None:
+        """通过 ctx.notifier 发送通知；任何异常都吞掉以避免影响交易主流程。"""
+        notifier = getattr(ctx, "notifier", None)
+        if notifier is None:
+            return
+        try:
+            notifier.send(title, message)
+        except Exception:
+            logger.exception(f"[LIVE] notifier 发送失败: {title}")
 
     def _shutdown_live_session(self, ctx: _LiveContext) -> None:
         """Cancel pending orders, restore signal handlers, disconnect broker."""

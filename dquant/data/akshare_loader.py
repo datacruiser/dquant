@@ -218,11 +218,20 @@ class AKShareLoader(DataSource):
         df = calculate_common_factors(df)
 
         # AKShare 特有因子：换手率均线
-        if "turnover" in df.columns:
-            for symbol, grp in df.groupby("symbol"):
-                grp = grp.sort_index()
-                df.loc[grp.index, "turnover_ma_5"] = grp["turnover"].rolling(5).mean()
-                df.loc[grp.index, "turnover_ma_10"] = grp["turnover"].rolling(10).mean()
+        # 注意：DatetimeIndex 在多 symbol 面板下会有重复 label，
+        # 直接 df.loc[grp.index, col] = ... 会把同一天所有 symbol 一起改写。
+        # 改用 set_index + sort + groupby level 的写法，避免 label 重复误赋值，
+        # 也避免 pandas 2.x 下 groupby.apply 的 include_groups 警告。
+        if "turnover" in df.columns and "symbol" in df.columns:
+            df = df.sort_values(["symbol", df.index.name or "date"])
+            grp = df.set_index("symbol", append=True)
+            grp["turnover_ma_5"] = grp.groupby(level="symbol")["turnover"].transform(
+                lambda s: s.rolling(5).mean()
+            )
+            grp["turnover_ma_10"] = grp.groupby(level="symbol")["turnover"].transform(
+                lambda s: s.rolling(10).mean()
+            )
+            df = grp.reset_index(level="symbol")
 
         return df
 

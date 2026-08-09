@@ -75,15 +75,17 @@ def get_logger(
 
         # 如果本次请求了 log_file 但还没有 file handler，补充创建
         if log_file:
-            has_file_handler = any(isinstance(h, DquantFileHandler) for h in logger.handlers)
+            from logging.handlers import RotatingFileHandler
+
+            has_file_handler = any(
+                isinstance(h, (DquantFileHandler, RotatingFileHandler)) for h in logger.handlers
+            )
             if not has_file_handler:
                 fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
                 formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
                 log_path = Path(log_file)
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 if rotating:
-                    from logging.handlers import RotatingFileHandler
-
                     file_handler = RotatingFileHandler(
                         log_file,
                         maxBytes=max_bytes,
