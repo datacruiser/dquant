@@ -353,21 +353,32 @@ class DQNAgent(BaseRLAgent):
             batch = [self._buffer[i] for i in indices]
 
             states = torch.FloatTensor([e[0] for e in batch])
-            actions = torch.LongTensor([e[1] for e in batch])
-            rewards = torch.FloatTensor([e[2] for e in batch])
+            actions = torch.LongTensor([e[1] for e in batch])  # (B, n_stocks)
+            rewards = torch.FloatTensor([e[2] for e in batch])  # (B,) 标量奖励
             next_states = torch.FloatTensor([e[3] for e in batch])
-            dones = torch.FloatTensor([e[4] for e in batch])
+            dones = torch.FloatTensor([e[4] for e in batch])  # (B,)
 
-            # 计算 Q 值
-            current_q = self._model(states).gather(1, actions.unsqueeze(1))
+            batch_sz = states.shape[0]
+
+            # 模型输出 (B, n_stocks * 3) → reshape 成 (B, n_stocks, 3)，
+            # actions 也 reshape 成 (B, n_stocks, 1) 让 gather 维度一致。
+            q_out = self._model(states).view(batch_sz, self.n_stocks, 3)
+            actions_ = actions.view(batch_sz, self.n_stocks, 1)
+            current_q_per_stock = q_out.gather(2, actions_).squeeze(2)  # (B, n_stocks)
+            # 由于 reward 是 scalar（整体收益率），对每只股票的 Q 取平均得到 batch Q
+            current_q = current_q_per_stock.mean(dim=1)  # (B,)
 
             # 计算目标 Q 值
             with torch.no_grad():
-                next_q = self._target_model(next_states).max(1)[0]
-                target_q = rewards + self.gamma * next_q * (1 - dones)
+                next_q_out = self._target_model(next_states).view(
+                    batch_sz, self.n_stocks, 3
+                )
+                next_q_per_stock = next_q_out.max(2)[0]  # (B, n_stocks)
+                next_q = next_q_per_stock.mean(dim=1)  # (B,)
+                target_q = rewards + self.gamma * next_q * (1 - dones)  # (B,)
 
             # 计算损失
-            loss = torch.nn.functional.mse_loss(current_q.squeeze(), target_q)
+            loss = torch.nn.functional.mse_loss(current_q, target_q)
 
             # 反向传播
             self.optimizer.zero_grad()

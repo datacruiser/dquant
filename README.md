@@ -14,7 +14,7 @@
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-390%20passed-brightgreen?style=flat)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-412%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -194,7 +194,7 @@ dquant/
 │   ├── notify/              # 通知 (钉钉 + 飞书 + 日志)
 │   ├── ai/                  # AI 模块 (因子 + ML + RL + Qlib)
 │   └── visualization/       # 可视化
-├── tests/                   # 测试 (390 tests)
+├── tests/                   # 测试 (412 tests)
 └── pyproject.toml
 ```
 
@@ -221,7 +221,7 @@ dquant/
 python -m pytest tests/ -v
 
 # 当前状态
-# 390 passed, 1 skipped, 0 failures
+# 412 passed, 1 skipped, 0 failures
 ```
 
 ## 🤝 贡献

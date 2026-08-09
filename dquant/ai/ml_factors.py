@@ -35,12 +35,12 @@ def _temporal_split(
         unique_dates = idx.unique().sort_values()
         # Need at least 2 unique dates for a temporal split;
         # otherwise fall through to row-count split.
-        if len(unique_dates) >= 2:
-            split_idx = max(1, int(len(unique_dates) * train_ratio))
-            # Ensure at least 1 test date
-            split_idx = min(split_idx, len(unique_dates) - 1)
-            split_date = unique_dates[split_idx]
-            combined = (idx < split_date) & mask
+        n_dates = len(unique_dates)
+        if n_dates >= 2:
+            # 训练集日期数：至少 1，至多 n_dates-1（必须留至少 1 个测试日期）。
+            n_train = max(1, min(n_dates - 1, int(n_dates * train_ratio)))
+            train_dates = set(unique_dates[:n_train])
+            combined = idx.isin(train_dates) & mask
             return X[combined], y[combined]
 
     # Fallback: row-count split (non-datetime index or single-date data)

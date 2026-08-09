@@ -113,10 +113,16 @@ class QlibModelAdapter(BaseFactor):
             fit_start_time: 训练开始时间
             fit_end_time: 训练结束时间
         """
-        self._init_qlib()
+        # 先做契约检查：没有 Qlib Dataset 时直接抛错，
+        # 避免下面去 import qlib + create_model 才暴露问题。
+        if self._dataset is None:
+            raise NotImplementedError(
+                "QlibModelAdapter.fit() 当前仅支持预先构造好的 Qlib Dataset。"
+                "请先通过 Qlib DataHandler 构建 dataset 并注入 adapter._dataset，"
+                "或直接使用 dquant.ai.XGBoostFactor / LGBMFactor。"
+            )
 
-        # 构建 Qlib Dataset
-        # 这里简化实现，实际使用时需要按 Qlib 格式准备数据
+        self._init_qlib()
 
         # 导入模型
         self._model = self._create_model()
@@ -125,35 +131,13 @@ class QlibModelAdapter(BaseFactor):
         logger.info(f"[QlibAdapter] Training {self.model_name} model...")
 
         try:
-            # 准备训练数据
-            if self._dataset is not None:
-                # 使用 Qlib 数据集训练
-                self._model.fit(self._dataset)
-                logger.info("[QlibAdapter] Training completed with Qlib dataset")
-            else:
-                # 使用传入的 DataFrame 训练
-                if data is None or len(data) == 0:
-                    raise ValueError("No training data provided")
-
-                # 准备特征
-                features = self.features or data.select_dtypes(include=[np.number]).columns.tolist()
-
-                # 训练 (简化版，实际 Qlib 训练更复杂)
-                # NOTE: 实际使用时，此数据应传入模型训练
-                _ = data[features].values if isinstance(data, pd.DataFrame) else data  # noqa: F841
-
-                # 注意: 实际 Qlib 模型需要特定格式的数据
-                # 这里只是示例，真实场景需要按照 Qlib 文档准备数据
-                logger.info(
-                    f"[QlibAdapter] Training with {len(data)} samples, {len(features)} features"
-                )
-
+            self._model.fit(self._dataset)
+            logger.info("[QlibAdapter] Training completed with Qlib dataset")
+            self._is_fitted = True
         except Exception as e:
             logger.error(f"[QlibAdapter] Training error: {e}")
-            # 回退到简化训练
-            pass
+            raise
 
-        self._is_fitted = True
         return self
 
     def _create_model(self):
@@ -202,36 +186,19 @@ class QlibModelAdapter(BaseFactor):
 
     def _predict_with_qlib(self, data: pd.DataFrame) -> pd.DataFrame:
         """使用 Qlib 模型预测"""
-        # TODO: 实现 Qlib 模型预测
-        return self._simple_predict(data)
+        if self._dataset is None or self._model is None:
+            raise NotImplementedError(
+                "QlibModelAdapter._predict_with_qlib 当前未实现。"
+                "适配器仅在 self._dataset / self._model 都被正确注入时才能预测。"
+            )
+        return self._model.predict(self._dataset)
 
     def _simple_predict(self, data: pd.DataFrame) -> pd.DataFrame:
-        """简单预测 (当 Qlib 模型不可用时)"""
-        results = []
-
-        for idx, row in data.iterrows():
-            date = idx if isinstance(idx, pd.Timestamp) else row.get("date")
-            symbol = row.get("symbol", "")
-
-            # 简单打分: 使用第一个特征
-            if self.features and self.features[0] in row:
-                score = row[self.features[0]]
-            else:
-                score = 0
-
-            if pd.notna(score):
-                results.append(
-                    {
-                        "date": pd.to_datetime(date),
-                        "symbol": symbol,
-                        "score": score,
-                    }
-                )
-
-        df = pd.DataFrame(results)
-        if len(df) > 0:
-            df = df.set_index("date")
-        return df
+        """已废弃：原来会用第一个特征原值作为 score，具有误导性。"""
+        raise NotImplementedError(
+            "QlibModelAdapter._simple_predict 已废弃。"
+            "如需轻量预测请直接使用 dquant.ai.XGBoostFactor / LGBMFactor。"
+        )
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "QlibModelAdapter":

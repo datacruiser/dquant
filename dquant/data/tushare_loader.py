@@ -276,25 +276,32 @@ class TushareLoader(DataSource):
         df = calculate_common_factors(df)
 
         # Tushare 扩展因子：额外的窗口 + 特有因子
-        for symbol, grp in df.groupby("symbol"):
-            grp = grp.sort_index()
+        # 注意：DatetimeIndex 在多 symbol 面板下会有重复 label，
+        # 直接 df.loc[grp.index, col] = ... 会把同一天所有 symbol 一起改写。
+        # 改用 groupby(...).transform 按每个 symbol 独立计算，避免 label 重复误赋值，
+        # 也避免 pandas 2.x 下 groupby.apply 的 include_groups 警告。
+        if "symbol" in df.columns:
+            grp = df.sort_values(["symbol", df.index.name or "date"])
+            grp_idx = grp.set_index("symbol", append=True)
 
-            # 扩展动量窗口
-            df.loc[grp.index, "momentum_60"] = grp["close"].pct_change(60)
+            close_grp = grp_idx.groupby(level="symbol")["close"]
+            low_grp = grp_idx.groupby(level="symbol")["low"]
+            high_grp = grp_idx.groupby(level="symbol")["high"]
+            vol_grp = grp_idx.groupby(level="symbol")["volume"]
 
-            # 扩展均线窗口
-            df.loc[grp.index, "ma_60"] = grp["close"].rolling(60).mean()
-            df.loc[grp.index, "bias_60"] = (grp["close"] - df.loc[grp.index, "ma_60"]) / df.loc[
-                grp.index, "ma_60"
-            ]
+            ma_60 = close_grp.transform(lambda s: s.rolling(60).mean())
+            grp_idx["momentum_60"] = close_grp.transform(lambda s: s.pct_change(60))
+            grp_idx["ma_60"] = ma_60
+            grp_idx["bias_60"] = (grp_idx["close"] - ma_60) / ma_60
+            grp_idx["volume_ma_10"] = vol_grp.transform(lambda s: s.rolling(10).mean())
 
-            # 成交量 10 日均线
-            df.loc[grp.index, "volume_ma_10"] = grp["volume"].rolling(10).mean()
+            low_min = low_grp.transform(lambda s: s.rolling(20).min())
+            high_max = high_grp.transform(lambda s: s.rolling(20).max())
+            grp_idx["price_position_20"] = (grp_idx["close"] - low_min) / (
+                high_max - low_min
+            )
 
-            # 价格位置
-            low_min = grp["low"].rolling(20).min()
-            high_max = grp["high"].rolling(20).max()
-            df.loc[grp.index, "price_position_20"] = (grp["close"] - low_min) / (high_max - low_min)
+            df = grp_idx.reset_index(level="symbol")
 
         return df
 
