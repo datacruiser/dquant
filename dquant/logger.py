@@ -78,8 +78,7 @@ def get_logger(
             from logging.handlers import RotatingFileHandler
 
             has_file_handler = any(
-                isinstance(h, (DquantFileHandler, RotatingFileHandler))
-                for h in logger.handlers
+                isinstance(h, (DquantFileHandler, RotatingFileHandler)) for h in logger.handlers
             )
             if not has_file_handler:
                 fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT

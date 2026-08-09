@@ -297,9 +297,7 @@ class TushareLoader(DataSource):
 
             low_min = low_grp.transform(lambda s: s.rolling(20).min())
             high_max = high_grp.transform(lambda s: s.rolling(20).max())
-            grp_idx["price_position_20"] = (grp_idx["close"] - low_min) / (
-                high_max - low_min
-            )
+            grp_idx["price_position_20"] = (grp_idx["close"] - low_min) / (high_max - low_min)
 
             df = grp_idx.reset_index(level="symbol")
 

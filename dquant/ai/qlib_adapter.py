@@ -5,7 +5,6 @@ Qlib 模型适配器
 from pathlib import Path
 from typing import List, Optional, Union
 
-import numpy as np
 import pandas as pd
 
 from dquant.ai.base import BaseFactor
