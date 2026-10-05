@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+
 # ---------------------------------------------------------------------------
 # akshare / tushare 因子串号
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ def test_cache_key_excludes_sensitive_kwargs():
 
 def test_futures_long_open_close_no_double_count():
     """IF 多 1 手 @100 → 平仓 @110，净变动应恰好等于盈亏 +3000。"""
-    from dquant.futures import INDEX_FUTURES, FuturesAccount
+    from dquant.futures import FuturesAccount, INDEX_FUTURES
 
     account = FuturesAccount(initial_capital=1_000_000.0)
     account._contracts = INDEX_FUTURES
@@ -144,7 +145,7 @@ def test_futures_long_open_close_no_double_count():
 
 def test_futures_short_open_close_correct_pnl():
     """IF 空 1 手 @100 → 平仓 @90，盈亏应为 +3000。"""
-    from dquant.futures import INDEX_FUTURES, FuturesAccount
+    from dquant.futures import FuturesAccount, INDEX_FUTURES
 
     account = FuturesAccount(initial_capital=1_000_000.0)
     account._contracts = INDEX_FUTURES
