@@ -148,11 +148,14 @@ class TradingEnvironment:
         for i, act in enumerate(action):
             price = current_prices[i]
 
+            # 缺失行情被 _prepare_data 零填充、脏数据 NaN：一律跳过。
+            # 否则卖分会把持仓按 0 收入清空，买分的 int(NaN) 直接 ValueError。
+            if not np.isfinite(price) or price <= 0:
+                continue
+
             if act == 2:  # 买入
                 # 用可用资金的 1/n_stocks 买入
                 buy_amount = self.cash / self.n_stocks
-                if price <= 0:
-                    continue
                 shares = int((buy_amount / price) // MIN_SHARES) * MIN_SHARES
                 if shares <= 0:
                     continue
@@ -263,6 +266,7 @@ class DQNAgent(BaseRLAgent):
         epsilon_decay: float = 0.995,
         buffer_size: int = 10000,
         batch_size: int = 32,
+        target_update_freq: int = 100,
     ):
         super().__init__(n_stocks, lookback)
         self.hidden_size = hidden_size
@@ -273,10 +277,12 @@ class DQNAgent(BaseRLAgent):
         self.epsilon_decay = epsilon_decay
         self.buffer_size = buffer_size
         self.batch_size = batch_size
+        self.target_update_freq = target_update_freq
 
         self._model = None
         self._target_model = None
         self._buffer: deque = deque(maxlen=buffer_size)
+        self._update_count = 0
 
     def _build_model(self, state_dim: int, action_dim: int):
         """构建神经网络"""
@@ -308,35 +314,34 @@ class DQNAgent(BaseRLAgent):
 
     def select_action(self, state: np.ndarray, training: bool = True) -> np.ndarray:
         """选择动作"""
+        # 惰性构建必须先于 epsilon 分支：否则探索期（epsilon=1.0 必然命中）永不建模型，
+        # update() 的 `if self._model is None: return` 会丢掉所有经验，agent 死锁在随机策略。
+        if self._model is None:
+            self._build_model(len(state), self.n_stocks * 3)
+
         # Epsilon-greedy 策略
         if training and np.random.random() < self.epsilon:
             return np.random.randint(0, 3, self.n_stocks)
 
-        # 使用模型预测
-        if self._model is None:
-            state_dim = len(state)
-            action_dim = self.n_stocks * 3
-            self._build_model(state_dim, action_dim)
+        # 使用模型预测。维度/设备不匹配等结构性错误必须显式抛出：
+        # 静默回退全 HOLD 会把故障伪装成"收敛到持有策略"，且没有任何诊断信息。
+        import torch
 
-        try:
-            import torch
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state).unsqueeze(0)
+            q_values = self._model(state_tensor)
 
-            with torch.no_grad():
-                state_tensor = torch.FloatTensor(state).unsqueeze(0)
-                q_values = self._model(state_tensor)
+            # 每只股票选择 Q 值最大的动作
+            q_values = q_values.view(self.n_stocks, 3)
+            actions = q_values.argmax(dim=1).numpy()
 
-                # 每只股票选择 Q 值最大的动作
-                q_values = q_values.view(self.n_stocks, 3)
-                actions = q_values.argmax(dim=1).numpy()
-
-                return actions
-        except (RuntimeError, ValueError):
-            return np.ones(self.n_stocks, dtype=int)  # 默认持有
+            return actions
 
     def update(self, experience: Tuple):
         """更新模型"""
+        # 经验必须无条件入缓冲；模型若未构建，按首条经验的维度惰性构建。
         if self._model is None:
-            return
+            self._build_model(len(experience[0]), self.n_stocks * 3)
 
         # 存储经验 (deque 自动淘汰旧数据)
         self._buffer.append(experience)
@@ -345,51 +350,51 @@ class DQNAgent(BaseRLAgent):
         if len(self._buffer) < self.batch_size:
             return
 
-        try:
-            import torch
+        import torch
 
-            # 采样
-            indices = np.random.choice(len(self._buffer), self.batch_size)
-            batch = [self._buffer[i] for i in indices]
+        # 采样（此时 buffer >= batch_size，可无放回采样，batch 内经验不重复）
+        indices = np.random.choice(len(self._buffer), self.batch_size, replace=False)
+        batch = [self._buffer[i] for i in indices]
 
-            states = torch.FloatTensor([e[0] for e in batch])
-            actions = torch.LongTensor([e[1] for e in batch])  # (B, n_stocks)
-            rewards = torch.FloatTensor([e[2] for e in batch])  # (B,) 标量奖励
-            next_states = torch.FloatTensor([e[3] for e in batch])
-            dones = torch.FloatTensor([e[4] for e in batch])  # (B,)
+        states = torch.FloatTensor([e[0] for e in batch])
+        actions = torch.LongTensor([e[1] for e in batch])  # (B, n_stocks)
+        rewards = torch.FloatTensor([e[2] for e in batch])  # (B,) 标量奖励
+        next_states = torch.FloatTensor([e[3] for e in batch])
+        dones = torch.FloatTensor([e[4] for e in batch])  # (B,)
 
-            batch_sz = states.shape[0]
+        batch_sz = states.shape[0]
 
-            # 模型输出 (B, n_stocks * 3) → reshape 成 (B, n_stocks, 3)，
-            # actions 也 reshape 成 (B, n_stocks, 1) 让 gather 维度一致。
-            q_out = self._model(states).view(batch_sz, self.n_stocks, 3)
-            actions_ = actions.view(batch_sz, self.n_stocks, 1)
-            current_q_per_stock = q_out.gather(2, actions_).squeeze(2)  # (B, n_stocks)
-            # 由于 reward 是 scalar（整体收益率），对每只股票的 Q 取平均得到 batch Q
-            current_q = current_q_per_stock.mean(dim=1)  # (B,)
+        # 模型输出 (B, n_stocks * 3) → reshape 成 (B, n_stocks, 3)，
+        # actions 也 reshape 成 (B, n_stocks, 1) 让 gather 维度一致。
+        q_out = self._model(states).view(batch_sz, self.n_stocks, 3)
+        actions_ = actions.view(batch_sz, self.n_stocks, 1)
+        current_q_per_stock = q_out.gather(2, actions_).squeeze(2)  # (B, n_stocks)
+        # 由于 reward 是 scalar（整体收益率），对每只股票的 Q 取平均得到 batch Q
+        current_q = current_q_per_stock.mean(dim=1)  # (B,)
 
-            # 计算目标 Q 值
-            with torch.no_grad():
-                next_q_out = self._target_model(next_states).view(
-                    batch_sz, self.n_stocks, 3
-                )
-                next_q_per_stock = next_q_out.max(2)[0]  # (B, n_stocks)
-                next_q = next_q_per_stock.mean(dim=1)  # (B,)
-                target_q = rewards + self.gamma * next_q * (1 - dones)  # (B,)
+        # 计算目标 Q 值
+        with torch.no_grad():
+            next_q_out = self._target_model(next_states).view(batch_sz, self.n_stocks, 3)
+            next_q_per_stock = next_q_out.max(2)[0]  # (B, n_stocks)
+            next_q = next_q_per_stock.mean(dim=1)  # (B,)
+            target_q = rewards + self.gamma * next_q * (1 - dones)  # (B,)
 
-            # 计算损失
-            loss = torch.nn.functional.mse_loss(current_q, target_q)
+        # 计算损失
+        loss = torch.nn.functional.mse_loss(current_q, target_q)
 
-            # 反向传播
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+        # 反向传播
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-            # 衰减 epsilon
-            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+        # 衰减 epsilon
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
-        except Exception as e:
-            logger.error(f"[DQN] Update error: {e}")
+        # 周期性同步目标网络：否则 TD target 永远来自随机初始化的冻结网络，
+        # 噪声主导 bootstrap 项，Q-learning 无法收敛。
+        self._update_count += 1
+        if self._update_count % self.target_update_freq == 0:
+            self.update_target_model()
 
     def update_target_model(self):
         """更新目标网络"""
