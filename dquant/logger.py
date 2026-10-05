@@ -26,6 +26,51 @@ class DquantFileHandler(logging.FileHandler):
     pass
 
 
+# 级别名映射：含 stdlib setLevel 认可的 WARN 别名；未知值抛 ValueError 而不是静默降级为 INFO
+_LEVEL_MAP = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARN": logging.WARNING,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def _resolve_level(level: str) -> int:
+    """把级别字符串解析成 logging 常量；未知值显式抛 ValueError（对齐 stdlib 行为）。"""
+    key = str(level).upper()
+    if key not in _LEVEL_MAP:
+        raise ValueError(
+            f"Unknown log level: {level!r}. " f"Valid levels: {', '.join(sorted(set(_LEVEL_MAP)))}"
+        )
+    return _LEVEL_MAP[key]
+
+
+def _build_file_handler(
+    log_file: str,
+    rotating: bool,
+    max_bytes: int,
+    backup_count: int,
+    formatter: logging.Formatter,
+) -> logging.FileHandler:
+    """按配置构建文件 handler（rotating=True 时用 RotatingFileHandler）。"""
+    if rotating:
+        from logging.handlers import RotatingFileHandler
+
+        handler: logging.FileHandler = RotatingFileHandler(
+            log_file,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+    else:
+        handler = DquantFileHandler(log_file, encoding="utf-8")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(formatter)
+    return handler
+
+
 def get_logger(
     name: str = "dquant",
     level: str = "INFO",
@@ -57,83 +102,54 @@ def get_logger(
     """
     logger = logging.getLogger(name)
 
-    level_map = {
-        "DEBUG": logging.DEBUG,
-        "INFO": logging.INFO,
-        "WARNING": logging.WARNING,
-        "ERROR": logging.ERROR,
-        "CRITICAL": logging.CRITICAL,
-    }
-
-    # 如果已经有 *我们自己的* handler（DquantStreamHandler / DquantFileHandler 实例），说明已初始化
-    dquant_handlers = [
-        h for h in logger.handlers if isinstance(h, (DquantStreamHandler, DquantFileHandler))
-    ]
-    if dquant_handlers:
-        # 更新级别（允许后续调用调整级别）
-        logger.setLevel(level_map.get(level.upper(), logging.INFO))
-
-        # 如果本次请求了 log_file 但还没有 file handler，补充创建
-        if log_file:
-            from logging.handlers import RotatingFileHandler
-
-            has_file_handler = any(
-                isinstance(h, (DquantFileHandler, RotatingFileHandler))
-                for h in logger.handlers
-            )
-            if not has_file_handler:
-                fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
-                formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
-                log_path = Path(log_file)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                if rotating:
-                    file_handler = RotatingFileHandler(
-                        log_file,
-                        maxBytes=max_bytes,
-                        backupCount=backup_count,
-                        encoding="utf-8",
-                    )
-                else:
-                    file_handler = DquantFileHandler(log_file, encoding="utf-8")
-                file_handler.setLevel(logging.DEBUG)
-                file_handler.setFormatter(formatter)
-                logger.addHandler(file_handler)
-
-        return logger
-
-    # 设置级别
-    logger.setLevel(level_map.get(level.upper(), logging.INFO))
+    resolved_level = _resolve_level(level)
+    initialized = any(
+        isinstance(h, (DquantStreamHandler, DquantFileHandler)) for h in logger.handlers
+    )
 
     # 选择格式
     fmt = DEFAULT_FORMAT if format_style == "simple" else DETAILED_FORMAT
     formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
-    # 控制台 handler
+    # 更新级别（允许后续调用调整级别）
+    logger.setLevel(resolved_level)
+
+    # 文件 handler：幂等挂载。注意用 FileHandler 基类判断 —— 它是
+    # DquantFileHandler / RotatingFileHandler / TimedRotatingFileHandler
+    # 以及 stdlib 裸 FileHandler 的公共父类，全部都能被识别，避免重复挂载。
+    if log_file:
+        existing_paths = {
+            getattr(h, "baseFilename", None)
+            for h in logger.handlers
+            if isinstance(h, logging.FileHandler)
+        }
+        wanted = str(Path(log_file).resolve())
+        if not existing_paths:
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            logger.addHandler(
+                _build_file_handler(log_file, rotating, max_bytes, backup_count, formatter)
+            )
+        elif wanted not in existing_paths:
+            # 显式警告而不是静默丢弃：第一条文件配置继续生效
+            logger.warning(
+                "[logger] %s 已配置日志文件 %s，忽略新的 log_file=%s",
+                name,
+                sorted(p for p in existing_paths if p),
+                log_file,
+            )
+
+    if initialized:
+        return logger
+
+    # 首次初始化：控制台 handler
     console_handler = DquantStreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 文件 handler
-    if log_file:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if rotating:
-            from logging.handlers import RotatingFileHandler
-
-            file_handler = RotatingFileHandler(
-                log_file,
-                maxBytes=max_bytes,
-                backupCount=backup_count,
-                encoding="utf-8",
-            )
-        else:
-            file_handler = DquantFileHandler(log_file, encoding="utf-8")
-
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+    # 自带全套 handler 后不再向祖先 logger 传播：
+    # 模块导入时预创建的父 logger（如 dquant.backtest）会让每条日志打两遍。
+    logger.propagate = False
 
     return logger
 
@@ -166,19 +182,20 @@ factor_logger = get_logger("dquant.factor")
 
 def set_log_level(level: str):
     """
-    设置全局日志级别
+    设置全局日志级别（作用于 dquant 及所有已创建的 dquant.* 子 logger）
+
+    get_logger 会给每个命名 logger 显式设置级别，子级自己的级别优先于父级，
+    所以只设根 logger 不够 —— 必须同步刷新所有已存在的 dquant.* logger，
+    否则 quiet_mode()/debug_mode() 对它们是静默 no-op。
 
     Args:
-        level: 日志级别 (DEBUG, INFO, WARNING, ERROR)
+        level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL；WARN 别名亦可)
     """
-    level_map = {
-        "DEBUG": logging.DEBUG,
-        "INFO": logging.INFO,
-        "WARNING": logging.WARNING,
-        "ERROR": logging.ERROR,
-    }
-
-    logging.getLogger("dquant").setLevel(level_map.get(level.upper(), logging.INFO))
+    resolved = _resolve_level(level)
+    logging.getLogger("dquant").setLevel(resolved)
+    for name, child in logging.root.manager.loggerDict.items():
+        if isinstance(child, logging.Logger) and (name == "dquant" or name.startswith("dquant.")):
+            child.setLevel(resolved)
 
 
 def quiet_mode():

@@ -36,6 +36,9 @@ jobs:
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
+      # fail_ci_if_error 只覆盖"上传结果"错误；action 自身网络/SSL 崩溃仍会失败 job。
+      # 覆盖率上传属于非关键路径，不应阻塞 CI。
+      continue-on-error: true
 
   lint:
     runs-on: ubuntu-latest
@@ -50,7 +53,9 @@ jobs:
 
     - name: Install linters
       run: |
-        pip install flake8 black isort
+        # 锁定与本地一致的版本：black 大版本之间 stable style 有差异，
+        # 不锁版本会导致"本地格式化通过、CI 拒绝"的漂移。
+        pip install flake8==7.3.0 black==26.3.1 isort==5.13.2
 
     - name: Run flake8
       run: |

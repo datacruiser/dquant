@@ -281,7 +281,12 @@ class TushareLoader(DataSource):
         # 改用 groupby(...).transform 按每个 symbol 独立计算，避免 label 重复误赋值，
         # 也避免 pandas 2.x 下 groupby.apply 的 include_groups 警告。
         if "symbol" in df.columns:
-            grp = df.sort_values(["symbol", df.index.name or "date"])
+            # 无名索引时不能引用不存在的 'date' 列（会 KeyError），先把索引命名为 date
+            sort_key = df.index.name or "date"
+            if sort_key not in df.columns:
+                df = df.rename_axis("date")
+                sort_key = "date"
+            grp = df.sort_values(["symbol", sort_key])
             grp_idx = grp.set_index("symbol", append=True)
 
             close_grp = grp_idx.groupby(level="symbol")["close"]
@@ -290,16 +295,22 @@ class TushareLoader(DataSource):
             vol_grp = grp_idx.groupby(level="symbol")["volume"]
 
             ma_60 = close_grp.transform(lambda s: s.rolling(60).mean())
-            grp_idx["momentum_60"] = close_grp.transform(lambda s: s.pct_change(60))
+            # fill_method=None：与 builtin_factors 的 momentum 口径一致，
+            # 不隐式 pad 内部 NaN，也规避 pandas 3 默认值翻转造成的数值漂移
+            grp_idx["momentum_60"] = close_grp.transform(
+                lambda s: s.pct_change(60, fill_method=None)
+            )
             grp_idx["ma_60"] = ma_60
-            grp_idx["bias_60"] = (grp_idx["close"] - ma_60) / ma_60
+            # 退化窗口（价格恒为 0 的脏数据）下 ma_60 可能为 0，除零置 NaN
+            safe_ma_60 = ma_60.replace(0, float("nan"))
+            grp_idx["bias_60"] = (grp_idx["close"] - ma_60) / safe_ma_60
             grp_idx["volume_ma_10"] = vol_grp.transform(lambda s: s.rolling(10).mean())
 
             low_min = low_grp.transform(lambda s: s.rolling(20).min())
             high_max = high_grp.transform(lambda s: s.rolling(20).max())
-            grp_idx["price_position_20"] = (grp_idx["close"] - low_min) / (
-                high_max - low_min
-            )
+            # 一字板（high_max == low_min）会除零：与 PricePositionFactor 一致地置 NaN
+            price_range = (high_max - low_min).replace(0, float("nan"))
+            grp_idx["price_position_20"] = (grp_idx["close"] - low_min) / price_range
 
             df = grp_idx.reset_index(level="symbol")
 

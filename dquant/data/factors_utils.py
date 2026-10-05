@@ -44,12 +44,12 @@ def calculate_common_factors(
         group = group.sort_index()
         close = group["close"]
 
-        # 动量因子
+        # 动量因子（fill_method=None：不隐式 pad 内部 NaN，规避 pandas 3 默认值翻转）
         for w in momentum_windows:
-            group[f"momentum_{w}"] = close.pct_change(w)
+            group[f"momentum_{w}"] = close.pct_change(w, fill_method=None)
 
-        # 波动率因子
-        returns = close.pct_change()
+        # 波动率因子（同上，显式不填充）
+        returns = close.pct_change(fill_method=None)
         for w in volatility_windows:
             group[f"volatility_{w}"] = returns.rolling(w).std()
 
