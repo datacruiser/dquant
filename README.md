@@ -13,8 +13,8 @@
 [![Stars](https://img.shields.io/github/stars/datacruiser/dquant?style=flat&logo=github&color=yellow)](https://github.com/datacruiser/dquant/stargazers)
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-412%20passed-brightgreen?style=flat)](tests/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat&logo=python)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Tests-422%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -194,7 +194,7 @@ dquant/
 │   ├── notify/              # 通知 (钉钉 + 飞书 + 日志)
 │   ├── ai/                  # AI 模块 (因子 + ML + RL + Qlib)
 │   └── visualization/       # 可视化
-├── tests/                   # 测试 (412 tests)
+├── tests/                   # 测试 (422 tests)
 └── pyproject.toml
 ```
 
@@ -205,6 +205,7 @@ dquant/
 - [x] Phase 1: 实盘基础设施 — RiskManager, Simulator 安全, Live Loop, JSONL 审计
 - [x] Phase 2: 可靠性增强 — 订单重试, 订单追踪, 通知系统, 数据验证
 - [x] Phase 3: 策略完善 — SELL 信号, 止损止盈, 优雅关机, 自动重连, Benchmark
+- [x] 期货账户基础 — 合约/持仓/保证金口径（IF/IH/IC 股指期货, `dquant/futures.py`）
 
 ### 规划中
 
@@ -212,7 +213,7 @@ dquant/
 - [ ] 配置安全 (env var / keyring)
 - [ ] 多策略组合
 - [ ] 更多数据源
-- [ ] 期货支持
+- [ ] 期货回测/实盘接入（账户模型已就绪，待接入引擎）
 
 ## 🔧 测试
 
@@ -221,7 +222,8 @@ dquant/
 python -m pytest tests/ -v
 
 # 当前状态
-# 412 passed, 1 skipped, 0 failures
+# 422 passed, 5 skipped, 0 failures
+# （skipped：4 个 DQN 回归测试需 torch；1 个多进程用例因本地函数无法 pickle 跳过）
 ```
 
 ## 🤝 贡献

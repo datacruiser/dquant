@@ -13,8 +13,8 @@
 [![Stars](https://img.shields.io/github/stars/datacruiser/dquant?style=flat&logo=github&color=yellow)](https://github.com/datacruiser/dquant/stargazers)
 [![Forks](https://img.shields.io/github/forks/datacruiser/dquant?style=flat&logo=github&color=blue)](https://github.com/datacruiser/dquant/network/members)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat&logo=python)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-378%20passed-brightgreen?style=flat)](tests/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat&logo=python)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Tests-422%20passed-brightgreen?style=flat)](tests/)
 
 </div>
 
@@ -180,7 +180,7 @@ dquant/
 │   ├── notify/              # Notifications (DingTalk + log)
 │   ├── ai/                  # AI module (factors + ML + RL + Qlib)
 │   └── visualization/       # Visualization
-├── tests/                   # Tests (197 tests)
+├── tests/                   # Tests (422 tests)
 └── pyproject.toml
 ```
 
@@ -191,6 +191,7 @@ dquant/
 - [x] Phase 1: Live Trading Infrastructure — RiskManager, Simulator safety, Live Loop, JSONL audit
 - [x] Phase 2: Reliability — Order retry, Order tracking, Notification, Data validation
 - [x] Phase 3: Strategy Enhancement — SELL signals, Stop-loss/Take-profit, Graceful shutdown, Auto-reconnect, Benchmark
+- [x] Futures account foundation — contracts/positions/margin accounting (IF/IH/IC index futures, `dquant/futures.py`)
 
 ### Planned
 
@@ -198,7 +199,7 @@ dquant/
 - [ ] Config security (env var / keyring)
 - [ ] Multi-strategy portfolio
 - [ ] More data sources
-- [ ] Futures support
+- [ ] Futures backtest/live integration (account model ready, engine integration pending)
 
 ## 🔧 Testing
 
@@ -207,7 +208,8 @@ dquant/
 python -m pytest tests/ -v
 
 # Current status
-# 197 passed, 1 skipped, 0 failures
+# 422 passed, 5 skipped, 0 failures
+# (skips: 4 DQN regression tests need torch; 1 multiprocessing test skipped due to local-function pickle limitation)
 ```
 
 ## 🤝 Contributing
