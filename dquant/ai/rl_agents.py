@@ -370,7 +370,9 @@ class DQNAgent(BaseRLAgent):
 
             # 计算目标 Q 值
             with torch.no_grad():
-                next_q_out = self._target_model(next_states).view(batch_sz, self.n_stocks, 3)
+                next_q_out = self._target_model(next_states).view(
+                    batch_sz, self.n_stocks, 3
+                )
                 next_q_per_stock = next_q_out.max(2)[0]  # (B, n_stocks)
                 next_q = next_q_per_stock.mean(dim=1)  # (B,)
                 target_q = rewards + self.gamma * next_q * (1 - dones)  # (B,)
